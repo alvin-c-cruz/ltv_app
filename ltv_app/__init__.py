@@ -1,13 +1,29 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 import os
+import subprocess
+
+
+def _get_version():
+    try:
+        base = os.path.dirname(os.path.abspath(__file__))
+        count = subprocess.check_output(
+            ['git', 'rev-list', '--count', 'HEAD'],
+            cwd=base, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return f"4.0.{count}"
+    except Exception:
+        return "4.0.0"
+
+
+VERSION = _get_version()
 
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY="acda5284c0cc9a93e828516b701ab77907cd9bfe5f4f00c5026059b2d7f58419",
-        DATABASE=os.path.join("ltv_database", "LTV Stocks.db"),  # TODO: Use instance when migration is done
+        DATABASE=os.path.join(app.instance_path, "LTV Stocks.db"),
     )
 
     if test_config is None:
@@ -20,6 +36,8 @@ def create_app(test_config=None):
         os.makedirs(os.path.join(app.instance_path, "test_database"))
     except OSError:
         pass
+
+    app.jinja_env.globals['app_version'] = VERSION
 
     from . import blueprints
     for module_ in dir(blueprints):
