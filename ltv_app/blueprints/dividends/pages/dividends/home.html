@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Cash Dividends</h1>
+<form action="{{ url_for('dividends.home') }}" method="post">
+  <label for="start_date">From</label>
+  <input type="date" name="start_date" value="{{ start_date }}">
+  <label for="end_date">To</label>
+  <input type="date" name="end_date" value="{{ end_date }}">
+  <input type="submit" value="Go" class="btn btn-success">
+</form>
+<a href="{{ url_for('dividends.add') }}" class="btn btn-success" autofocus>Add dividend</a>
+{% if dividends %}
+  <table class="table table-striped table-dark">
+    <tr>
+      <th>Bank / Account</th>
+      <th> Stock Name</th>
+      <th>Code</th>
+      <th>Quantity</th>
+      <th>Ex Date</th>
+      <th>Pay-Out Date</th>
+      <th>Ccy</th>
+      <th>Div per Share</th>
+      <th>Gross Amount</th>
+      <th>Tax/charges</th>
+      <th>Net Amount</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+    {% for dividend in dividends%}
+    <tr>
+      <td>{{ dividend.bank_name }}</td>
+      <td>{{ dividend.stock_name }}</td>
+      <td>{{ dividend.stock_code }}</td>
+      <td>{{ '{:,.0f}'.format(dividend.nominal) }}</td>
+      <td>{{ dividend.ex_date }}</td>
+      <td>{{ dividend.pay_out }}</td>
+      <td>{{ dividend.ccy_code }}</td>
+      <td>{{ '{:,.4f}'.format(dividend.dividends_per_share) }}</td>
+      <td>{{ '{:,.2f}'.format(dividend.nominal * dividend.dividends_per_share) }}</td>
+      <td>{{ '{:,.2f}'.format(dividend.tax + dividend.charges) }}</td>
+      <td>{{ '{:,.2f}'.format(dividend.nominal * dividend.dividends_per_share - dividend.tax - dividend.charges) }}</td>
+      <td>{{ dividend.status }}</td>
+      <td>
+        <a href="{{ url_for('dividends.edit', ref_num=dividend.ref_num) }}" class="btn btn-success">Edit</a>
+        <a href="{{ url_for('dividends.delete', ref_num=dividend.ref_num) }}" class="btn btn-danger"  onclick="return confirmation_message()">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p>No data</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Transaction Review</h1>
+
+<div class="mt-3" style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+    <form method="get" action="{{ url_for('review.home') }}"
+          style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:3px;">Code</div>
+            <select name="code" multiple size="{{ codes|length if codes|length <= 5 else 5 }}"
+                    class="filter-select" style="min-width:110px;">
+                {% for c in codes %}
+                <option value="{{ c }}" {% if c in filter_codes %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:3px;">Type</div>
+            <select name="txn_type" multiple size="{{ txn_types|length if txn_types|length >= 1 else 2 }}"
+                    class="filter-select" style="min-width:100px;">
+                {% for t in txn_types %}
+                <option value="{{ t }}" {% if t in filter_types %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display:flex; gap:6px;">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            {% if filter_codes or filter_types %}
+            <a href="{{ url_for('review.home') }}" class="btn btn-outline btn-sm">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <div style="margin-left:auto; display:flex; align-items:center; gap:12px; align-self:center;">
+        <span class="text-muted" style="font-size:0.9rem;">
+            {% if total %}{{ total }} unreviewed transaction{{ 's' if total != 1 }}{% else %}All up to date{% endif %}
+        </span>
+        {% if total %}
+        <form method="post" action="{{ url_for('review.mark_all') }}"
+              onsubmit="return confirm('Mark all {{ total }} transaction(s) as reviewed?')">
+            {% for c in filter_codes %}<input type="hidden" name="code" value="{{ c }}">{% endfor %}
+            {% for t in filter_types %}<input type="hidden" name="txn_type" value="{{ t }}">{% endfor %}
+            <button type="submit" class="btn btn-success">Mark All Reviewed</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if grouped %}
+<div class="mt-3">
+{% for bank_name, data in grouped.items() %}
+<div class="fixings-section">
+    <div class="fixings-section-header">
+        <span class="fixings-section-name">{{ bank_name }}</span>
+        <span class="fixings-section-total">{{ data.count }} transaction{{ 's' if data.count != 1 }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Trade Date</th>
+                    <th>Value Date</th>
+                    <th>Code</th>
+                    <th>Stock Name</th>
+                    <th>Type</th>
+                    <th class="text-right">Quantity</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Amount</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in data.rows %}
+            <tr>
+                <td style="white-space:nowrap;">{{ t.trade_date }}</td>
+                <td style="white-space:nowrap; color:var(--text-muted);">{{ t.value_date }}</td>
+                <td><strong>{{ t.code }}</strong></td>
+                <td>{{ t.stock_name }}</td>
+                <td>{{ t.transaction_type }}</td>
+                <td class="text-right {% if t.qty_neg %}text-danger{% endif %}">{{ t.quantity }}</td>
+                <td class="text-right">{{ t.price }}</td>
+                <td class="text-right {% if t.amt_neg %}text-danger{% endif %}">{{ t.amount }}</td>
+                <td class="text-center" style="white-space:nowrap;">
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="openReviewModal({{ t.id }})">&#9998; Edit</button>
+                    <form method="post" action="{{ url_for('review.mark', ref_num=t.id) }}"
+                          style="display:inline;">
+                        {% for c in filter_codes %}<input type="hidden" name="code" value="{{ c }}">{% endfor %}
+                        {% for tp in filter_types %}<input type="hidden" name="txn_type" value="{{ tp }}">{% endfor %}
+                        <button type="submit" class="btn btn-outline btn-sm">&#10003; Reviewed</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="mt-3" style="padding:40px; text-align:center; background:var(--surface);
+     border:1px solid var(--border); border-radius:8px;">
+    <p style="font-size:1.1rem; color:var(--text-muted); margin:0;">
+        {% if filter_code or filter_type %}
+        No unreviewed transactions match the current filter.
+        {% else %}
+        All transactions have been reviewed.
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="reviewModal">
+    <div class="modal" style="padding:0; max-width:700px;">
+        <div class="modal-header" style="margin:0; padding:20px 24px 14px; border-bottom:2px solid var(--accent);">
+            <span class="modal-title">Edit Transaction</span>
+            <button class="modal-close" onclick="closeReviewModal()">&times;</button>
+        </div>
+        <form id="reviewEditForm" method="post" action="">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:16px 20px;">
+                <div class="form-group">
+                    <label class="form-label">Trade Date</label>
+                    <input type="date" name="trade_date" id="re_trade_date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Value Date</label>
+                    <input type="date" name="value_date" id="re_value_date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <input type="text" name="transaction_type" id="re_type" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" name="quantity" id="re_quantity" class="form-control"
+                           step="1" required oninput="reComputeAmount()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Price</label>
+                    <input type="number" name="price" id="re_price" class="form-control"
+                           step="0.0001" min="0" required oninput="reComputeAmount()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Brokerage</label>
+                    <input type="number" name="brokerage" id="re_brokerage" class="form-control"
+                           step="0.01" value="0" oninput="reComputeCharges()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Commission</label>
+                    <input type="number" name="commission" id="re_commission" class="form-control"
+                           step="0.01" value="0" oninput="reComputeCharges()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Foreign Charge</label>
+                    <input type="number" name="foreign_charge" id="re_foreign_charge" class="form-control"
+                           step="0.01" value="0" oninput="reComputeCharges()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Stamp Duty</label>
+                    <input type="number" name="stamp_duty" id="re_stamp_duty" class="form-control"
+                           step="0.01" value="0" oninput="reComputeCharges()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Misc</label>
+                    <input type="number" name="misc" id="re_misc" class="form-control"
+                           step="0.01" value="0" oninput="reComputeCharges()">
+                </div>
+            </div>
+            <div class="modal-computed" style="margin:0 20px 16px;">
+                <div style="display:flex; justify-content:space-around;">
+                    <div style="text-align:center;">
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:2px;">Amount</div>
+                        <div class="computed-value" id="re_amount_display">—</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:2px;">Total Charges</div>
+                        <div class="computed-value" id="re_charges_display">—</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:2px;">Net Amount</div>
+                        <div class="computed-value" id="re_net_display">—</div>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; padding:12px 20px 20px;
+                        border-top:1px solid var(--border);">
+                <button type="button" class="btn btn-outline" onclick="closeReviewModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openReviewModal(refNum) {
+    fetch('/review/' + refNum + '/data')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('reviewEditForm').action = '/review/' + refNum + '/edit';
+            document.getElementById('re_trade_date').value  = d.trade_date;
+            document.getElementById('re_value_date').value  = d.value_date;
+            document.getElementById('re_type').value        = d.transaction_type;
+            document.getElementById('re_quantity').value    = d.quantity;
+            document.getElementById('re_price').value       = d.price;
+            document.getElementById('re_brokerage').value      = d.brokerage;
+            document.getElementById('re_commission').value     = d.commission;
+            document.getElementById('re_foreign_charge').value = d.foreign_charge;
+            document.getElementById('re_stamp_duty').value     = d.stamp_duty;
+            document.getElementById('re_misc').value           = d.misc;
+            reComputeAmount();
+            document.getElementById('reviewModal').classList.add('active');
+        });
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').classList.remove('active');
+}
+
+function reComputeAmount() {
+    var qty   = parseFloat(document.getElementById('re_quantity').value) || 0;
+    var price = parseFloat(document.getElementById('re_price').value)    || 0;
+    var amt   = qty * price;
+    document.getElementById('re_amount_display').textContent = formatNum(amt, 2);
+    reComputeCharges();
+}
+
+function reComputeCharges() {
+    var qty   = parseFloat(document.getElementById('re_quantity').value)       || 0;
+    var price = parseFloat(document.getElementById('re_price').value)          || 0;
+    var brok  = parseFloat(document.getElementById('re_brokerage').value)      || 0;
+    var comm  = parseFloat(document.getElementById('re_commission').value)     || 0;
+    var fgn   = parseFloat(document.getElementById('re_foreign_charge').value) || 0;
+    var stamp = parseFloat(document.getElementById('re_stamp_duty').value)     || 0;
+    var misc  = parseFloat(document.getElementById('re_misc').value)           || 0;
+    var amt     = qty * price;
+    var charges = brok + comm + fgn + stamp + misc;
+    var net     = amt - charges;
+    document.getElementById('re_charges_display').textContent = formatNum(charges, 2);
+    document.getElementById('re_net_display').textContent     = formatNum(net, 2);
+}
+
+function formatNum(v, dp) {
+    var abs = Math.abs(v).toFixed(dp).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return v < 0 ? '(' + abs + ')' : abs;
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeReviewModal();
+});
+document.getElementById('reviewModal').addEventListener('click', function(e) {
+    if (e.target === this) closeReviewModal();
+});
+</script>
+{% endblock %}

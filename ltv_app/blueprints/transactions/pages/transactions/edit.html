@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Edit Transaction</h1>
+
+<form method="post" action="{{ url_for('transactions.edit', ref_num=ref_num) }}" class="page-form mt-3">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="trade_date">Trade Date</label>
+            <input type="date" name="trade_date" id="trade_date" value="{{ form.trade_date }}" required>
+        </div>
+        <div class="form-group">
+            <label for="value_date">Value Date</label>
+            <input type="date" name="value_date" id="value_date" value="{{ form.value_date }}" required>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label for="bank_ref">Account</label>
+            <select name="bank_ref" id="bank_ref" required>
+                <option value=""></option>
+                {% for bank in g.bank_accounts %}
+                <option value="{{ bank.ref_num }}"{% if form.bank_ref == bank.ref_num %} selected{% endif %}>
+                    {{ bank.bank_id }}: {{ bank.bank_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="code_ref">Stock</label>
+            <select name="code_ref" id="code_ref" required>
+                <option value=""></option>
+                {% for stock in g.stocks %}
+                <option value="{{ stock.ref_num }}"{% if form.code_ref == stock.ref_num %} selected{% endif %}>
+                    {{ stock.code }}: {{ stock.stock_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="transaction_type">Transaction Type</label>
+        <select name="transaction_type" id="transaction_type" required>
+            <option value=""></option>
+            {% for option in transaction_types %}
+            <option value="{{ option[0] }}"{% if option[0] == form.transaction_type %} selected{% endif %}>
+                {{ option[1] }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% if form.transaction_type.startswith("Transfer") %}
+    <div class="form-group">
+        <label for="counter_bank_ref">
+            {% if "In" in form.transaction_type %}Received From{% else %}Transferred To{% endif %}
+        </label>
+        <select name="counter_bank_ref" id="counter_bank_ref" required>
+            <option value=""></option>
+            {% for bank in g.bank_accounts %}
+            <option value="{{ bank.ref_num }}"{% if form.counter_bank_ref == bank.ref_num %} selected{% endif %}>
+                {{ bank.bank_id }}: {{ bank.bank_name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+    <div class="form-row">
+        <div class="form-group">
+            <label for="quantity">Quantity</label>
+            <input type="text" name="quantity" id="quantity" value="{{ form.quantity }}" autocomplete="off" required>
+        </div>
+        <div class="form-group">
+            <label for="price">Price</label>
+            <input type="text" name="price" id="price" value="{{ form.price }}" autocomplete="off" required>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label for="brokerage">Brokerage</label>
+            <input type="text" name="brokerage" id="brokerage" value="{{ form.brokerage }}" autocomplete="off" required>
+        </div>
+        <div class="form-group">
+            <label for="commission">Commission</label>
+            <input type="text" name="commission" id="commission" value="{{ form.commission }}" autocomplete="off" required>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label for="foreign_charge">Foreign Charge</label>
+            <input type="text" name="foreign_charge" id="foreign_charge" value="{{ form.foreign_charge }}" autocomplete="off" required>
+        </div>
+        <div class="form-group">
+            <label for="stamp_duty">Stamp Duty</label>
+            <input type="text" name="stamp_duty" id="stamp_duty" value="{{ form.stamp_duty }}" autocomplete="off" required>
+        </div>
+    </div>
+    <div class="form-group" style="max-width:270px;">
+        <label for="misc">Miscellaneous</label>
+        <input type="text" name="misc" id="misc" value="{{ form.misc }}" autocomplete="off" required>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-success">Save</button>
+        <a href="{{ url_for('transactions.home') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

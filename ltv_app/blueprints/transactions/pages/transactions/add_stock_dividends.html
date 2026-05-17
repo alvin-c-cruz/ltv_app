@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <form method="post" action="{{ url_for('transactions.add_stock_dividends') }}">
+        <h1 class="p-1 mt-5">Add Stock Dividends</h1>
+        <!-- Trade Date -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="trade_date">Trade Date</label>
+            </div>
+            <div class="col-6">
+                <input type="date" name="trade_date" id="trade_date" value="{{ form.trade_date }}" class="form-control" required>
+            </div>
+        </div>
+        <!-- Value Date -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="value_date">Value Date</label>
+            </div>
+            <div class="col-6">
+                <input type="date" name="value_date" id="value_date" value="{{ form.value_date }}" class="form-control" required>
+            </div>
+        </div>
+        <!-- Account -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="bank_ref">Account</label>
+            </div>
+            <div class="col-6">
+                <select name="bank_ref" id="bank_ref" class="form-select" required autofocus>
+                    <option value=""></option>
+                    {% for bank in g.bank_accounts %}
+                        {% if form.bank_ref == bank.ref_num %}
+                    <option value="{{ bank.ref_num }}" selected>{{bank.bank_id}}: {{ bank.bank_name }}</option>
+                        {% else %}
+                    <option value="{{ bank.ref_num }}">{{bank.bank_id}}: {{ bank.bank_name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!-- Stock -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="code_ref">Stock</label>
+            </div>
+            <div class="col-6">
+                <select name="code_ref" id="code_ref" class="form-select" required>
+                    <option value=""></option>
+                    {% for stock in g.stocks %}
+                        {% if form.code_ref == stock.ref_num %}
+                    <option value="{{ stock.ref_num }}" selected>{{ stock.code }}: {{ stock.stock_name }}</option>
+                        {% else %}
+                    <option value="{{ stock.ref_num }}">{{ stock.code }}: {{ stock.stock_name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!-- Transaction Type -->
+        <div class="row">
+            <div class="col-6">
+                <label for="transaction_type">Transaction Type</label>
+            </div>
+            <div class="col-6">
+                <select name="transaction_type" id="transaction_type" class="form-select" required>
+                    <option value=""></option>
+                    {% for option in transaction_types %}
+                        {% if option[0] == form.transaction_type %}
+                    <option value="{{ option[0] }}" selected>{{ option[1] }}</option>
+                        {% else %}
+                    <option value="{{ option[0] }}">{{ option[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!-- Quantity -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="quantity">Quantity</label>
+            </div>
+            <div class="col-6">
+                <input type="text" name="quantity" id="quantity" value="{{ form.quantity }}" class="form-control" autocomplete="off" required>
+            </div>
+        </div>
+        <!-- Price -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="price">Price</label>
+            </div>
+            <div class="col-6">
+                <input type="text" name="price" id="price" value="{{ form.price }}" class="form-control" autocomplete="off" required>
+            </div>
+        </div>
+        <!-- Buttons -->
+        <div class="row">
+            <div class="col-3"></div>
+            <div class="col-3">
+                <input type="submit" value="Save" class="btn btn-success form-control">
+            </div>
+            <div class="col-3">
+                <a href="{{ url_for('transactions.home') }}" class="btn btn-danger form-control">Cancel</a>
+            </div>
+            <div class="col-3"></div>
+        </div>
+    </form>
+</div>
+{% endblock %}

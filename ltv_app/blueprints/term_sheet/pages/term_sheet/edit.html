@@ -1,0 +1,350 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<form method="post" action="{{ url_for('term_sheet.edit', contract_ref=contract_ref) }}" class="container">
+    {{ csrf_token }}
+    <div class="row">
+        <!-- Bank Account-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="bank_ref">Account</label>
+            </div>
+            <div class="col-8">
+                <select name="bank_ref" id="bank_ref" class="form-select">
+                    {% for account in g.bank_accounts %}
+                        {% if ts.bank_ref == account.ref_num %}
+                    <option value="{{ account.ref_num }}" selected>{{ account.bank_name }}</option>
+                        {% else %}
+                    <option value="{{ account.ref_num }}">{{ account.bank_name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!--Reference-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="reference">Reference</label>
+            </div>
+            <div class="col-8">
+                <input type="text" name="reference" id="reference" value="{{ts.reference}}" class="form-control">
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!--Stock-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="code_ref">Underlying</label>
+            </div>
+            <div class="col-8">
+                <select name="code_ref" id="code_ref" class="form-select">
+                    {% for code in codes %}
+                        {% if ts.code_ref == code.ref_num %}
+                    <option value="{{ code.ref_num }}" selected>{{ code.code }}: {{ code.stock_name }}</option>
+                        {% else %}
+                    <option value="{{ code.ref_num }}">{{ code.code }}: {{ code.stock_name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!--Transaction Type-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="transaction_type">Derivative Type</label>
+            </div>
+            <div class="col-8">
+                <select name="transaction_type" id="transaction_type" class="form-select">
+                    {% for type_ in [('ACCU', 'Accumulator'), ('DECU', 'Decumulator')] %}
+                        {% if ts.transaction_type == type_[0] %}
+                    <option value="{{ type_[0] }}" selected>{{ type_[1] }}</option>
+                        {% else %}
+                    <option value="{{ type_[0] }}">{{ type_[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="row col-6">
+            <!--Daily Shares-->
+            <div class="col-4">
+                <label for="daily_shares">Daily Shares</label>
+            </div>
+            <div class="col-8">
+                <input type="text" name="daily_shares" id="daily_shares" value="{{ ts.daily_shares }}" class="form-control">
+            </div>
+        </div>
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="leveraged">Leveraged</label>
+            </div>
+            <div class="col-8">
+                <select name="leveraged" id="leveraged" class="form-select">
+                    {% for type_ in [('Yes', 'Yes'), ('No', 'No')] %}
+                        {% if ts.leveraged == type_[0] %}
+                    <option value="{{ type_[0] }}" selected>{{ type_[1] }}</option>
+                        {% else %}
+                    <option value="{{ type_[0] }}">{{ type_[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!--Trade Date-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="trade_date">Trade Date</label>
+            </div>
+            <div class="col-8">
+                 <input type="text" name="trade_date" id="trade_date" value="{{ts.trade_date}}" class="form-control">
+            </div>
+        </div>
+        <!--Start Date-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="start_date">Start Date</label>
+            </div>
+            <div class="col-8">
+                <input type="text" name="start_date" id="start_date" value="{{ts.start_date}}" class="form-control">
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!--Spot-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="spot">Spot</label>
+            </div>
+            <div class="col-8">
+                 <input type="text" name="spot" id="spot" value="{{ts.spot}}" class="form-control">
+            </div>
+        </div>
+        <!--Status-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="status">Status</label>
+            </div>
+            <div class="col-8">
+                <select name="status" id="status" class="form-select">
+                    {% for type_ in [('active', 'Active'), ('KO', 'KO'), ('inactive', 'Inactive')] %}
+                        {% if ts.status == type_[0] %}
+                    <option value="{{ type_[0] }}" selected>{{ type_[1] }}</option>
+                        {% else %}
+                    <option value="{{ type_[0] }}">{{ type_[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!--Strike Rate-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="strike_rate">Strike Rate</label>
+            </div>
+            <div class="col-8">
+                 <input type="text" name="strike_rate" id="strike_rate" value="{{ts.strike_rate}}" class="form-control">
+            </div>
+        </div>
+        <!--Strike-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="strike">Strike</label>
+            </div>
+            <div class="col-8">
+                <input type="text" name="strike" id="strike" value="{{ ts.strike }}" class="form-control" disabled>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!--KO Rate-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="ko_rate">KO Rate</label>
+            </div>
+            <div class="col-8">
+                 <input type="text" name="ko_rate" id="ko_rate" value="{{ts.ko_rate}}" class="form-control">
+            </div>
+        </div>
+        <!--KO-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="ko">KO</label>
+            </div>
+            <div class="col-8">
+                <input type="text" name="ko" id="ko" value="{{ ts.ko }}" class="form-control" disabled>
+            </div>
+        </div>
+    </div>
+
+   <div class="row">
+        <!--Tenor-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="tenor">Tenor</label>
+            </div>
+            <div class="col-8">
+                <select name="tenor" id="tenor" class="form-select">
+                    {% for tenor in tenors %}
+                        {% if ts.tenor == tenor[0] %}
+                    <option value="{{ tenor[0] }}" selected>{{ tenor[1] }}</option>
+                        {% else %}
+                    <option value="{{ tenor[0] }}">{{ tenor[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!--Frequency-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="frequency">Frequency</label>
+            </div>
+            <div class="col-8">
+                <select name="frequency" id="frequency" class="form-select">
+                    {% for frequency in frequencies %}
+                        {% if ts.frequency == frequency[0] %}
+                    <option value="{{ frequency[0] }}" selected>{{ frequency[1] }}</option>
+                        {% else %}
+                    <option value="{{ frequency[0] }}">{{ frequency[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!--GTD-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="gtd">Guaranteed</label>
+            </div>
+            <div class="col-8">
+                <select name="gtd" id="gtd" class="form-select">
+                    {% for type_ in gtds %}
+                        {% if ts.gtd == type_[0] %}
+                    <option value="{{ type_[0] }}" selected>{{ type_[1] }}</option>
+                        {% else %}
+                    <option value="{{ type_[0] }}">{{ type_[1] }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <!--Bank Doc-->
+        <div class="row col-6">
+            <div class="col-4">
+                <label for="bank_doc">Bank Reference</label>
+            </div>
+            <div class="col-8">
+                 <input type="text" name="bank_doc" id="bank_doc" value="{{ts.bank_doc}}" class="form-control">
+            </div>
+        </div>
+    </div>
+
+    <table class="table table-stripe table-light">
+        <tr>
+            <th class=" text-center">Start Date</th>
+            <th class=" text-center">End Date</th>
+            <th class=" text-center">Days</th>
+            <th class=" text-center">Received</th>
+            <th class=" text-center">{% if ts.transaction_type == 'ACCU' %}to Accu{% else %}to Decu{% endif %}</th>
+            <th class=" text-center">GTD</th>
+            <th>
+                <a href="{{ url_for('term_sheet.add_line', contract_ref=contract_ref) }}" class="btn btn-success" style="font-size: .65em">Add line</a>
+            </th>
+        </tr>
+    {% for sched in ts.schedules %}
+        <tr>
+            <td>
+                <input type="text" name="start_date_{{sched.ref_num}}" value="{{sched.start_date}}" class="form-control text-center">
+            </td>
+            <td>
+                <input type="text" name="end_date_{{sched.ref_num}}" value="{{sched.end_date}}" class="form-control text-center">
+            </td>
+            <td>
+                <input type="text" name="days_{{sched.ref_num}}" value="{% if sched.days %}{{sched.days}}{% endif %}" class="form-control text-center">
+            </td>
+            <td>
+                <input type="text" name="received_{{sched.ref_num}}" value="{% if sched.received %}{{sched.received}}{% endif %}" class="form-control text-center">
+            </td>
+            <td>
+                {% if ts.leveraged=="Yes" %}
+                    <input class="form-control text-center" value="{{ sched.days * ts.daily_shares * 2 }}">
+                {% else %}
+                    <input class="form-control text-center" value="{{ sched.days * ts.daily_shares }}">
+                {% endif %}
+            </td>
+            <td>
+                <select name="gtd_{{sched.ref_num}}" id="gtd_{{sched.ref_num}}" class="form-select">
+                    {% for option in ("Yes", "No") %}
+                        {% if sched.gtd == option %}
+                    <option value="{{option}}" selected>{{option}}</option>
+                        {% else %}
+                    <option value="{{option}}">{{option}}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <a href="{{ url_for('term_sheet.delete_period', contract_ref=contract_ref, period_ref=sched.ref_num) }}"
+                   class="btn btn-danger"
+                   onclick="return confirm('Are you sure you want to delete this item')"
+                >Delete</a>
+            </td>
+        </tr>
+    {% endfor %}
+        <tr>
+            <td></td>
+            <td>Received</td>
+            <td><input class="form-control text-center" value="{{ ts.received_days }}"></td>
+            <td><input class="form-control text-center" value="{{ ts.received_shares }}"></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>Remaining</td>
+            <td><input class="form-control text-center" value="{{ ts.remaining_days }}"></td>
+            <td></td>
+            <td><input class="form-control text-center" value="{{ ts.remaining_shares }}"></td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>Total</td>
+            <td><input class="form-control text-center" value="{{ ts.total_days }}"></td>
+            <td></td>
+            <td><input class="form-control text-center" value="{{ ts.total_shares }}"></td>
+        </tr>
+    </table>
+
+    <div class="row">
+        <div class="col-3">
+        </div>
+        <div class="col-3">
+            <a href="{{ url_for('term_sheet.home', bank_id=bank_id) }}" class="btn btn-danger form-control">
+                Back
+            </a>
+        </div>
+        <div class="col-3">
+            <input type="submit" value="Save" class="btn btn-success form-control">
+        </div>
+        <div class="col-3">
+        </div>
+    </div>
+
+</form>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% macro transaction_trade_view(transactions) %}
+{% if transactions %}
+<div class="table-wrap mt-2">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Trade Date</th>
+                <th>Value Date</th>
+                <th>Account</th>
+                <th>Code</th>
+                <th>Transaction</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Price</th>
+                <th class="text-right">Amount</th>
+                <th class="text-center">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for transaction in transactions %}
+        <tr>
+            <td>{{ transaction.trade_date }}</td>
+            <td>{{ transaction.value_date }}</td>
+            <td>{{ transaction.bank_name }}</td>
+            <td>{{ transaction.code }}</td>
+            <td>{{ transaction.transaction_type }}</td>
+            <td class="text-right">{{ '{:,.0f}'.format(transaction.quantity) }}</td>
+            <td class="text-right">{{ '{:,.4f}'.format(transaction.price) }}</td>
+            <td class="text-right">{{ '{:,.2f}'.format(transaction.amount) }}</td>
+            <td class="text-center">
+                <a href="{{ url_for('fixings.edit', ref_num=transaction.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{{ url_for('fixings.delete', ref_num=transaction.id) }}" class="btn btn-danger btn-sm"
+                   onclick="return confirm('Delete this fixing?')">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}

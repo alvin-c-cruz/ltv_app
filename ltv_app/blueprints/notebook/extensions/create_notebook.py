@@ -1,0 +1,417 @@
+from flask import current_app
+import os
+from openpyxl import load_workbook
+from openpyxl.styles import Font, Alignment
+from openpyxl.styles.borders import Border, Side
+from datetime import datetime
+
+from ltv_app.blueprints.transactions import TradesDoneAverage
+
+CARD_ROW_HEIGHT = 12
+ROW_HEIGHT = 17.25
+ROW_NUM_START = 24
+STOCK_TRANSACTIONS = [
+    "Buy (Accu)",
+    "Buy (Accu-KO)",
+    "Buy (Spot)",
+    "Stock Dividends",
+    "Sell (Decu)",
+    "Sell (Decu-KO)",
+    "Sell (Spot)"
+]
+
+DERIVATIVES = [
+    "ACCU",
+    "DECU"
+]
+
+RED_COLOR = "00FF0000"
+
+
+class CreateNotebook:
+    def __init__(self, db, trade_date, transactions):
+        self.db = db
+        self.trade_date = trade_date
+        self.transactions = transactions
+
+        self.template_file = os.path.join(current_app.instance_path, "excel_templates", "notebook.xlsx")
+        self.filename = os.path.join(current_app.instance_path, "temp", f"{trade_date} notebook.xlsx")
+
+        self.create_file()
+
+    def create_file(self):
+        wb = load_workbook(self.template_file)
+        ws = wb["notebook"]
+
+        self.write_date(ws)
+        self.write_stock_card(ws)
+        row_num = self.write_transactions(ws=ws, row_num=ROW_NUM_START)
+
+        ws.print_area = f"A1:Q{row_num}"
+
+        wb.save(self.filename)
+        wb.close()
+
+    def write_date(self, ws):
+        # Page date
+        cell = ws["A1"]
+        cell.value = datetime.strptime(self.trade_date, "%Y-%m-%d").strftime("%B %d, %Y %A")
+        cell.font = Font(size=13, bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+        ws.merge_cells("A1:Q1")
+        ws.row_dimensions[1].height = ROW_HEIGHT
+
+        # Card date
+        ws["K6"].value = datetime.strptime(self.trade_date, "%Y-%m-%d")
+
+    def write_stock_card(self, ws):
+        for row_num in range(5, ROW_NUM_START):
+            ws.row_dimensions[row_num].height = CARD_ROW_HEIGHT
+
+    def write_transactions(self, ws, row_num):
+        for ccy, accounts in self.transactions.items():
+            for bank_name, codes in accounts.items():
+                bank_id = self.db.execute("SELECT bank_id FROM tbl_bank_account WHERE bank_name = ?",
+                                          (bank_name, )).fetchone()[0]
+                counter = 1
+
+                border_line(ws, row_num)
+                cell = ws[f"A{row_num}"]
+                cell.value = bank_name if ccy == "HKD" else f"{bank_name} ({ccy})"
+                cell.font = Font(size=13, bold=True)
+                cell.alignment = Alignment(horizontal="center")
+                ws.merge_cells(f"A{row_num}:Q{row_num}")
+                ws.row_dimensions[row_num].height = ROW_HEIGHT
+
+                row_num += 1
+                ws.row_dimensions[row_num].height = ROW_HEIGHT
+                border_line(ws, row_num)
+
+                for code in codes:
+                    trades = codes[code]
+
+                for code, trades in codes.items():
+                    stock_trade_count = sum([len(trades) for _type, trades in trades.items() if _type in STOCK_TRANSACTIONS])
+
+                    transaction_reference = []
+                    for transaction_type in STOCK_TRANSACTIONS:
+                        if transaction_type in trades:
+                            for row in trades[transaction_type]:
+                                row_num, counter, cell_reference = self.write_line(ws, row_num, counter, row)
+                                transaction_reference.append(cell_reference)
+                                border_line(ws, row_num)
+
+                                row_num += 1
+                                ws.row_dimensions[row_num].height = ROW_HEIGHT
+                                border_line(ws, row_num)
+
+                    # Balance lines
+                    if stock_trade_count:
+                        shares_remaining = 0
+                        row_num -= 1
+                        # Shares beginning
+                        balance_formula = f"=G{row_num}"
+                        cell = ws[f"G{row_num}"]
+                        shares_balance = self.db.execute(
+                            "SELECT SUM(tbl_transaction.quantity) as balance "
+                            "FROM tbl_transaction "
+                            "INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_transaction.bank_ref "
+                            "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_transaction.code_ref "
+                            "WHERE tbl_bank_account.bank_name = ? "
+                            "   AND tbl_code.code = ? "
+                            "   AND tbl_transaction.trade_date < ?",
+                            (bank_name, code, self.trade_date)
+                        ).fetchone()
+                        cell.value = shares_balance[0] if shares_balance else 0
+                        if shares_balance:
+                            try:
+                                shares_remaining += shares_balance[0]
+                            except TypeError:
+                                pass
+
+                        cell.font = Font(size=13)
+                        cell.number_format = "#,##0_ ;[Red](#,##0)"
+                        ws.merge_cells(f"G{row_num}:J{row_num}")
+                        row_num += 1
+                        ws.row_dimensions[row_num].height = ROW_HEIGHT
+                        border_line(ws, row_num)
+
+                        # Quantities
+                        i = 0
+                        for _type in STOCK_TRANSACTIONS:
+                            if _type in trades:
+                                for trade in trades[_type]:
+                                    shares_remaining += trade["quantity"]
+                                    quantity = abs(trade["quantity"])
+                                    sign = "+" if trade["quantity"] >= 0 else "-"
+
+                                    cell = ws[f"F{row_num}"]
+                                    cell.value = sign
+                                    cell.alignment = Alignment(horizontal="right")
+                                    cell.font = Font(size=13, name="AR JULIAN")
+
+                                    cell = ws[f"G{row_num}"]
+                                    cell.value = f"={transaction_reference[i]}"
+                                    i += 1
+                                    cell.font = Font(size=13)
+                                    cell.number_format = "#,##0_ ;[Red](#,##0)"
+                                    ws.merge_cells(f"G{row_num}:J{row_num}")
+
+                                    balance_formula += f"{sign}G{row_num}"
+
+                                    row_num += 1
+                                    ws.row_dimensions[row_num].height = ROW_HEIGHT
+                                    border_line(ws, row_num)
+
+                        # Remaining shares
+                        cell = ws[f"F{row_num}"]
+                        cell.value = f'=IF(G{row_num}>=0,"shares","short")'
+                        cell.font = Font(size=13)
+                        cell.alignment = Alignment(horizontal="right")
+
+                        cell = ws[f"G{row_num}"]
+                        cell.value = balance_formula
+                        cell.font = Font(size=13)
+                        cell.border = Border(top=Side(style='thin'))
+                        cell.number_format = "#,##0_ ;[Red](#,##0)"
+                        ws.merge_cells(f"G{row_num}:J{row_num}")
+                        row_num += 1
+                        ws.row_dimensions[row_num].height = ROW_HEIGHT
+                        border_line(ws, row_num)
+
+                        # Closing Rate
+                        for transaction_type, _ in trades.items():
+                            if "KO" in transaction_type:
+                                cell = ws[f"O{row_num-3}"]
+                                cell.value = "Closing"
+                                cell.alignment = Alignment(horizontal="center")
+                                cell.font = Font(size=9, color=RED_COLOR)
+                                ws.merge_cells(f"O{row_num-3}:Q{row_num-3}")
+
+                                cell = ws[f"O{row_num-2}"]
+                                cell.alignment = Alignment(horizontal="center")
+                                cell.number_format = "#,##0.00"
+                                cell.font = Font(size=9, color=RED_COLOR)
+                                ws.merge_cells(f"O{row_num-2}:Q{row_num-2}")
+
+                                cell = ws[f"O{row_num-1}"]
+                                cell.alignment = Alignment(horizontal="center")
+                                cell.number_format = "d-mmm-yyyy"
+                                cell.font = Font(size=9, color=RED_COLOR)
+                                ws.merge_cells(f"O{row_num-1}:Q{row_num-1}")
+
+                        # Average
+                        if "+" in balance_formula:
+                            if shares_balance[0] == 0 and shares_remaining == 0:
+                                pass
+                            else:
+                                cell = ws[f"L{row_num - 2}"]
+                                cell.value = "Average"
+                                cell.alignment = Alignment(horizontal="center")
+                                cell.font = Font(size=13)
+                                ws.merge_cells(f"L{row_num - 2}:N{row_num - 2}")
+
+                                cell = ws[f"L{row_num - 1}"]
+                                cell.alignment = Alignment(horizontal="center")
+                                average = TradesDoneAverage(db=self.db, trade_date=self.trade_date,
+                                                            code=code, bank_id=bank_id).average
+                                cell.value = average
+                                cell.font = Font(size=13)
+                                cell.number_format = "#,##0.0000"
+                                ws.merge_cells(f"L{row_num - 1}:N{row_num - 1}")
+
+                        # Extra line after remaining shares
+                        row_num += 1
+                        ws.row_dimensions[row_num].height = ROW_HEIGHT
+                        border_line(ws, row_num)
+
+                    for transaction_type in DERIVATIVES:
+                        if transaction_type in trades:
+                            for row in trades[transaction_type]:
+                                row_num, counter, _ = self.write_line(ws, row_num, counter, row)
+                                row_num += 1
+                                ws.row_dimensions[row_num].height = ROW_HEIGHT
+                                border_line(ws, row_num)
+
+                # Additional empty lines after each bank name
+                row_num += 1
+                ws.row_dimensions[row_num].height = ROW_HEIGHT
+                border_line(ws, row_num)
+
+        return row_num
+
+    def write_line(self, ws, row_num, counter, row):
+        ccy = row["ccy_id"]
+        transaction_type = row["transaction_type"]
+        stock_name = row["stock_name"]
+        code = row["code"]
+        cell_reference = None
+
+        if transaction_type in STOCK_TRANSACTIONS:
+            # Stock line
+            cell = ws[f"B{row_num}"]
+            cell.value = counter
+            cell.font = Font(size=13)
+            cell.number_format = "0)"
+            cell.alignment = Alignment(horizontal="right")
+
+            cell = ws[f"C{row_num}"]
+            cell.value = f"{transaction_type} {stock_name} ({code})"
+            cell.font = Font(size=13)
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+            # Transaction Line
+            cell_reference = f"R{row_num}"
+            ws[f"R{row_num}"].value = abs(row["quantity"])
+            ws[f"S{row_num}"].value = row["price"]
+
+            strike_spot = "Spot" if "Spot" in transaction_type else "Strike"
+            number_format = "#,##0.00" if len(str(row["price"])[-(len(str(row["price"])) - (str(row["price"]).find(".")) - 1):]) <= 2 else "#,##0.0000"
+
+            cell = ws[f"C{row_num}"]
+            cell.value = f'=TEXT(R{row_num},"#,###,###,##0")&" shares @ "&TEXT(S{row_num},"{number_format}")&" ' \
+                         f'{strike_spot} = {ccy} "&TEXT(R{row_num}*S{row_num},"#,###,###,###,##0.00")'
+            cell.font = Font(size=13)
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+            # Spot and KO Line
+            if "(Accu" in transaction_type or "(Decu" in transaction_type:
+                cell = ws[f"C{row_num}"]
+                cell.value = "Spot"
+                cell.font = Font(size=13)
+
+                cell = ws[f"E{row_num}"]
+                cell.value = row["spot"]
+                cell.font = Font(size=13)
+                cell.alignment = Alignment(horizontal="left")
+                cell.number_format = "#,##0.00" if len(str(row["spot"])[-(len(str(row["spot"])) - (str(row["spot"]).find(".")) - 1):]) <= 2 else "#,##0.0000"
+                ws.merge_cells(f"E{row_num}:G{row_num}")
+
+                cell = ws[f"I{row_num}"]
+                cell.value = "KO"
+                cell.font = Font(size=13)
+
+                cell = ws[f"J{row_num}"]
+                cell.value = row["ko"]
+                cell.font = Font(size=13)
+                cell.alignment = Alignment(horizontal="left")
+                cell.number_format = "#,##0.00" if len(str(row["ko"])[-(len(str(row["ko"])) - (str(row["ko"]).find(".")) - 1):]) <= 2 else "#,##0.0000"
+                ws.merge_cells(f"J{row_num}:L{row_num}")
+
+                row_num += 1
+                ws.row_dimensions[row_num].height = ROW_HEIGHT
+                border_line(ws, row_num)
+
+        elif transaction_type in DERIVATIVES:
+            # Stock line
+            cell = ws[f"B{row_num}"]
+            cell.value = counter
+            cell.font = Font(size=13)
+            cell.number_format = "0)"
+            cell.alignment = Alignment(horizontal="right")
+
+            cell = ws[f"C{row_num}"]
+            cell.value = f"New {transaction_type.title()}mulator - {stock_name} ({code})"
+            cell.font = Font(size=13)
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+            # Terms line
+            tenor = row["tenor"].replace("m", "")
+            if row["gtd"] in ("1m", "Yes"):
+                gtd = "1 month GTD"
+            elif row["gtd"] == "No":
+                gtd = "No GTD"
+            else:
+                gtd = f"{row['gtd'].replace('m', '')} months GTD"
+
+            if row["leveraged"] == "Yes":
+                shares = '{:,.0f}'.format(row["daily_shares"]) + " / " + '{:,.0f}'.format(row["daily_shares"] * 2)
+            else:
+                shares = '{:,.0f}'.format(row["daily_shares"])
+
+            cell = ws[f"C{row_num}"]
+            cell.value = f"{tenor} months, {gtd}, shares {shares} "
+            cell.font = Font(size=13)
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+            # Spot and Strike Line
+            cell = ws[f"C{row_num}"]
+            cell.value = "Spot"
+            cell.font = Font(size=13)
+
+            cell = ws[f"E{row_num}"]
+            cell.value = row["spot"]
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="left")
+            cell.number_format = "#,##0.0000"
+            ws.merge_cells(f"E{row_num}:G{row_num}")
+
+            cell = ws[f"H{row_num}"]
+            cell.value = "Strike"
+            cell.font = Font(size=13)
+
+            cell = ws[f"J{row_num}"]
+            cell.value = row["strike_rate"] / 100
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "0.00%"
+            ws.merge_cells(f"J{row_num}:L{row_num}")
+
+            cell = ws[f"M{row_num}"]
+            cell.value = f"=E{row_num}*J{row_num}"
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "#,##0.0000"
+            ws.merge_cells(f"M{row_num}:O{row_num}")
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+            # KO line
+            cell = ws[f"H{row_num}"]
+            cell.value = "KO"
+            cell.font = Font(size=13)
+
+            cell = ws[f"J{row_num}"]
+            cell.value = row["ko_rate"] / 100
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "0.00%"
+            ws.merge_cells(f"J{row_num}:L{row_num}")
+
+            cell = ws[f"M{row_num}"]
+            cell.value = f"=E{row_num-1}*J{row_num}"
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "#,##0.0000"
+            ws.merge_cells(f"M{row_num}:O{row_num}")
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+        counter += 1
+        return row_num, counter, cell_reference
+
+
+def border_line(ws, row_num):
+    for column in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"):
+        cell = ws[f'{column}{row_num}']
+        cell.border = Border(
+            top=Side(style='thin', color='00C0C0C0'),
+            bottom=Side(style='thin', color='00C0C0C0')
+        )

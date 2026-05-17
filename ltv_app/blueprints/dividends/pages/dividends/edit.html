@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% macro form_control(field) %}
+  <div class="row mt-3 mb-3">
+    {{ field.label }}
+    {{ field }}
+    {% for error in field.errors %}
+    <p style="color: red;">{{ error }}</p>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<form action="{{ url_for('dividends.edit', ref_num=ref_num) }}" method="post" class="form p-5">
+  <h1>Edit Dividend</h1>
+  {{ form_control(form.bank_id) }}
+  {{ form_control(form.stock_id) }}
+  {{ form_control(form.ex_date) }}
+  {{ form_control(form.pay_out) }}
+  {{ form_control(form.nominal) }}
+  {{ form_control(form.ccy_id) }}
+  {{ form_control(form.dividends_per_share) }}
+  {{ form_control(form.tax) }}
+  {{ form_control(form.charges) }}
+  {{ form_control(form.status) }}
+
+  <input type="submit" value="Save" class="btn btn-success">
+</form>
+{% endblock %}

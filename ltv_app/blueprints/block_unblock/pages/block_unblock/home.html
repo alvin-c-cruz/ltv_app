@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Block / Unblock</h1>
+
+<form action="{{ url_for('block_unblock.home') }}" method="post" class="mb-3">
+    <button type="submit" class="btn btn-success">&#x2193; Download</button>
+</form>
+
+{% for bank_name in data %}
+<h2>{{ bank_name }}</h2>
+<div class="table-wrap mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Underlying</th>
+                <th class="text-right">Shares to Block</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for stock in data[bank_name] %}
+        <tr>
+            <td>{{ stock }}</td>
+            <td class="text-right">{{ '{:,}'.format(data[bank_name][stock]['shares_to_block']) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+{% endblock %}

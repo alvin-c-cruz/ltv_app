@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Holidays</h1>
+
+<div class="toolbar mt-3">
+    <form method="post" action="{{ url_for('holiday.home') }}" class="toolbar-form">
+        {{ csrf_token }}
+        <div class="form-group">
+            <label for="date_from">Date From</label>
+            <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
+        </div>
+        <div class="form-group">
+            <label for="date_to">Date To</label>
+            <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
+        </div>
+        <div class="toolbar-actions">
+            <button type="submit" class="btn btn-primary">Refresh</button>
+        </div>
+    </form>
+    <div class="toolbar-actions" style="margin-left:auto;">
+        <a href="{{ url_for('holiday.add') }}" class="btn btn-success">+ Add Holiday</a>
+    </div>
+</div>
+
+{% if grouped %}
+<div class="holiday-grid mt-3">
+    {% for ccy, dates in grouped.items() %}
+    <div class="holiday-card">
+        <div class="holiday-card-header">
+            <span class="holiday-ccy">{{ ccy }}</span>
+            <span class="holiday-count">{{ dates|length }} holiday{{ 's' if dates|length != 1 }}</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for h in dates %}
+                <tr>
+                    <td>{{ h.date }}</td>
+                    <td class="{% if h.day in ['Saturday','Sunday'] %}text-danger{% else %}text-muted{% endif %}">
+                        {{ h.day }}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted mt-3">No holidays found for the selected period.</p>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+    <title>LTV System</title>
+</head>
+<body>
+
+{% if g.get('user') %}
+    {% include 'navbar.html' %}
+{% endif %}
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <ul class="flash-list">
+        {% for message in messages %}
+        <li class="flash">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+{% endwith %}
+
+<div class="page-content">
+    {% block content %}{% endblock %}
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

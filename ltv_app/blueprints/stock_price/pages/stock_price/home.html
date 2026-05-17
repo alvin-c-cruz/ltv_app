@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Upload Yahoo File</h1>
+
+<form action="{{ url_for('stock_price.home') }}" method="post" enctype="multipart/form-data" class="page-form mt-3">
+    {{ csrf_token }}
+    <div class="form-group">
+        <label for="file">File</label>
+        <input type="file" name="file[]" id="file" multiple>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-success">Upload</button>
+    </div>
+</form>
+
+<div class="mt-3">
+    <img src="{{ url_for('static', filename='images/yahoo_csv.JPG') }}" alt="yahoo csv export file" style="max-width:100%;">
+</div>
+{% endblock %}

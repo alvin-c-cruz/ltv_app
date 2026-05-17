@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <form method="post" action="{{ url_for('upload.heroku') }}" class="container w-50" enctype = "multipart/form-data">
+        <h1 class="mb-5 mt-5">Upload Heroku File</h1>
+        {{ csrf_token }}
+
+        <div class="row p-1">
+            <div class="row col-6">
+                <label for="file" class="form-label">File</label>
+            </div>
+            <div class="row col-6">
+                <input type="file" name="file[]" multiple="" class="form-control">
+            </div>
+        </div>
+        <div class="row p-1 mt-5">
+            <div class="col-4"></div>
+            <div class="col-4 row">
+                <div class="col-1"></div>
+                <div class="col-10">
+                    <input type="submit" value="Upload" class="btn btn-success form-control">
+                </div>
+                <div class="col-1"></div>
+            </div>
+            <div class="col-4"></div>
+        </div>
+    </form>
+{% endblock %}

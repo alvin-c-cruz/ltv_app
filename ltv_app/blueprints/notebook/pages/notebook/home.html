@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Notebook</h1>
+
+<div class="container">
+    <form class="form" id="form" action="{{ url_for('notebook.home') }}" method="post">
+        {{ date_form.csrf_token }}
+        {{ date_form.trade_date.label }}
+        {{ date_form.trade_date }}
+        {{ date_form.submit(class="btn btn-success") }}
+    </form>
+    <a href="{{ url_for('notebook.generate', trade_date=trade_date) }}" class="btn btn-success">Generate</a>
+</div>
+{% endblock %}

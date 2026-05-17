@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ bank_name }}</h1>
+
+{% for ccy in position %}
+<h2>{{ ccy }} Stocks</h2>
+<div class="table-wrap mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Stock</th>
+                <th class="text-center">Code</th>
+                <th class="text-right">Shares</th>
+                <th class="text-right">Average</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for code_ref in position[ccy] %}
+        <tr class="clickable-row"
+            data-href="{{ url_for('bank.transaction_list', bank_id=bank_id, code=position[ccy][code_ref]['code']) }}">
+            <td>{{ position[ccy][code_ref]['name'] }}</td>
+            <td class="text-center">{{ position[ccy][code_ref]['code'] }}</td>
+            <td class="text-right">{{ position[ccy][code_ref]['quantity'] }}</td>
+            <td class="text-right">{{ position[ccy][code_ref]['average'] }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+{% endblock %}

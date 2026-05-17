@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Fixings</h1>
+
+<div class="toolbar mt-3">
+    <form method="post" action="{{ url_for('fixings.home') }}" class="toolbar-form">
+        {{ date_form.csrf_token }}
+        <div class="form-group">
+            <label for="trade_date">Trade Date</label>
+            <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}">
+        </div>
+        <div class="toolbar-actions">
+            <button type="submit" class="btn btn-primary">Refresh</button>
+        </div>
+    </form>
+    <div class="toolbar-actions" style="margin-left:auto;">
+        <a href="{{ url_for('fixings.generate', trade_date=trade_date) }}" class="btn btn-success">Generate</a>
+        {% if not has_fixings %}
+        <a href="{{ url_for('fixings.record', trade_date=trade_date) }}" class="btn btn-outline"
+           onclick="return confirm('Record fixings for {{ trade_date }}?')">Record Fixings</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if grouped %}
+<div class="mt-3">
+{% for bank_name, data in grouped.items() %}
+<div class="fixings-section">
+    <div class="fixings-section-header">
+        <span class="fixings-section-name">{{ bank_name }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Value Date</th>
+                    <th>Code</th>
+                    <th>Transaction</th>
+                    <th class="text-right">Quantity</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Amount</th>
+                    <th class="text-right">Charges</th>
+                    <th class="text-right">Net Amount</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in data.rows %}
+            <tr>
+                <td>{{ t.value_date }}</td>
+                <td><strong>{{ t.code }}</strong></td>
+                <td>{{ t.transaction_type }}</td>
+                <td class="text-right {% if t.qty_neg %}text-danger{% endif %}">{{ t.quantity }}</td>
+                <td class="text-right">{{ t.price }}</td>
+                <td class="text-right {% if t.amt_neg %}text-danger{% endif %}">{{ t.amount }}</td>
+                <td class="text-right {% if t.charges_neg %}text-danger{% endif %}">{{ t.charges }}</td>
+                <td class="text-right {% if t.net_neg %}text-danger{% endif %}"><strong>{{ t.net_amount }}</strong></td>
+                <td class="text-center" style="white-space:nowrap;">
+                    <button type="button" class="btn btn-outline btn-sm"
+                        onclick="openFixingModal({
+                            id: {{ t.id }},
+                            trade_date: '{{ t.trade_date_raw }}',
+                            value_date: '{{ t.value_date_raw }}',
+                            bank_ref: {{ t.bank_ref }},
+                            code_ref: {{ t.code_ref }},
+                            transaction_type: '{{ t.transaction_type }}',
+                            qty: {{ t.qty_raw }},
+                            price: {{ t.price_raw }},
+                            brokerage: {{ t.brokerage }},
+                            commission: {{ t.commission }},
+                            foreign_charge: {{ t.foreign_charge }},
+                            stamp_duty: {{ t.stamp_duty }},
+                            misc: {{ t.misc }}
+                        })">Edit</button>
+                    <a href="{{ url_for('fixings.delete', ref_num=t.id) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this fixing?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<p class="text-muted mt-3">No fixings found for {{ trade_date }}.</p>
+{% endif %}
+
+
+{# ── Edit Fixing Modal ─────────────────────────────────────────── #}
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Edit Fixing <span id="modal-ref"></span></span>
+            <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <form method="post" id="editFixingForm" action="">
+            <input type="hidden" name="csrf_token" value="{{ date_form.csrf_token._value() }}">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" id="m_trade_date" required>
+                </div>
+                <div class="form-group">
+                    <label>Value Date</label>
+                    <input type="date" name="value_date" id="m_value_date" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select name="bank_ref" id="m_bank_ref" required>
+                        <option value=""></option>
+                        {% for bank in g.bank_accounts %}
+                        <option value="{{ bank.ref_num }}">{{ bank.bank_id }}: {{ bank.bank_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Stock</label>
+                    <select name="code_ref" id="m_code_ref" required>
+                        <option value=""></option>
+                        {% for stock in g.stocks %}
+                        <option value="{{ stock.ref_num }}">{{ stock.code }}: {{ stock.stock_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Transaction Type</label>
+                <select name="transaction_type" id="m_transaction_type" required>
+                    <option value=""></option>
+                    {% for tt in ['Buy (Accu)', 'Buy (Accu-KO)', 'Sell (Decu)', 'Sell (Decu-KO)'] %}
+                    <option value="{{ tt }}">{{ tt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" name="quantity" id="m_quantity" step="1" required oninput="computeTotals()">
+                </div>
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" name="price" id="m_price" step="0.0001" required oninput="computeTotals()">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-section-label">Charges</div>
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label>Brokerage</label>
+                        <input type="number" name="brokerage" id="m_brokerage" step="0.01" required oninput="computeTotals()">
+                    </div>
+                    <div class="form-group">
+                        <label>Commission</label>
+                        <input type="number" name="commission" id="m_commission" step="0.01" required oninput="computeTotals()">
+                    </div>
+                    <div class="form-group">
+                        <label>Foreign Charge</label>
+                        <input type="number" name="foreign_charge" id="m_foreign_charge" step="0.01" required oninput="computeTotals()">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stamp Duty</label>
+                        <input type="number" name="stamp_duty" id="m_stamp_duty" step="0.01" required oninput="computeTotals()">
+                    </div>
+                    <div class="form-group">
+                        <label>Miscellaneous</label>
+                        <input type="number" name="misc" id="m_misc" step="0.01" required oninput="computeTotals()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-computed">
+                <div class="modal-computed-item">
+                    <label>Total Charges</label>
+                    <span class="computed-value" id="m_total_charges">0.00</span>
+                </div>
+                <div class="modal-computed-item">
+                    <label>Net Amount</label>
+                    <span class="computed-value" id="m_net_amount">0.00</span>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-success">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openFixingModal(d) {
+    document.getElementById('modal-ref').textContent = '#' + d.id;
+    document.getElementById('editFixingForm').action = '/fixings/' + d.id + '/edit';
+    document.getElementById('m_trade_date').value = d.trade_date;
+    document.getElementById('m_value_date').value = d.value_date;
+    document.getElementById('m_bank_ref').value = d.bank_ref;
+    document.getElementById('m_code_ref').value = d.code_ref;
+    document.getElementById('m_transaction_type').value = d.transaction_type;
+    document.getElementById('m_quantity').value = d.qty;
+    document.getElementById('m_price').value = d.price;
+    document.getElementById('m_brokerage').value = d.brokerage;
+    document.getElementById('m_commission').value = d.commission;
+    document.getElementById('m_foreign_charge').value = d.foreign_charge;
+    document.getElementById('m_stamp_duty').value = d.stamp_duty;
+    document.getElementById('m_misc').value = d.misc;
+    computeTotals();
+    document.getElementById('editModal').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('editModal').classList.remove('active');
+}
+
+function computeTotals() {
+    var brok = parseFloat(document.getElementById('m_brokerage').value)      || 0;
+    var comm = parseFloat(document.getElementById('m_commission').value)      || 0;
+    var fc   = parseFloat(document.getElementById('m_foreign_charge').value)  || 0;
+    var sd   = parseFloat(document.getElementById('m_stamp_duty').value)      || 0;
+    var misc = parseFloat(document.getElementById('m_misc').value)            || 0;
+    var qty  = parseFloat(document.getElementById('m_quantity').value)        || 0;
+    var price= parseFloat(document.getElementById('m_price').value)           || 0;
+
+    var totalCharges = brok + comm + fc + sd + misc;
+    var netAmount    = qty * price + totalCharges;
+
+    function fmt(v) {
+        var abs = Math.abs(v).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+        return v < 0 ? '(' + abs + ')' : abs;
+    }
+
+    document.getElementById('m_total_charges').textContent = fmt(totalCharges);
+    var netEl = document.getElementById('m_net_amount');
+    netEl.textContent  = fmt(netAmount);
+    netEl.style.color  = netAmount < 0 ? 'var(--danger)' : 'var(--text)';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+
+{% endblock %}

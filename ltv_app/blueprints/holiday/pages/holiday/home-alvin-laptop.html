@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <form method="post" action="{{ url_for('holiday.home') }}" class="container w-75">
+        <h1 class="mb-5 mt-5">Holiday</h1>
+        {{ csrf_token }}
+
+        <div class="row p-1">
+            <div class="row col-2">
+                <label for="date_from" class="form-label">Date From</label>
+            </div>
+            <div class="row col-2">
+                <input type="date" name="date_from" class="form-control" value="{{ date_range['date_from'] }}">
+            </div>
+            <div class="row col-2">
+                <label for="date_to" class="form-label">Date To</label>
+            </div>
+            <div class="row col-2">
+                <input type="date" name="date_to" class="form-control" value="{{ date_range['date_to'] }}">
+            </div>
+            <div class="col-2">
+                <input type="submit" value="Refresh" class="btn btn-success form-control">
+            </div>
+            <div class="col-2">
+                <a href="{{ url_for('holiday.add') }}" class="btn btn-success form-control">Add</a>
+            </div>
+        
+
+        </div>
+        <table>
+            <tr>
+                <th>CCY</th>
+                <th>Date</th>
+            </tr>
+        {% for _date in holidays %}
+            <tr>
+                <td>{{ _date.ccy_ref }}</td>
+                <td>{{ _date.holi_date }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+
+    </form>
+{% endblock %}

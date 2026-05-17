@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ bank_name }}</h1>
+
+{% if accus %}
+<h2>Accumulators</h2>
+<div class="table-wrap mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Stock</th><th class="text-center">Code</th>
+                <th class="text-right">Shares/Day</th><th class="text-right">Spot</th>
+                <th class="text-right">Strike</th><th class="text-right">KO</th>
+                <th class="text-center">Start</th><th class="text-center">End</th>
+                <th class="text-center">Received</th><th class="text-center">Remaining</th>
+                <th class="text-center">Total</th><th class="text-center">Next Date</th>
+                <th>Contract No.</th><th>Reference</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for accu in accus %}
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}">
+            <td>{{ accu.stock_name }}</td>
+            <td class="text-center">{{ accu.code }}</td>
+            <td class="text-right">{{ accu.shares }}</td>
+            <td class="text-right">{{ accu.spot }}</td>
+            <td class="text-right"><b>{{ accu.strike }}</b></td>
+            <td class="text-right">{{ accu.ko }}</td>
+            <td class="text-center">{{ accu.start_date }}</td>
+            <td class="text-center">{{ accu.end_date }}</td>
+            <td class="text-center" title="{{ accu.received[1] }}">{{ accu.received[0] }}</td>
+            <td class="text-center" title="{{ accu.remaining[1] }}">{{ accu.remaining[0] }}</td>
+            <td class="text-center" title="{{ accu.total[1] }}">{{ accu.total[0] }}</td>
+            <td class="text-center">{{ accu.next_date }}</td>
+            <td>{{ accu.bank_doc }}</td>
+            <td>{{ accu.reference }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if decus %}
+<h2>Decumulators</h2>
+<div class="table-wrap mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Stock</th><th class="text-center">Code</th>
+                <th class="text-right">Shares/Day</th><th class="text-right">Spot</th>
+                <th class="text-right">Strike</th><th class="text-right">KO</th>
+                <th class="text-center">Start</th><th class="text-center">End</th>
+                <th class="text-center">Received</th><th class="text-center">Remaining</th>
+                <th class="text-center">Total</th><th class="text-center">Next Date</th>
+                <th>Contract No.</th><th>Reference</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for decu in decus %}
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}">
+            <td>{{ decu.stock_name }}</td>
+            <td class="text-center">{{ decu.code }}</td>
+            <td class="text-right">{{ decu.shares }}</td>
+            <td class="text-right">{{ decu.spot }}</td>
+            <td class="text-right"><b>{{ decu.strike }}</b></td>
+            <td class="text-right">{{ decu.ko }}</td>
+            <td class="text-center">{{ decu.start_date }}</td>
+            <td class="text-center">{{ decu.end_date }}</td>
+            <td class="text-center" title="{{ decu.received[1] }}">{{ decu.received[0] }}</td>
+            <td class="text-center" title="{{ decu.remaining[1] }}">{{ decu.remaining[0] }}</td>
+            <td class="text-center" title="{{ decu.total[1] }}">{{ decu.total[0] }}</td>
+            <td class="text-center">{{ decu.next_date }}</td>
+            <td>{{ decu.bank_doc }}</td>
+            <td>{{ decu.reference }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}

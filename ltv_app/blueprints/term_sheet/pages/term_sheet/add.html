@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Add Term Sheet</h1>
+
+<form method="post" action="{{ url_for('term_sheet.add') }}" class="page-form-wide mt-3">
+
+    <div class="form-row">
+        <div class="form-group">
+            <label for="bank_ref">Account</label>
+            <select name="bank_ref" id="bank_ref" required>
+                <option value=""></option>
+                {% for account in g.bank_accounts %}
+                <option value="{{ account.ref_num }}"{% if ts and ts.bank_ref == account.ref_num %} selected{% endif %}>
+                    {{ account.bank_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="transaction_type">Derivative Type</label>
+            <select name="transaction_type" id="transaction_type" required>
+                <option value=""></option>
+                {% for type_ in [('ACCU', 'Accumulator'), ('DECU', 'Decumulator')] %}
+                <option value="{{ type_[0] }}"{% if ts and ts.transaction_type == type_[0] %} selected{% endif %}>
+                    {{ type_[1] }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="code_ref">Underlying Stock</label>
+        <select name="code_ref" id="code_ref" required>
+            <option value=""></option>
+            {% for code in codes %}
+            <option value="{{ code.ref_num }}"{% if ts and ts.code_ref == code.ref_num %} selected{% endif %}>
+                {{ code.code }}: {{ code.stock_name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-section">
+        <div class="form-section-label">Dates</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="trade_date">Trade Date</label>
+                <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}" required>
+            </div>
+            <div class="form-group">
+                <label for="start_date">Start Date</label>
+                <input type="date" name="start_date" id="start_date" value="{{ start_date }}" required>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <div class="form-section-label">Pricing</div>
+        <div class="form-row-3">
+            <div class="form-group">
+                <label for="spot">Spot</label>
+                <input type="text" name="spot" id="spot" value="{{ ts.spot if ts else '' }}" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label for="strike_rate">Strike Rate (%)</label>
+                <input type="text" name="strike_rate" id="strike_rate" value="{{ ts.strike_rate if ts else '' }}" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label for="ko_rate">KO Rate (%)</label>
+                <input type="text" name="ko_rate" id="ko_rate" value="{{ ts.ko_rate if ts else '' }}" autocomplete="off" required>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <div class="form-section-label">Schedule</div>
+        <div class="form-row-3">
+            <div class="form-group">
+                <label for="daily_shares">Daily Shares</label>
+                <input type="text" name="daily_shares" id="daily_shares" value="{{ ts.daily_shares if ts else '' }}" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label for="tenor">Tenor</label>
+                <select name="tenor" id="tenor" required>
+                    <option value=""></option>
+                    {% for tenor in tenors %}
+                    <option value="{{ tenor[0] }}"{% if ts and ts.tenor == tenor[0] %} selected{% endif %}>
+                        {{ tenor[1] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="frequency">Frequency</label>
+                <select name="frequency" id="frequency" required>
+                    <option value=""></option>
+                    {% for frequency in frequencies %}
+                    <option value="{{ frequency[0] }}"{% if ts and ts.frequency == frequency[0] %} selected{% endif %}>
+                        {{ frequency[1] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="leveraged">Leveraged</label>
+                <select name="leveraged" id="leveraged" required>
+                    <option value=""></option>
+                    {% for type_ in [('Yes', 'Yes'), ('No', 'No')] %}
+                    <option value="{{ type_[0] }}"{% if ts and ts.leveraged == type_[0] %} selected{% endif %}>
+                        {{ type_[1] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="gtd">Guaranteed</label>
+                <select name="gtd" id="gtd" required>
+                    <option value=""></option>
+                    {% for type_ in gtds %}
+                    <option value="{{ type_[0] }}"{% if ts and ts.gtd == type_[0] %} selected{% endif %}>
+                        {{ type_[1] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <div class="form-section-label">Other</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="status">Status</label>
+                <select name="status" id="status" required>
+                    {% for type_ in [('active', 'Active'), ('KO', 'KO'), ('inactive', 'Inactive')] %}
+                    <option value="{{ type_[0] }}"{% if not ts or ts.status == type_[0] or (not ts.status and type_[0] == 'active') %} selected{% endif %}>
+                        {{ type_[1] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="bank_doc">Bank Reference No.</label>
+                <input type="text" name="bank_doc" id="bank_doc" value="{{ ts.bank_doc if ts else '' }}" autocomplete="off">
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-success">Save</button>
+        <a href="{{ url_for('transactions.home') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

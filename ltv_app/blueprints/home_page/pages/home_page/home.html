@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="bank-grid">
+    {% for bank in banks %}
+    <div class="bank-card">
+        <h2 class="bank-card-title">{{ bank.bank_name }}</h2>
+        {% for ccy in bank.position %}
+        <h3 class="bank-card-ccy">{{ ccy }} Stocks</h3>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Stock</th>
+                        <th class="text-center">Code</th>
+                        <th class="text-right">Shares</th>
+                        <th class="text-right">Average</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for code_ref in bank.position[ccy] %}
+                    {% set stock = bank.position[ccy][code_ref] %}
+                    <tr class="clickable-row" data-href="{{ url_for('bank.transaction_list', bank_id=bank.bank_id, code=stock.code) }}">
+                        <td>{{ stock.name }}</td>
+                        <td class="text-center">{{ stock.code }}</td>
+                        <td class="text-right{% if stock.quantity.startswith('(') %} text-danger{% endif %}">{{ stock.quantity }}</td>
+                        <td class="text-right">{{ stock.average }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

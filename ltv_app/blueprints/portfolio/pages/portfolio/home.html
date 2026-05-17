@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Portfolio Reports</h1>
+    <form action="{{ url_for('portfolio.home') }}" class="form" method="post">
+        {{ form.csrf_token }}
+        {{ form.report_date.label }}
+        {{ form.report_date }}
+        {{ form.submit(class="btn btn-success") }}
+    </form>
+</div>
+
+{% endblock %}

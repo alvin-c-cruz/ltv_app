@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="color: red">Under development</h1>
+<div class="container">
+    <form id="frm_pricing" action="{{ url_for('pricing.home') }}" method="post" class="form">
+        <h1>Pricing</h1>
+
+        <!-- BANKS -->
+        <div class="row p-2">
+            <div class="col-6">
+                <label for="bank_code">Bank</label>
+            </div>
+            <div class="col-6">
+                <select name="bank_code" id="bank" class="form-select"
+                        onchange="document.getElementById('frm_pricing').submit()"
+                        required autofocus>
+                    <option value=""></option>
+                    {% for bank_code, bank_name in banks %}
+                        {% if form.bank_code == bank_code %}
+                    <option value="{{ bank_code }}" selected>{{ bank_name }}</option>
+                        {% else %}
+                    <option value="{{ bank_code }}">{{ bank_name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <textarea name="textarea_data" class="form-control p-2 mt-2"
+                  style="resize: none; height: 200px;">{{ form.textarea_data }}</textarea>
+
+        {% if form.not_in_record %}
+            <p style="color: red;">Header not in record</p>
+            <p style="color: red;">{{ form.not_in_record }}</p>
+            <p>Do you want to register this header?</p>
+            <input type="submit" value="Yes" name="cmd_button" class="btn btn-success p-2 mt-2">
+            <input type="submit" value="No" name="cmd_button" class="btn btn-danger p-2 mt-2">
+        {% else %}
+            <input type="submit" value="Submit" name="cmd_button" class="btn btn-success p-2 mt-2">
+        {% endif %}
+
+    </form>
+
+    {% for row in form.list_data %}
+        <p>{{ row  }}</p>
+    {% endfor %}
+</div>
+
+{% endblock %}

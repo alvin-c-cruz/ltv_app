@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Gain / Loss Report</h1>
+<p class="text-muted mb-3">Generate an Excel report of realised gains and losses over a selected date range.</p>
+
+<form method="post" action="{{ url_for('gain_loss.home') }}" class="report-card" id="gain-loss-form">
+    <div class="report-fields">
+        <div class="form-group">
+            <label for="date_from">Date From</label>
+            <input type="date" id="date_from" name="date_from" value="{{ form['date_from'] }}">
+        </div>
+        <div class="form-group">
+            <label for="date_to">Date To</label>
+            <input type="date" id="date_to" name="date_to" value="{{ form['date_to'] }}">
+        </div>
+        <div class="form-group">
+            <label for="bank_ref">Bank Account</label>
+            <select id="bank_ref" name="bank_ref">
+                <option value="0">-- All Banks --</option>
+                {% for account in g.bank_accounts %}
+                <option value="{{ account.ref_num }}"{% if account.ref_num == form.bank_ref %} selected{% endif %}>
+                    {{ account.bank_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="code_ref">Stock</label>
+            <select id="code_ref" name="code_ref">
+                <option value="0">-- All Stocks --</option>
+                {% for stock in g.stocks %}
+                <option value="{{ stock.ref_num }}"{% if stock.ref_num == form.code_ref %} selected{% endif %}>
+                    {{ stock.code }}: {{ stock.stock_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="report-actions mt-3">
+        <button type="submit" class="btn btn-success" id="gl-download-btn">
+            &#x2193; Download Excel
+        </button>
+        <span class="report-generating" id="gl-generating" style="display:none;">
+            Generating report&hellip;
+        </span>
+    </div>
+</form>
+
+<script>
+document.getElementById('gain-loss-form').addEventListener('submit', function () {
+    var btn = document.getElementById('gl-download-btn');
+    var msg = document.getElementById('gl-generating');
+    btn.disabled = true;
+    msg.style.display = 'inline';
+    setTimeout(function () {
+        btn.disabled = false;
+        msg.style.display = 'none';
+    }, 60000);
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <form method="post" action="{{ url_for('holiday.add') }}" class="container w-50">
+        <h1 class="mb-5 mt-5">Add Holiday</h1>
+        {{ csrf_token }}
+
+        <div class="row p-1">
+            <div class="row col-5">
+                <label for="holi_date" class="form-label">Holiday</label>
+            </div>
+            <div class="row col-7">
+                <input type="date" name="holi_date" class="form-control" required autofocus>
+            </div>
+        </div>
+        <div class="row p-1">
+            <div class="row col-5">
+                <label for="ccy_ref" class="form-label">Currency</label>
+            </div>
+            <div class="row col-7">
+                <select name="ccy_ref" class="form-select" required>
+                    <option value=""></option>
+                    {% for ccy in ccys %}
+                    <option value="{{ ccy.ref_num }}" {% if ccy.ref_num==1 %}selected{% endif %}>{{ ccy.ccy_id }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row p-1 mt-5">
+            <div class="col-4"></div>
+            <div class="col-4 row">
+                <div class="col-1"></div>
+                <div class="col-10">
+                    <input type="submit" value="Save" class="btn btn-success form-control">
+                </div>
+                <div class="col-1"></div>
+            </div>
+            <div class="col-4"></div>
+        </div>
+
+    </form>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Trades Done</h1>
+
+<div class="toolbar">
+    <form class="toolbar-form" method="post" action="{{ url_for('transactions.home') }}">
+        <div class="form-group">
+            <label for="trade_date">Trade Date</label>
+            <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Refresh</button>
+    </form>
+    <div class="toolbar-actions">
+        <a href="{{ url_for('transactions.download', trade_date=trade_date) }}" class="btn btn-outline">Old Trades Done</a>
+        <a href="{{ url_for('transactions.download_with_gain_loss', trade_date=trade_date) }}" class="btn btn-outline">New Trades Done</a>
+        <a href="{{ url_for('transactions.add') }}" class="btn btn-success">+ Spot</a>
+        <a href="{{ url_for('transactions.stock_transfer') }}" class="btn btn-success">+ Transfer</a>
+        <a href="{{ url_for('term_sheet.add') }}" class="btn btn-success">+ Contract</a>
+        <a href="{{ url_for('transactions.add_stock_dividends') }}" class="btn btn-success">+ Dividends</a>
+    </div>
+</div>
+
+{% if accus %}
+<h2>Accumulators</h2>
+<div class="table-wrap mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Account</th><th>Stock</th><th>Shares</th><th class="text-right">Spot</th>
+                <th class="text-right">Strike</th><th class="text-right">KO</th>
+                <th>Tenor</th><th>GTD</th><th class="text-center">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ccy in accus %}{% for ts in accus[ccy] %}
+        <tr>
+            <td>{{ ts.bank_name }}</td>
+            <td>{{ ts.stock_name }}</td>
+            <td class="text-right">{{ ts.shares }}</td>
+            <td class="text-right">{{ ts.spot }}</td>
+            <td class="text-right"><b>{{ ts.strike }}</b></td>
+            <td class="text-right">{{ ts.ko }}</td>
+            <td>{{ ts.tenor }}</td>
+            <td>{{ ts.gtd }}</td>
+            <td class="text-center">
+                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
+                   onclick="return confirm('Delete this contract?')">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}{% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if decus %}
+<h2>Decumulators</h2>
+<div class="table-wrap mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Account</th><th>Stock</th><th>Shares</th><th class="text-right">Spot</th>
+                <th class="text-right">Strike</th><th class="text-right">KO</th>
+                <th>Tenor</th><th>GTD</th><th class="text-center">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ccy in decus %}{% for ts in decus[ccy] %}
+        <tr>
+            <td>{{ ts.bank_name }}</td>
+            <td>{{ ts.stock_name }}</td>
+            <td class="text-right">{{ ts.shares }}</td>
+            <td class="text-right">{{ ts.spot }}</td>
+            <td class="text-right"><b>{{ ts.strike }}</b></td>
+            <td class="text-right">{{ ts.ko }}</td>
+            <td>{{ ts.tenor }}</td>
+            <td>{{ ts.gtd }}</td>
+            <td class="text-center">
+                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
+                   onclick="return confirm('Delete this contract?')">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}{% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% for ccy in transactions %}
+    {% for transaction_type in transactions[ccy] %}
+    <h2>{{ ccy }} — {{ transaction_type }}</h2>
+    <div class="table-wrap mb-3">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Account</th><th>Stock</th>
+                    <th class="text-right">Quantity</th><th class="text-right">Price</th>
+                    <th class="text-right">Amount</th><th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for bank_name in transactions[ccy][transaction_type] %}
+                {% for stock in transactions[ccy][transaction_type][bank_name] %}
+                    {% for row in transactions[ccy][transaction_type][bank_name][stock] %}
+            <tr>
+                <td>{{ bank_name }}</td>
+                <td>{{ stock }}</td>
+                <td class="text-right">{{ row['quantity'] }}</td>
+                <td class="text-right">{{ row['price'] }}</td>
+                <td class="text-right">{{ row['amount'] }}</td>
+                <td class="text-center">
+                    {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
+                    <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% else %}
+                    <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% endif %}
+                </td>
+            </tr>
+                    {% endfor %}
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+{% endfor %}
+
+{% for ccy in short_transactions %}
+    {% for transaction_type in short_transactions[ccy] %}
+    <h2>{{ ccy }} — {{ transaction_type }}</h2>
+    <div class="table-wrap mb-3">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Account</th><th>Stock</th>
+                    <th class="text-right">Quantity</th><th class="text-right">Price</th>
+                    <th class="text-right">Amount</th><th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for bank_name in short_transactions[ccy][transaction_type] %}
+                {% for stock in short_transactions[ccy][transaction_type][bank_name] %}
+                    {% for row in short_transactions[ccy][transaction_type][bank_name][stock] %}
+            <tr>
+                <td>{{ bank_name }}</td>
+                <td>{{ stock }}</td>
+                <td class="text-right">{{ row['quantity'] }}</td>
+                <td class="text-right">{{ row['price'] }}</td>
+                <td class="text-right">{{ row['amount'] }}</td>
+                <td class="text-center">
+                    <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                </td>
+            </tr>
+                    {% endfor %}
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+{% endfor %}
+
+{% endblock %}

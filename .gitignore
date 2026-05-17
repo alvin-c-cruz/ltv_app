@@ -1,0 +1,13 @@
+# Ignore everything at the root level (instance/, localhost/, venv/, etc.)
+/*
+
+# Keep this file and the Flask app source only
+!.gitignore
+!flask_app.py
+!/ltv_app/
+
+# Compiled Python — never commit these
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
