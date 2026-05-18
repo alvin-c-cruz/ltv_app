@@ -88,7 +88,7 @@ def gather_position_bulk(db, trade_date, bank_ref):
         "t.brokerage, t.commission, t.foreign_charge, t.stamp_duty, t.misc "
         "FROM tbl_transaction t "
         "INNER JOIN tbl_transaction_type tt ON tt.transaction_type = t.transaction_type "
-        f"WHERE t.bank_ref=? AND t.{transaction_basis}<=? "
+        f"WHERE t.bank_ref=? AND t.trade_date<=? "
         f"ORDER BY t.code_ref, t.{transaction_basis}, tt.priority",
         (bank_ref, trade_date)
     ).fetchall()
