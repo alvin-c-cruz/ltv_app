@@ -5,11 +5,16 @@
 
 <form method="post" class="page-form">
 
+    <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" name="username" class="form-control"
+               value="{{ form.username }}" required autofocus autocomplete="off">
+    </div>
+
     <div class="form-row" style="grid-template-columns:1fr 1fr">
         <div class="form-group">
-            <label class="form-label">Username</label>
-            <input type="text" name="username" class="form-control"
-                   value="{{ form.username }}" required autofocus autocomplete="off">
+            <label class="form-label">Email <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+            <input type="email" name="email" class="form-control" value="{{ form.email }}">
         </div>
         <div class="form-group">
             <label class="form-label">Role</label>
@@ -21,11 +26,6 @@
                 {% endfor %}
             </select>
         </div>
-    </div>
-
-    <div class="form-group">
-        <label class="form-label">Email <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-        <input type="email" name="email" class="form-control" value="{{ form.email }}">
     </div>
 
     <div style="display:flex; gap:0.5rem; margin-top:0.5rem">
