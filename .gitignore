@@ -4,6 +4,7 @@
 # Keep this file and the Flask app source only
 !.gitignore
 !flask_app.py
+!VERSION
 !/ltv_app/
 !/tests/
 

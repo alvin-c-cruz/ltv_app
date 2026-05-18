@@ -2,17 +2,14 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 import os
-import subprocess
 
 
 def _get_version():
     try:
         base = os.path.dirname(os.path.abspath(__file__))
-        count = subprocess.check_output(
-            ['git', 'rev-list', '--count', 'origin/main'],
-            cwd=base, stderr=subprocess.DEVNULL
-        ).decode().strip()
-        return f"4.0.{count}"
+        version_file = os.path.normpath(os.path.join(base, '..', 'VERSION'))
+        with open(version_file) as f:
+            return f.read().strip()
     except Exception:
         return "4.0.0"
 
