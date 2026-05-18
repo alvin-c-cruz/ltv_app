@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, current_app, redirect, jsonify
+from flask import Blueprint, render_template, request, current_app, redirect, jsonify, send_from_directory, abort
 from werkzeug.utils import secure_filename
 import os
 from openpyxl import load_workbook
@@ -9,6 +9,27 @@ from ..transactions import Transaction
 from ..database import get_db
 
 bp = Blueprint('upload', __name__, template_folder="pages", url_prefix="/upload")
+
+
+@bp.route('/downloads')
+@login_required
+def downloads():
+    uploads_dir = os.path.join(current_app.instance_path, 'uploads')
+    try:
+        files = sorted(os.listdir(uploads_dir), reverse=True)
+    except FileNotFoundError:
+        files = []
+    return render_template('upload/downloads.html', files=files)
+
+
+@bp.route('/downloads/<path:filename>')
+@login_required
+def download_file(filename):
+    uploads_dir = os.path.join(current_app.instance_path, 'uploads')
+    safe = os.path.normpath(os.path.join(uploads_dir, filename))
+    if not safe.startswith(os.path.normpath(uploads_dir)):
+        abort(404)
+    return send_from_directory(uploads_dir, filename, as_attachment=True)
 
 
 @bp.route('/heroku', methods=["GET", "POST"])
