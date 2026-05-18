@@ -28,7 +28,7 @@ def login():
         else:
             user = User(db=db)
             user.get(username=username)
-            if not check_password_hash(user.password, password):
+            if not check_password_hash(user.password, password or ''):
                 error = "Invalid password"
 
         if error is None:

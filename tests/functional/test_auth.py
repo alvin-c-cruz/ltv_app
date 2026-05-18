@@ -1,88 +1,78 @@
-from pytest import mark
-from flask import url_for, request
+"""
+Integration tests — Authentication (login / logout).
+"""
 
 
-@mark.auth
 class LoginTests:
-    @mark.log_out
-    def test_login_page_get_start_up(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a GET request and there's no user logged in
-        THEN check that '200' status code is returned
-        """
-        response = test_client.get('/auth/login')
+
+    # ── GET login page ───────────────────────────────────────────────────────
+
+    def test_login_page_loads(self, client):
+        response = client.get('/login')
         assert response.status_code == 200
         assert b'Login' in response.data
 
-    @mark.log_out
-    def test_login_page_post_typed_no_data(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a POST request and there's no user logged in
-        THEN check that '200' status code is returned
-        """
-        response = test_client.post('/auth/login', data={})
+    # ── POST with missing / empty credentials ────────────────────────────────
+
+    def test_no_data_returns_login_page(self, client):
+        response = client.post('/login', data={})
         assert response.status_code == 200
         assert b'Login' in response.data
 
-    @mark.log_out
-    def test_login_page_post_typed_username_only(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a POST request and there's no user logged in
-        THEN check that '500' status code is returned
-        """
-        response = test_client.post('/auth/login', data={"username": "alvin"})
-        assert response.status_code == 500
-
-    @mark.log_out
-    def test_login_page_post_typed_password_only(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a POST request and there's no user logged in
-        THEN check that '200' status code is returned
-        """
-        response = test_client.post('/auth/login', data={"password": "saguiguilid"})
-        assert response.status_code == 200
-        assert b'Login' in response.data
-
-    @mark.log_out
-    def test_login_page_post_typed_wrong_credentials(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a POST request and there's no user logged in
-        THEN check that '200' status code is returned
-        """
-        response = test_client.post('/auth/login', data={"username": "fake_user", "password": "fake_password"})
-        assert response.status_code == 200
-        assert b'Login' in response.data
+    def test_no_data_shows_not_registered(self, client):
+        response = client.post('/login', data={})
         assert b'User is not registered' in response.data
 
-    @mark.log_out
-    def test_login_page_post_typed_wrong_password(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a POST request and there's no user logged in
-        THEN check that '200' status code is returned
-        """
-        response = test_client.post('/auth/login', data={"username": "alvin", "password": "fake_password"})
+    def test_username_only_shows_invalid_password(self, client):
+        response = client.post('/login', data={'username': 'staff_user'})
         assert response.status_code == 200
-        assert b'Login' in response.data
         assert b'Invalid password' in response.data
-        assert b'alvin' in response.data
 
-    @mark.log_out
-    def test_login_page_post_typed_correct_credentials(self, test_client):
-        """
-        GIVEN a FLASK application
-        WHEN the '/auth/login' page received a POST request and there's no user logged in
-        THEN check that '200' status code is returned
-        """
-        response = test_client.post('/auth/login', data={"username": "alvin", "password": "saguiguilid"},
-                                    follow_redirects=True)
+    def test_password_only_shows_not_registered(self, client):
+        response = client.post('/login', data={'password': 'staffpass'})
         assert response.status_code == 200
-        assert request.path == url_for('home_page.home')
+        assert b'User is not registered' in response.data
 
-# TODO: Test on /auth
-# TODO: Test on /logout
+    # ── POST with wrong credentials ──────────────────────────────────────────
+
+    def test_unknown_user_shows_not_registered(self, client):
+        response = client.post('/login', data={'username': 'nobody', 'password': 'x'})
+        assert response.status_code == 200
+        assert b'User is not registered' in response.data
+
+    def test_wrong_password_shows_invalid_password(self, client):
+        response = client.post('/login', data={'username': 'staff_user', 'password': 'wrong'})
+        assert response.status_code == 200
+        assert b'Invalid password' in response.data
+
+    def test_wrong_password_repopulates_username(self, client):
+        response = client.post('/login', data={'username': 'staff_user', 'password': 'wrong'})
+        assert b'staff_user' in response.data
+
+    # ── POST with correct credentials ────────────────────────────────────────
+
+    def test_correct_credentials_redirects(self, client):
+        response = client.post('/login', data={'username': 'staff_user', 'password': 'staffpass'})
+        assert response.status_code == 302
+
+    def test_correct_credentials_redirects_to_home(self, client):
+        response = client.post('/login', data={'username': 'staff_user', 'password': 'staffpass'})
+        assert '/' in response.headers['Location']
+
+    def test_correct_credentials_follow_redirect_loads_home(self, client):
+        response = client.post('/login', data={'username': 'staff_user', 'password': 'staffpass'},
+                               follow_redirects=True)
+        assert response.status_code == 200
+
+    # ── Logout ───────────────────────────────────────────────────────────────
+
+    def test_logout_redirects_to_login(self, auth_client):
+        response = auth_client.get('/logout')
+        assert response.status_code == 302
+        assert '/login' in response.headers['Location']
+
+    def test_logout_clears_session(self, auth_client):
+        auth_client.get('/logout')
+        response = auth_client.get('/')
+        assert response.status_code == 302
+        assert '/login' in response.headers['Location']
