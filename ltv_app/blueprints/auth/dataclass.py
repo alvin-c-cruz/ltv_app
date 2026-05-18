@@ -12,4 +12,4 @@ class User(Model):
     role: str = 'staff'  # Roles: staff, superuser
 
     def __post_init__(self):
-        self.table_name = "tbl_User"
+        self.table_name = "tbl_user"
