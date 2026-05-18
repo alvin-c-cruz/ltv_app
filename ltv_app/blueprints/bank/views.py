@@ -75,7 +75,7 @@ def gather_position(db, trade_date, bank_ref):
     return dict_position
 
 
-def gather_position_bulk(db, trade_date, bank_ref):
+def gather_position_bulk(db, bank_ref):
     """Faster alternative to gather_position — fetches all transactions for
     a bank in one query instead of one query per stock."""
 
@@ -88,9 +88,9 @@ def gather_position_bulk(db, trade_date, bank_ref):
         "t.brokerage, t.commission, t.foreign_charge, t.stamp_duty, t.misc "
         "FROM tbl_transaction t "
         "INNER JOIN tbl_transaction_type tt ON tt.transaction_type = t.transaction_type "
-        f"WHERE t.bank_ref=? AND t.trade_date<=? "
+        f"WHERE t.bank_ref=? "
         f"ORDER BY t.code_ref, t.{transaction_basis}, tt.priority",
-        (bank_ref, trade_date)
+        (bank_ref,)
     ).fetchall()
 
     # replicate the balance logic from get_balance for each stock in one pass
