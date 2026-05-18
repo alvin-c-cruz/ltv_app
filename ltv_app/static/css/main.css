@@ -393,7 +393,7 @@ input:focus, select:focus, textarea:focus {
 /* ── Bank grid (home page) ────────────────────────────────────── */
 .bank-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
     gap: 24px;
     align-items: start;
 }
@@ -780,13 +780,12 @@ input:focus, select:focus, textarea:focus {
 /* ── Responsive — tablet (≤ 1024px) ──────────────────────────── */
 @media (max-width: 1024px) {
     .table-narrow  { width: 100%; }
-    .bank-grid     { grid-template-columns: repeat(2, 1fr); }
     .holiday-grid  { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ── Responsive — mobile (≤ 768px) ───────────────────────────── */
 @media (max-width: 768px) {
-    .bank-grid    { grid-template-columns: 1fr; gap: 16px; }
+    .bank-grid    { gap: 16px; }
     .holiday-grid { grid-template-columns: 1fr; gap: 16px; }
     .form-row     { grid-template-columns: 1fr; }
     .form-row-3   { grid-template-columns: 1fr; }
