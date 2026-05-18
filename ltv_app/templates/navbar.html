@@ -31,6 +31,7 @@
                     <li><a href="{{ url_for('charges.home') }}">Charges</a></li>
                     {% if current_user.is_authenticated and current_user.role == 'superuser' %}
                     <li><a href="{{ url_for('lock.home') }}">Lock</a></li>
+                    <li><a href="{{ url_for('users.home') }}">Users</a></li>
                     {% endif %}
                     <li><a href="{{ url_for('stock_price.home') }}">Upload from Yahoo</a></li>
                     <li><a href="{{ url_for('bank_accounts.home') }}">Bank Accounts</a></li>

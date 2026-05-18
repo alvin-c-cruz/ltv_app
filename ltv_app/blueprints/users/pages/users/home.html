@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:0.5rem;">
+    <h1 style="margin:0">Users</h1>
+    <a href="{{ url_for('users.add') }}" class="btn btn-primary">+ Add User</a>
+</div>
+
+<div class="table-wrap">
+    <table class="table" style="table-layout:fixed; width:100%">
+        <colgroup>
+            <col style="width:22%">
+            <col style="width:28%">
+            <col style="width:14%">
+            <col style="width:14%">
+            <col style="width:22%">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th class="text-center">Role</th>
+                <th class="text-center">Level</th>
+                <th class="text-center">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.username }}</td>
+            <td>{{ user.email or '—' }}</td>
+            <td class="text-center">
+                {% if user.role == 'superuser' %}
+                <span style="font-size:0.75rem;background:var(--accent);color:var(--bg-primary);padding:2px 7px;border-radius:3px;font-weight:700;">ADMIN</span>
+                {% else %}
+                <span style="font-size:0.8rem;color:var(--text-muted)">staff</span>
+                {% endif %}
+            </td>
+            <td class="text-center" style="font-size:0.85rem; color:var(--text-muted)">{{ user.level_label }}</td>
+            <td class="text-center" style="white-space:nowrap">
+                <a href="{{ url_for('users.edit', user_id=user.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{{ url_for('users.change_password', user_id=user.id) }}" class="btn btn-outline btn-sm">Password</a>
+                <a href="{{ url_for('users.delete', user_id=user.id) }}" class="btn btn-sm"
+                   style="background:var(--accent-muted);color:var(--text-primary)"
+                   onclick="return confirm('Delete {{ user.username }}? This cannot be undone.')">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
