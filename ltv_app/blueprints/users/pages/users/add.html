@@ -11,11 +11,12 @@
                value="{{ form.username }}" required autofocus autocomplete="off">
     </div>
 
+    <div class="form-group">
+        <label class="form-label">Email <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+        <input type="email" name="email" class="form-control" value="{{ form.email }}">
+    </div>
+
     <div class="form-row" style="grid-template-columns:1fr 1fr">
-        <div class="form-group">
-            <label class="form-label">Email <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-            <input type="email" name="email" class="form-control" value="{{ form.email }}">
-        </div>
         <div class="form-group">
             <label class="form-label">Role</label>
             <select name="role" class="form-control">
@@ -26,6 +27,7 @@
                 {% endfor %}
             </select>
         </div>
+        <div></div>
     </div>
 
     <div class="form-row" style="grid-template-columns:1fr 1fr">
