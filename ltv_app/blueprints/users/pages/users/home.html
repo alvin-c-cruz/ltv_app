@@ -9,18 +9,16 @@
 <div class="table-wrap">
     <table class="table" style="table-layout:fixed; width:100%">
         <colgroup>
-            <col style="width:22%">
             <col style="width:28%">
-            <col style="width:14%">
-            <col style="width:14%">
-            <col style="width:22%">
+            <col style="width:36%">
+            <col style="width:12%">
+            <col style="width:24%">
         </colgroup>
         <thead>
             <tr>
                 <th>Username</th>
                 <th>Email</th>
                 <th class="text-center">Role</th>
-                <th class="text-center">Level</th>
                 <th class="text-center">Actions</th>
             </tr>
         </thead>
@@ -36,7 +34,6 @@
                 <span style="font-size:0.8rem;color:var(--text-muted)">staff</span>
                 {% endif %}
             </td>
-            <td class="text-center" style="font-size:0.85rem; color:var(--text-muted)">{{ user.level_label }}</td>
             <td class="text-center" style="white-space:nowrap">
                 <a href="{{ url_for('users.edit', user_id=user.id) }}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{{ url_for('users.change_password', user_id=user.id) }}" class="btn btn-outline btn-sm">Password</a>

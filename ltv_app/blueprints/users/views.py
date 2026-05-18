@@ -6,14 +6,7 @@ from ..database import get_db
 
 bp = Blueprint('users', __name__, template_folder='pages', url_prefix='/users')
 
-ROLES  = ['staff', 'superuser']
-LEVELS = [
-    (1, 'Admin'),
-    (2, 'Audit'),
-    (3, 'Accountant'),
-    (4, 'Bookkeeper'),
-    (5, 'Viewer'),
-]
+ROLES = ['staff', 'superuser']
 
 
 def _all_users(db):
@@ -45,9 +38,6 @@ def _username_taken(db, username, exclude_id=None):
 def home():
     db = get_db()
     users = [dict(u) for u in _all_users(db)]
-    level_map = dict(LEVELS)
-    for u in users:
-        u['level_label'] = level_map.get(u['level'], str(u['level']))
     return render_template('users/home.html', users=users)
 
 
@@ -60,7 +50,6 @@ def add():
         password = request.form.get('password', '')
         confirm  = request.form.get('confirm', '')
         role     = request.form.get('role', 'staff')
-        level    = int(request.form.get('level', 5))
 
         error = None
         if not username:
@@ -76,20 +65,20 @@ def add():
 
         if error:
             flash(error)
-            form = dict(username=username, email=email, role=role, level=level)
-            return render_template('users/add.html', form=form, roles=ROLES, levels=LEVELS)
+            form = dict(username=username, email=email, role=role)
+            return render_template('users/add.html', form=form, roles=ROLES)
 
         db = get_db()
         db.execute(
             "INSERT INTO tbl_user (username, email, password, role, level) VALUES (?,?,?,?,?)",
-            (username, email, generate_password_hash(password), role, level)
+            (username, email, generate_password_hash(password), role, 5)
         )
         db.commit()
         flash(f'User "{username}" created.')
         return redirect(url_for('users.home'))
 
-    form = dict(username='', email='', role='staff', level=5)
-    return render_template('users/add.html', form=form, roles=ROLES, levels=LEVELS)
+    form = dict(username='', email='', role='staff')
+    return render_template('users/add.html', form=form, roles=ROLES)
 
 
 @bp.route('/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -105,7 +94,6 @@ def edit(user_id):
         username = request.form.get('username', '').strip()
         email    = request.form.get('email', '').strip()
         role     = request.form.get('role', 'staff')
-        level    = int(request.form.get('level', 5))
 
         error = None
         if not username:
@@ -115,20 +103,19 @@ def edit(user_id):
 
         if error:
             flash(error)
-            form = dict(id=user_id, username=username, email=email, role=role, level=level)
-            return render_template('users/edit.html', form=form, roles=ROLES, levels=LEVELS)
+            form = dict(id=user_id, username=username, email=email, role=role)
+            return render_template('users/edit.html', form=form, roles=ROLES)
 
         db.execute(
-            "UPDATE tbl_user SET username=?, email=?, role=?, level=? WHERE id=?",
-            (username, email, role, level, user_id)
+            "UPDATE tbl_user SET username=?, email=?, role=? WHERE id=?",
+            (username, email, role, user_id)
         )
         db.commit()
         flash(f'User "{username}" updated.')
         return redirect(url_for('users.home'))
 
-    form = dict(id=user_id, username=row['username'], email=row['email'] or '',
-                role=row['role'], level=row['level'])
-    return render_template('users/edit.html', form=form, roles=ROLES, levels=LEVELS)
+    form = dict(id=user_id, username=row['username'], email=row['email'] or '', role=row['role'])
+    return render_template('users/edit.html', form=form, roles=ROLES)
 
 
 @bp.route('/<int:user_id>/change-password', methods=['GET', 'POST'])

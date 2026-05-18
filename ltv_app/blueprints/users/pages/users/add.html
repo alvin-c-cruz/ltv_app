@@ -3,59 +3,46 @@
 {% block content %}
 <h1>Add User</h1>
 
-<div class="card" style="max-width:480px">
-    <div class="card-body">
-        <form method="post">
+<form method="post" class="page-form">
 
-            <div class="form-group">
-                <label class="form-label">Username</label>
-                <input type="text" name="username" class="form-control"
-                       value="{{ form.username }}" required autofocus autocomplete="off">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Email <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
-                <input type="email" name="email" class="form-control" value="{{ form.email }}">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Role</label>
-                <select name="role" class="form-control">
-                    {% for role in roles %}
-                    <option value="{{ role }}" {% if form.role == role %}selected{% endif %}>
-                        {{ role|capitalize }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Level</label>
-                <select name="level" class="form-control">
-                    {% for value, label in levels %}
-                    <option value="{{ value }}" {% if form.level == value %}selected{% endif %}>
-                        {{ value }} — {{ label }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Password</label>
-                <input type="password" name="password" class="form-control" required>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Confirm Password</label>
-                <input type="password" name="confirm" class="form-control" required>
-            </div>
-
-            <div style="display:flex; gap:0.5rem; margin-top:1.25rem">
-                <button type="submit" class="btn btn-primary">Create User</button>
-                <a href="{{ url_for('users.home') }}" class="btn btn-outline">Cancel</a>
-            </div>
-
-        </form>
+    <div class="form-row" style="grid-template-columns:1fr 1fr">
+        <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" name="username" class="form-control"
+                   value="{{ form.username }}" required autofocus autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Role</label>
+            <select name="role" class="form-control">
+                {% for role in roles %}
+                <option value="{{ role }}" {% if form.role == role %}selected{% endif %}>
+                    {{ role|capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
-</div>
+
+    <div class="form-group">
+        <label class="form-label">Email <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+        <input type="email" name="email" class="form-control" value="{{ form.email }}">
+    </div>
+
+    <div class="form-row" style="grid-template-columns:1fr 1fr">
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Confirm Password</label>
+            <input type="password" name="confirm" class="form-control" required>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem">
+        <button type="submit" class="btn btn-primary">Create User</button>
+        <a href="{{ url_for('users.home') }}" class="btn btn-outline">Cancel</a>
+    </div>
+
+</form>
 {% endblock %}
