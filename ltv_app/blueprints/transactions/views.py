@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g
+from flask_login import current_user
 from datetime import timedelta
 from ...tz import ph_today
 
@@ -202,7 +203,7 @@ def edit(ref_num):
     transaction = Transaction(db=get_db())
     transaction.get(ref_num=ref_num)
 
-    if transaction.locked and g.user.role != 'superuser':
+    if transaction.locked and current_user.role != 'superuser':
         flash("This transaction is locked and cannot be edited.")
         return redirect(url_for('transactions.home'))
 
@@ -309,7 +310,7 @@ def delete(ref_num):
     transaction = Transaction(db=get_db())
     transaction.get(ref_num=ref_num)
 
-    if transaction.locked and g.user.role != 'superuser':
+    if transaction.locked and current_user.role != 'superuser':
         flash("This transaction is locked and cannot be deleted.")
         return redirect(url_for('transactions.home'))
 
@@ -326,7 +327,7 @@ def edit_short(ref_num):
     transaction = TransactionShort(db=get_db())
     transaction.get(ref_num=ref_num)
 
-    if transaction.locked and g.user.role != 'superuser':
+    if transaction.locked and current_user.role != 'superuser':
         flash("This transaction is locked and cannot be edited.")
         return redirect(url_for('transactions.home'))
 
@@ -416,7 +417,7 @@ def delete_short(ref_num):
     transaction = TransactionShort(db=get_db())
     transaction.get(ref_num=ref_num)
 
-    if transaction.locked and g.user.role != 'superuser':
+    if transaction.locked and current_user.role != 'superuser':
         flash("This transaction is locked and cannot be deleted.")
         return redirect(url_for('transactions.home'))
 

@@ -1,6 +1,7 @@
 import datetime
 
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g
+from flask_login import current_user
 
 from .models import TermSheet, StockContract, FixingSchedule, CreateSchedules, next_day
 
@@ -153,7 +154,7 @@ def edit(contract_ref):
     db = get_db()
     ts = StockContract(db=db)
     ts.get(ref_num=contract_ref)
-    if ts.locked and g.user.role != 'superuser':
+    if ts.locked and current_user.role != 'superuser':
         flash("This contract is locked and cannot be edited.")
         return redirect(url_for('transactions.home'))
     ts = StockContract(db=db)
@@ -255,7 +256,7 @@ def edit(contract_ref):
 def delete_contract(contract_ref):
     db = get_db()
     locked = db.execute("SELECT locked FROM tbl_stock_contract WHERE ref_num=?", (contract_ref,)).fetchone()
-    if locked and locked['locked'] and g.user.role != 'superuser':
+    if locked and locked['locked'] and current_user.role != 'superuser':
         flash("This contract is locked and cannot be deleted.")
         return redirect(url_for('transactions.home'))
     db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?;", (contract_ref, ))

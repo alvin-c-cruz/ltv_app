@@ -13,3 +13,19 @@ class User(Model):
 
     def __post_init__(self):
         self.table_name = "tbl_user"
+
+    # --- Flask-Login interface ---
+    @property
+    def is_authenticated(self):
+        return self.id is not None
+
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return str(self.id) if self.id else None

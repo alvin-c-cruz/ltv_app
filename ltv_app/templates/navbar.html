@@ -29,7 +29,7 @@
                 <ul class="dropdown-menu">
                     <li><a href="{{ url_for('review.home') }}">Review</a></li>
                     <li><a href="{{ url_for('charges.home') }}">Charges</a></li>
-                    {% if g.user and g.user.role == 'superuser' %}
+                    {% if current_user.is_authenticated and current_user.role == 'superuser' %}
                     <li><a href="{{ url_for('lock.home') }}">Lock</a></li>
                     {% endif %}
                     <li><a href="{{ url_for('stock_price.home') }}">Upload from Yahoo</a></li>
@@ -50,11 +50,11 @@
 
             <li class="nav-spacer"></li>
 
-            {% if g.user %}
+            {% if current_user.is_authenticated %}
             <li style="display:flex;align-items:center;gap:0.4rem;padding:0 0.5rem;font-size:0.85rem;opacity:0.8;">
                 <span style="font-size:0.75rem;">&#128100;</span>
-                <span>{{ g.user.username }}</span>
-                {% if g.user.role == 'superuser' %}
+                <span>{{ current_user.username }}</span>
+                {% if current_user.role == 'superuser' %}
                 <span style="font-size:0.65rem;background:var(--accent);color:var(--bg-primary);padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:0.04em;">ADMIN</span>
                 {% endif %}
             </li>

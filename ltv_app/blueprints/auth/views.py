@@ -1,91 +1,59 @@
-# TODO: Create login layout
-
-from flask import Blueprint, session, g, render_template, redirect, url_for, flash, request, current_app
+from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask_login import login_user, logout_user, login_required, current_user
+from werkzeug.security import check_password_hash
 import functools
-import click
-from flask.cli import with_appcontext
-from werkzeug.security import check_password_hash, generate_password_hash
 
 bp = Blueprint('auth', __name__, template_folder='pages', url_prefix='')
 
 
 @bp.route('/auth')
 def home():
-	return "Users Home Page."
+    return "Users Home Page."
 
 
 @bp.route('/login', methods=['POST', 'GET'])
 def login():
-	from ..database import get_db
-	from .dataclass import User
-	db = get_db()
-	user = User(db=db)
+    from ..database import get_db
+    from .dataclass import User
+    db = get_db()
 
-	if request.method == 'POST':
-		username = request.form.get('username')
-		password = request.form.get('password')
-		error = None
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        error = None
 
-		if not db.execute('SELECT username FROM tbl_user WHERE username=?;', (username, )).fetchone():
-			error = "User is not registered"
-		else:
-			user.get(username=username)
+        row = db.execute('SELECT * FROM tbl_user WHERE username=?;', (username,)).fetchone()
+        if not row:
+            error = "User is not registered"
+        else:
+            user = User(db=db)
+            user.get(username=username)
+            if not check_password_hash(user.password, password):
+                error = "Invalid password"
 
-			if not check_password_hash(user.password, password):
-				error = "Invalid password"
-		
-		if error is None:
-			session.clear()
-			session['user_id'] = user.id
-			return redirect(url_for('home_page.home'))
+        if error is None:
+            login_user(user)
+            return redirect(url_for('home_page.home'))
 
-		flash(error)
-	else:
-		username = ""
-		# Temporary auto-log
-		# user.get(username='alvin')
-		# session.clear()
-		# session['user_id'] = user.id
-		# return redirect(url_for('home_page.home'))
+        flash(error)
+        return render_template('auth/login.html', username=username)
 
-	return render_template('auth/login.html', username=username)
+    return render_template('auth/login.html', username="")
 
 
 @bp.route('/logout')
 def logout():
-	session.clear()
-	return redirect(url_for('auth.login'))
-
-
-@bp.before_app_request
-def load_logged_in_user():
-	user_id = session.get('user_id')
-
-	if user_id is None:
-		g.user = None
-	else:
-		from .. database import get_db
-		from .dataclass import User
-		user = User(get_db())
-		user.get(id=user_id)
-		g.user = user
-
-
-def login_required(view):
-	@functools.wraps(view)
-	def wrapped_view(**kwargs):
-		if g.get('user') is None: return redirect(url_for('auth.login'))
-		return view(**kwargs)
-	return wrapped_view
+    logout_user()
+    return redirect(url_for('auth.login'))
 
 
 def superuser_required(view):
-	@functools.wraps(view)
-	def wrapped_view(**kwargs):
-		if g.get('user') is None: return redirect(url_for('auth.login'))
-		if g.user.role != 'superuser':
-			from flask import abort
-			abort(403)
-		return view(**kwargs)
-	return wrapped_view
-
+    @functools.wraps(view)
+    def wrapped_view(**kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login'))
+        if current_user.role != 'superuser':
+            from flask import abort
+            abort(403)
+        return view(**kwargs)
+    return wrapped_view

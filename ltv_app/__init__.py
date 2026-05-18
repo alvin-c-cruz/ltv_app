@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager
 import os
 import subprocess
 
@@ -42,6 +43,18 @@ def create_app(test_config=None):
     from .tz import ph_now, ph_today
     app.jinja_env.globals['ph_now'] = ph_now
     app.jinja_env.globals['ph_today'] = ph_today
+
+    login_manager = LoginManager()
+    login_manager.login_view = 'auth.login'
+    login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        from .blueprints.database.views import get_db
+        from .blueprints.auth.dataclass import User
+        user = User(db=get_db())
+        user.get(id=int(user_id))
+        return user if user.id else None
 
     from . import blueprints
     for module_ in dir(blueprints):
