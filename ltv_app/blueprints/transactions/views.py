@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
-from datetime import date, timedelta
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g
+from datetime import timedelta
+from ...tz import ph_today
 
 from .models import Transaction, TransactionShort
 from .. auth import login_required
@@ -14,7 +15,7 @@ def home():
     if request.method == 'POST':
         trade_date = request.form['trade_date']
     else:
-        trade_date = date.today()
+        trade_date = request.args.get('trade_date', str(ph_today()))
 
     from ..database import get_db
     db = get_db()
@@ -92,12 +93,13 @@ def add():
 
             new_transaction.save()
 
-            return redirect(url_for('transactions.add'))
+            flash(f"Transaction added: {transaction_type} {abs(quantity):,} shares.")
+            return redirect(url_for('transactions.home', trade_date=trade_date))
         else:
             flash(error)
     else:
-        trade_date = str(date.today())
-        value_date = str(date.today() + timedelta(days=2))
+        trade_date = str(ph_today())
+        value_date = str(ph_today() + timedelta(days=2))
         form = {
           "trade_date": trade_date,
           "value_date": value_date
@@ -172,12 +174,13 @@ def stock_transfer():
                   )
             transfer_in.save()
 
-            return redirect(url_for('transactions.stock_transfer'))
+            flash(f"Transfer recorded: {abs(quantity):,} shares between accounts.")
+            return redirect(url_for('transactions.home', trade_date=trade_date))
         else:
             flash(error)
     else:
-        trade_date = str(date.today())
-        value_date = str(date.today() + timedelta(days=2))
+        trade_date = str(ph_today())
+        value_date = str(ph_today() + timedelta(days=2))
         form = {
           "trade_date": trade_date,
           "value_date": value_date,
@@ -198,6 +201,10 @@ def edit(ref_num):
     from .. database import get_db
     transaction = Transaction(db=get_db())
     transaction.get(ref_num=ref_num)
+
+    if transaction.locked and g.user.role != 'superuser':
+        flash("This transaction is locked and cannot be edited.")
+        return redirect(url_for('transactions.home'))
 
     transaction_types = [(i, i) for i in ['Buy (Spot)', 'Sell (Spot)', 'Transfer-In', 'Transfer-Out', "Stock Dividend"]]
 
@@ -301,6 +308,11 @@ def delete(ref_num):
     from .. database import get_db
     transaction = Transaction(db=get_db())
     transaction.get(ref_num=ref_num)
+
+    if transaction.locked and g.user.role != 'superuser':
+        flash("This transaction is locked and cannot be deleted.")
+        return redirect(url_for('transactions.home'))
+
     transaction.delete()
 
     flash(f"Transaction #{ref_num} has been deleted.")
@@ -313,6 +325,10 @@ def edit_short(ref_num):
     from .. database import get_db
     transaction = TransactionShort(db=get_db())
     transaction.get(ref_num=ref_num)
+
+    if transaction.locked and g.user.role != 'superuser':
+        flash("This transaction is locked and cannot be edited.")
+        return redirect(url_for('transactions.home'))
 
     transaction_types = [(i, i) for i in ['Sell (Short)', 'Buy (Pay Short)']]
 
@@ -399,6 +415,11 @@ def delete_short(ref_num):
     from .. database import get_db
     transaction = TransactionShort(db=get_db())
     transaction.get(ref_num=ref_num)
+
+    if transaction.locked and g.user.role != 'superuser':
+        flash("This transaction is locked and cannot be deleted.")
+        return redirect(url_for('transactions.home'))
+
     transaction.delete()
 
     flash(f"Transaction #{ref_num} has been deleted.")
@@ -486,12 +507,13 @@ def add_stock_dividends():
 
             new_transaction.save()
 
-            return redirect(url_for('transactions.add_stock_dividends'))
+            flash(f"Stock dividend added: {abs(quantity):,} shares.")
+            return redirect(url_for('transactions.home', trade_date=trade_date))
         else:
             flash(error)
     else:
-        trade_date = str(date.today())
-        value_date = str(date.today())
+        trade_date = str(ph_today())
+        value_date = str(ph_today())
         form = {
           "trade_date": trade_date,
           "value_date": value_date,

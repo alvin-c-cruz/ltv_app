@@ -68,8 +68,10 @@ def save_log(request_url, request_data):
 def base_variables():
     db = get_db()
     if "bank_accounts" not in g:
-        banks = BankAccount(db=db)
-        g.bank_accounts = banks.all(fields=["ref_num", "bank_name", "bank_id"], order_by=["priority"])
+        g.bank_accounts = db.execute(
+            "SELECT ref_num, bank_name, bank_id FROM tbl_bank_account "
+            "WHERE is_active = 1 ORDER BY priority"
+        ).fetchall()
 
     if "stocks" not in g:
         stocks = Stocks(db=db)

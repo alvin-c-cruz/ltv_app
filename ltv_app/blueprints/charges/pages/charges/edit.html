@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Edit Charges</h1>
+
+<div class="card" style="max-width:520px">
+    <div class="card-body">
+        <table class="table mb-3" style="table-layout:fixed">
+            <tbody>
+                <tr><th style="width:35%">Account</th><td>{{ bank_name }}</td></tr>
+                <tr><th>Stock</th><td>{{ stock }}</td></tr>
+                <tr><th>Type</th><td>{{ transaction_type }}</td></tr>
+                <tr><th>Quantity</th><td class="text-right">{{ quantity }}</td></tr>
+                <tr><th>Price</th><td class="text-right">{{ price }}</td></tr>
+                <tr><th>Amount</th><td class="text-right">{{ amount }}</td></tr>
+            </tbody>
+        </table>
+
+        <form method="post">
+            <div class="form-group">
+                <label>Brokerage</label>
+                <input type="number" step="0.01" name="brokerage" class="form-control" value="{{ brokerage }}">
+            </div>
+            <div class="form-group">
+                <label>Commission</label>
+                <input type="number" step="0.01" name="commission" class="form-control" value="{{ commission }}">
+            </div>
+            <div class="form-group">
+                <label>Foreign Charge</label>
+                <input type="number" step="0.01" name="foreign_charge" class="form-control" value="{{ foreign_charge }}">
+            </div>
+            <div class="form-group">
+                <label>Stamp Duty</label>
+                <input type="number" step="0.01" name="stamp_duty" class="form-control" value="{{ stamp_duty }}">
+            </div>
+            <div class="form-group">
+                <label>Misc</label>
+                <input type="number" step="0.01" name="misc" class="form-control" value="{{ misc }}">
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:1rem">
+                <button type="submit" class="btn btn-primary">Save Charges</button>
+                <a href="{{ url_for('charges.home') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for
-from datetime import date
 
 from .. database import get_db
 from .. auth import login_required
+from ...tz import ph_today
 
 bp = Blueprint('holiday', __name__, template_folder="pages", url_prefix="/holiday")
 
@@ -10,7 +10,7 @@ bp = Blueprint('holiday', __name__, template_folder="pages", url_prefix="/holida
 @bp.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
-    today = date.today()
+    today = ph_today()
     if request.method == "POST":
         date_from = request.form['date_from']
         date_to   = request.form['date_to']

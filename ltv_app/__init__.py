@@ -39,6 +39,10 @@ def create_app(test_config=None):
 
     app.jinja_env.globals['app_version'] = VERSION
 
+    from .tz import ph_now, ph_today
+    app.jinja_env.globals['ph_now'] = ph_now
+    app.jinja_env.globals['ph_today'] = ph_today
+
     from . import blueprints
     for module_ in dir(blueprints):
         module_obj = getattr(blueprints, module_)

@@ -5,6 +5,7 @@
 !.gitignore
 !flask_app.py
 !/ltv_app/
+!/tests/
 
 # Compiled Python — never commit these
 __pycache__/

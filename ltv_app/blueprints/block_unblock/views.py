@@ -1,8 +1,9 @@
 import re
 
 from flask import Blueprint, render_template, request, send_file, current_app
-from datetime import timedelta, date
+from datetime import timedelta
 from .. transactions.models import get_balance
+from ...tz import ph_today
 
 from .. auth import login_required
 from .. database import get_db
@@ -60,7 +61,7 @@ def home():
             code = re.search(r'\((\d+)\)', stock_name).group(1)
             code_ref = db.execute("SELECT ref_num FROM tbl_code WHERE code=?;", (code, )).fetchone()[0]
 
-            balance, cost_to_date = get_balance(db=db, bank_ref=bank_ref, code_ref=code_ref, trade_date=str(date.today())[:10])
+            balance, cost_to_date = get_balance(db=db, bank_ref=bank_ref, code_ref=code_ref, trade_date=str(ph_today())[:10])
             data[bank_name][stock_name]["shares_on_hand"] = balance
             data[bank_name][stock_name]["cost-to-date"] = cost_to_date
             

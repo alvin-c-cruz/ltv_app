@@ -23,6 +23,8 @@ class StockContract(Model):
     gtd: str = "1m"
     bank_doc: str = ""
     status: str = "active"
+    reviewed: int = 0
+    locked: int = 0
 
     def __post_init__(self):
         if self.ref_num:

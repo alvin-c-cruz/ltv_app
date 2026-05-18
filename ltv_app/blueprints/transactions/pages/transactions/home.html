@@ -15,20 +15,31 @@
     <div class="toolbar-actions">
         <a href="{{ url_for('transactions.download', trade_date=trade_date) }}" class="btn btn-outline">Old Trades Done</a>
         <a href="{{ url_for('transactions.download_with_gain_loss', trade_date=trade_date) }}" class="btn btn-outline">New Trades Done</a>
-        <a href="{{ url_for('transactions.add') }}" class="btn btn-success">+ Spot</a>
-        <a href="{{ url_for('transactions.stock_transfer') }}" class="btn btn-success">+ Transfer</a>
-        <a href="{{ url_for('term_sheet.add') }}" class="btn btn-success">+ Contract</a>
-        <a href="{{ url_for('transactions.add_stock_dividends') }}" class="btn btn-success">+ Dividends</a>
+        <button type="button" class="btn btn-success" onclick="openTxnModal('spotModal')">+ Spot</button>
+        <button type="button" class="btn btn-success" onclick="openTxnModal('transferModal')">+ Transfer</button>
+        <button type="button" class="btn btn-success" onclick="openTxnModal('contractModal')">+ Contract</button>
+        <button type="button" class="btn btn-success" onclick="openTxnModal('dividendModal')">+ Dividends</button>
     </div>
 </div>
 
 {% if accus %}
 <h2>Accumulators</h2>
 <div class="table-wrap mb-3">
-    <table class="table">
+    <table class="table" style="table-layout:fixed;width:100%">
+        <colgroup>
+            <col style="width:14%">
+            <col style="width:18%">
+            <col style="width:10%">
+            <col style="width:9%">
+            <col style="width:14%">
+            <col style="width:14%">
+            <col style="width:6%">
+            <col style="width:8%">
+            <col style="width:7%">
+        </colgroup>
         <thead>
             <tr>
-                <th>Account</th><th>Stock</th><th>Shares</th><th class="text-right">Spot</th>
+                <th>Account</th><th>Stock</th><th class="text-right">Shares</th><th class="text-right">Spot</th>
                 <th class="text-right">Strike</th><th class="text-right">KO</th>
                 <th>Tenor</th><th>GTD</th><th class="text-center">Action</th>
             </tr>
@@ -45,9 +56,18 @@
             <td>{{ ts.tenor }}</td>
             <td>{{ ts.gtd }}</td>
             <td class="text-center">
+                {% if ts.locked %}
+                <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
+                {% if g.user and g.user.role == 'superuser' %}
                 <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
                    onclick="return confirm('Delete this contract?')">Delete</a>
+                {% endif %}
+                {% else %}
+                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
+                   onclick="return confirm('Delete this contract?')">Delete</a>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}{% endfor %}
@@ -59,10 +79,21 @@
 {% if decus %}
 <h2>Decumulators</h2>
 <div class="table-wrap mb-3">
-    <table class="table">
+    <table class="table" style="table-layout:fixed;width:100%">
+        <colgroup>
+            <col style="width:14%">
+            <col style="width:18%">
+            <col style="width:10%">
+            <col style="width:9%">
+            <col style="width:14%">
+            <col style="width:14%">
+            <col style="width:6%">
+            <col style="width:8%">
+            <col style="width:7%">
+        </colgroup>
         <thead>
             <tr>
-                <th>Account</th><th>Stock</th><th>Shares</th><th class="text-right">Spot</th>
+                <th>Account</th><th>Stock</th><th class="text-right">Shares</th><th class="text-right">Spot</th>
                 <th class="text-right">Strike</th><th class="text-right">KO</th>
                 <th>Tenor</th><th>GTD</th><th class="text-center">Action</th>
             </tr>
@@ -79,9 +110,18 @@
             <td>{{ ts.tenor }}</td>
             <td>{{ ts.gtd }}</td>
             <td class="text-center">
+                {% if ts.locked %}
+                <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
+                {% if g.user and g.user.role == 'superuser' %}
                 <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
                    onclick="return confirm('Delete this contract?')">Delete</a>
+                {% endif %}
+                {% else %}
+                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
+                   onclick="return confirm('Delete this contract?')">Delete</a>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}{% endfor %}
@@ -99,7 +139,8 @@
                 <tr>
                     <th>Account</th><th>Stock</th>
                     <th class="text-right">Quantity</th><th class="text-right">Price</th>
-                    <th class="text-right">Amount</th><th class="text-center">Action</th>
+                    <th class="text-right">Amount</th><th class="text-right">Charges</th>
+                    <th class="text-right">Net Amount</th><th class="text-center">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -112,7 +153,12 @@
                 <td class="text-right">{{ row['quantity'] }}</td>
                 <td class="text-right">{{ row['price'] }}</td>
                 <td class="text-right">{{ row['amount'] }}</td>
+                <td class="text-right">{{ row['charges'] }}</td>
+                <td class="text-right">{{ row['net_amount'] }}</td>
                 <td class="text-center">
+                    {% if row['locked'] %}
+                    <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
+                    {% if g.user and g.user.role == 'superuser' %}
                     {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
                     <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
                     <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
@@ -121,6 +167,18 @@
                     <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
                     <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
                        onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% endif %}
+                    {% endif %}
+                    {% else %}
+                    {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
+                    <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% else %}
+                    <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% endif %}
                     {% endif %}
                 </td>
             </tr>
@@ -142,7 +200,8 @@
                 <tr>
                     <th>Account</th><th>Stock</th>
                     <th class="text-right">Quantity</th><th class="text-right">Price</th>
-                    <th class="text-right">Amount</th><th class="text-center">Action</th>
+                    <th class="text-right">Amount</th><th class="text-right">Charges</th>
+                    <th class="text-right">Net Amount</th><th class="text-center">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -155,10 +214,21 @@
                 <td class="text-right">{{ row['quantity'] }}</td>
                 <td class="text-right">{{ row['price'] }}</td>
                 <td class="text-right">{{ row['amount'] }}</td>
+                <td class="text-right">{{ row['charges'] }}</td>
+                <td class="text-right">{{ row['net_amount'] }}</td>
                 <td class="text-center">
+                    {% if row['locked'] %}
+                    <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
+                    {% if g.user and g.user.role == 'superuser' %}
                     <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
                     <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
                        onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% endif %}
+                    {% else %}
+                    <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    {% endif %}
                 </td>
             </tr>
                     {% endfor %}
@@ -169,5 +239,294 @@
     </div>
     {% endfor %}
 {% endfor %}
+
+
+{# ── MODAL HELPER ─────────────────────────────────────────────── #}
+{% macro bank_options() %}
+    <option value=""></option>
+    {% for bank in g.bank_accounts %}
+    <option value="{{ bank.ref_num }}">{{ bank.bank_id }}: {{ bank.bank_name }}</option>
+    {% endfor %}
+{% endmacro %}
+
+{% macro stock_options() %}
+    <option value=""></option>
+    {% for stock in g.stocks %}
+    <option value="{{ stock.ref_num }}">{{ stock.code }}: {{ stock.stock_name }}</option>
+    {% endfor %}
+{% endmacro %}
+
+{# ── + SPOT MODAL ─────────────────────────────────────────────── #}
+<div class="modal-overlay" id="spotModal">
+<div class="modal" style="max-width:520px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Add Spot / Short Transaction</span>
+        <button class="modal-close" onclick="closeTxnModal('spotModal')">&times;</button>
+    </div>
+    <form method="post" action="{{ url_for('transactions.add') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
+            <div class="form-group">
+                <label>Trade Date</label>
+                <input type="date" name="trade_date" class="modal-date" required>
+            </div>
+            <div class="form-group">
+                <label>Value Date</label>
+                <input type="date" name="value_date" class="modal-value-date" required>
+            </div>
+            <div class="form-group">
+                <label>Account</label>
+                <select name="bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>Stock</label>
+                <select name="code_ref" required>{{ stock_options() }}</select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+                <label>Transaction Type</label>
+                <select name="transaction_type" required>
+                    <option value=""></option>
+                    <option value="Buy (Spot)">Buy (Spot)</option>
+                    <option value="Sell (Spot)">Sell (Spot)</option>
+                    <option value="Sell (Short)">Sell (Short)</option>
+                    <option value="Buy (Pay Short)">Buy (Pay Short)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="text" name="quantity" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Price</label>
+                <input type="text" name="price" autocomplete="off" required>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('spotModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
+{# ── + TRANSFER MODAL ─────────────────────────────────────────── #}
+<div class="modal-overlay" id="transferModal">
+<div class="modal" style="max-width:520px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Add Transfer</span>
+        <button class="modal-close" onclick="closeTxnModal('transferModal')">&times;</button>
+    </div>
+    <form method="post" action="{{ url_for('transactions.stock_transfer') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
+            <div class="form-group">
+                <label>Trade Date</label>
+                <input type="date" name="trade_date" class="modal-date" required>
+            </div>
+            <div class="form-group">
+                <label>Value Date</label>
+                <input type="date" name="value_date" class="modal-value-date" required>
+            </div>
+            <div class="form-group">
+                <label>From Account</label>
+                <select name="bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>To Account</label>
+                <select name="counter_bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+                <label>Stock</label>
+                <select name="code_ref" required>{{ stock_options() }}</select>
+            </div>
+            <input type="hidden" name="transaction_type" value="Transfer-Out">
+            <div class="form-group">
+                <label>Quantity (negative)</label>
+                <input type="text" name="quantity" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Price</label>
+                <input type="text" name="price" autocomplete="off" required>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('transferModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
+{# ── + DIVIDENDS MODAL ────────────────────────────────────────── #}
+<div class="modal-overlay" id="dividendModal">
+<div class="modal" style="max-width:520px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Add Stock Dividend</span>
+        <button class="modal-close" onclick="closeTxnModal('dividendModal')">&times;</button>
+    </div>
+    <form method="post" action="{{ url_for('transactions.add_stock_dividends') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
+            <div class="form-group">
+                <label>Trade Date</label>
+                <input type="date" name="trade_date" class="modal-date" required>
+            </div>
+            <div class="form-group">
+                <label>Value Date</label>
+                <input type="date" name="value_date" class="modal-value-date" required>
+            </div>
+            <div class="form-group">
+                <label>Account</label>
+                <select name="bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>Stock</label>
+                <select name="code_ref" required>{{ stock_options() }}</select>
+            </div>
+            <input type="hidden" name="transaction_type" value="Stock Dividend">
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="text" name="quantity" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Price</label>
+                <input type="text" name="price" autocomplete="off" required>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('dividendModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
+{# ── + CONTRACT MODAL ─────────────────────────────────────────── #}
+<div class="modal-overlay" id="contractModal">
+<div class="modal" style="max-width:680px;padding:0;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);position:sticky;top:0;background:var(--surface);z-index:1;">
+        <span class="modal-title">Add Contract (Accumulator / Decumulator)</span>
+        <button class="modal-close" onclick="closeTxnModal('contractModal')">&times;</button>
+    </div>
+    <form method="post" action="{{ url_for('term_sheet.add') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
+            <div class="form-group">
+                <label>Account</label>
+                <select name="bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>Derivative Type</label>
+                <select name="transaction_type" required>
+                    <option value=""></option>
+                    <option value="ACCU">Accumulator</option>
+                    <option value="DECU">Decumulator</option>
+                </select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+                <label>Underlying Stock</label>
+                <select name="code_ref" required>{{ stock_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>Trade Date</label>
+                <input type="date" name="trade_date" class="modal-date" required>
+            </div>
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" name="start_date" class="modal-start-date" required>
+            </div>
+            <div class="form-group">
+                <label>Spot</label>
+                <input type="text" name="spot" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Strike Rate (%)</label>
+                <input type="text" name="strike_rate" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>KO Rate (%)</label>
+                <input type="text" name="ko_rate" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Daily Shares</label>
+                <input type="text" name="daily_shares" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Tenor</label>
+                <select name="tenor" required>
+                    <option value=""></option>
+                    {% for n in range(1,16) %}<option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Frequency</label>
+                <select name="frequency" required>
+                    <option value=""></option>
+                    <option value="monthly">Monthly</option>
+                    <option value="bi-monthly">Bi-Weekly</option>
+                    <option value="weekly">Weekly</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Leveraged</label>
+                <select name="leveraged" required>
+                    <option value=""></option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Guaranteed (GTD)</label>
+                <select name="gtd" required>
+                    <option value=""></option>
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                    <option value="1m">1 month</option>
+                    <option value="2m">2 months</option>
+                    <option value="3m">3 months</option>
+                    <option value="4m">4 months</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" required>
+                    <option value="active" selected>Active</option>
+                    <option value="KO">KO</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Bank Reference No.</label>
+                <input type="text" name="bank_doc" autocomplete="off">
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('contractModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
+<script>
+var _today = '{{ trade_date }}';
+var _d = new Date(_today);
+var _vd = new Date(_d); _vd.setDate(_vd.getDate() + 2);
+var _vdStr = _vd.toISOString().slice(0,10);
+var _sdStr = (function(){ var d=new Date(_today); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
+
+function openTxnModal(id) {
+    var m = document.getElementById(id);
+    m.querySelectorAll('.modal-date').forEach(function(el){ el.value = _today; });
+    m.querySelectorAll('.modal-value-date').forEach(function(el){ el.value = _vdStr; });
+    m.querySelectorAll('.modal-start-date').forEach(function(el){ el.value = _sdStr; });
+    m.classList.add('active');
+}
+function closeTxnModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+document.addEventListener('keydown', function(e){
+    if(e.key==='Escape') document.querySelectorAll('.modal-overlay.active').forEach(function(m){ m.classList.remove('active'); });
+});
+document.querySelectorAll('.modal-overlay').forEach(function(m){
+    m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('active'); });
+});
+</script>
 
 {% endblock %}

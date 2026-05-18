@@ -9,6 +9,7 @@ class User(Model):
     email: str = ""
     password: str = ""
     level: int = 5  # Levels: 1=admin; 2=audit; 3=accountant; 4=bookkeeper; 5=viewer
+    role: str = 'staff'  # Roles: staff, superuser
 
     def __post_init__(self):
         self.table_name = "tbl_User"

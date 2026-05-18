@@ -19,7 +19,7 @@
     --font:         'Segoe UI', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
 }
 
-html { font-size: 16px; }
+html { font-size: 16px; overflow-x: hidden; }
 
 body {
     font-family: var(--font);
@@ -38,26 +38,27 @@ a:hover { text-decoration: underline; }
     position: sticky;
     top: 0;
     z-index: 1000;
-    background: var(--nav-bg);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    background: linear-gradient(135deg, #0c1a2e 0%, #162644 60%, #1e3560 100%);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+    border-bottom: 1px solid rgba(230,201,106,0.15);
 }
 
 .navbar-inner {
     height: var(--nav-height);
     display: flex;
     align-items: center;
-    padding: 0 clamp(12px, 3vw, 24px);
+    padding: 0 clamp(12px, 3vw, 28px);
     gap: 8px;
 }
 
 .navbar-brand {
-    font-size: 1.3rem;
-    font-weight: 700;
+    font-size: 1.35rem;
+    font-weight: 800;
     color: var(--nav-active);
-    letter-spacing: 2px;
-    margin-right: 20px;
+    letter-spacing: 4px;
+    margin-right: 24px;
     flex-shrink: 0;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 .navbar-brand:hover { text-decoration: none; color: var(--nav-active); }
 
@@ -579,6 +580,7 @@ input:focus, select:focus, textarea:focus {
     gap: 8px;
     flex-wrap: wrap;
     align-items: flex-end;
+    margin-left: auto;
 }
 
 /* ── Report generation forms ──────────────────────────────────── */

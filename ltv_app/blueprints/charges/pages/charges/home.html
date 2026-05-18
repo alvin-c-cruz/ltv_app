@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Charges Encoding</h1>
+
+<div class="mt-3" style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+    <form method="get" action="{{ url_for('charges.home') }}"
+          style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+
+        <div>
+            <div class="ms-filter-label">Account</div>
+            <div class="ms-wrap" id="bankWrap">
+                <button type="button" class="ms-btn" onclick="msToggle('bankWrap')">
+                    <span id="bankLabel">
+                        {%- if not filter_banks %}All Accounts
+                        {%- elif filter_banks|length == 1 %}{{ filter_banks[0] }}
+                        {%- else %}{{ filter_banks|length }} selected{%- endif %}
+                    </span>
+                    <span class="ms-arrow">&#9660;</span>
+                </button>
+                <div class="ms-panel">
+                    {% for b in all_banks %}
+                    <label class="ms-option">
+                        <input type="checkbox" name="bank" value="{{ b }}"
+                               {% if b in filter_banks %}checked{% endif %}
+                               onchange="msUpdateLabel('bankWrap','bankLabel','All Accounts')">
+                        {{ b }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:6px;">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            {% if filter_banks %}
+            <a href="{{ url_for('charges.home') }}" class="btn btn-outline btn-sm">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <div style="margin-left:auto; display:flex; align-items:center; gap:12px; align-self:center;">
+        <span class="text-muted" style="font-size:0.9rem;">
+            {% if total %}{{ total }} record{{ 's' if total != 1 }}{% else %}All up to date{% endif %}
+        </span>
+    </div>
+</div>
+
+{% if grouped %}
+<div class="mt-3">
+{% for bank_name, data in grouped.items() %}
+<div class="fixings-section">
+    <div class="fixings-section-header">
+        <span class="fixings-section-name">{{ bank_name }}</span>
+        <span class="fixings-section-total">{{ data.count }} record{{ 's' if data.count != 1 }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="table" style="table-layout:fixed;width:100%">
+            <colgroup>
+                <col style="width:9%">
+                <col style="width:24%">
+                <col style="width:13%">
+                <col style="width:8%">
+                <col style="width:9%">
+                <col style="width:10%">
+                <col style="width:27%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Stock</th>
+                    <th>Type</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Amount</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in data.rows %}
+            <tr>
+                <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                <td>{{ row.stock }}</td>
+                <td>{{ row.transaction_type }}</td>
+                <td class="text-right">{{ row.quantity }}</td>
+                <td class="text-right">{{ row.price }}</td>
+                <td class="text-right">{{ row.amount }}</td>
+                <td class="text-center" style="white-space:nowrap">
+                    <a href="{{ url_for('charges.edit', source=row.source, ref_num=row.ref_num) }}"
+                       class="btn btn-outline btn-sm">Edit Charges</a>
+                    <form method="post"
+                          action="{{ url_for('charges.mark_no_charges', source=row.source, ref_num=row.ref_num) }}"
+                          style="display:inline">
+                        {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
+                        <button type="submit" class="btn btn-sm"
+                                style="background:var(--accent-muted);color:var(--text-primary)"
+                                onclick="return confirm('Mark this transaction as having no charges?')">
+                            No Charges
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="mt-3" style="padding:40px; text-align:center; background:var(--surface);
+     border:1px solid var(--border); border-radius:8px;">
+    <p style="font-size:1.1rem; color:var(--text-muted); margin:0;">
+        {% if filter_banks %}
+        No records match the selected account(s).
+        {% else %}
+        No reviewed transactions with missing charges.
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+<script>
+function msToggle(id) {
+    var wrap = document.getElementById(id);
+    var isOpen = wrap.classList.contains('open');
+    document.querySelectorAll('.ms-wrap.open').forEach(function(el) { el.classList.remove('open'); });
+    if (!isOpen) wrap.classList.add('open');
+}
+
+function msUpdateLabel(wrapId, labelId, allText) {
+    var checked = document.querySelectorAll('#' + wrapId + ' input[type=checkbox]:checked');
+    var label = document.getElementById(labelId);
+    if (checked.length === 0) label.textContent = allText;
+    else if (checked.length === 1) label.textContent = checked[0].value;
+    else label.textContent = checked.length + ' selected';
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.ms-wrap')) {
+        document.querySelectorAll('.ms-wrap.open').forEach(function(el) { el.classList.remove('open'); });
+    }
+});
+</script>
+
+{% endblock %}

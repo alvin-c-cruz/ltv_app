@@ -1,6 +1,6 @@
 import datetime
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g
 
 from .models import TermSheet, StockContract, FixingSchedule, CreateSchedules, next_day
 
@@ -152,6 +152,11 @@ def add():
 def edit(contract_ref):
     db = get_db()
     ts = StockContract(db=db)
+    ts.get(ref_num=contract_ref)
+    if ts.locked and g.user.role != 'superuser':
+        flash("This contract is locked and cannot be edited.")
+        return redirect(url_for('transactions.home'))
+    ts = StockContract(db=db)
 
     codes = db.execute("SELECT ref_num, code, stock_name FROM tbl_code;").fetchall()
     tenors = [
@@ -249,6 +254,10 @@ def edit(contract_ref):
 @login_required
 def delete_contract(contract_ref):
     db = get_db()
+    locked = db.execute("SELECT locked FROM tbl_stock_contract WHERE ref_num=?", (contract_ref,)).fetchone()
+    if locked and locked['locked'] and g.user.role != 'superuser':
+        flash("This contract is locked and cannot be deleted.")
+        return redirect(url_for('transactions.home'))
     db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?;", (contract_ref, ))
     db.execute("DELETE FROM tbl_stock_contract WHERE ref_num=?;", (contract_ref, ))
     db.commit()

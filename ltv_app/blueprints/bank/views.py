@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, g, request, send_file
 from datetime import date, timedelta
+from ...tz import ph_today
 import io
 from .. transactions import get_balance, get_transactions
 
@@ -31,7 +32,7 @@ def account_position(bank_id):
     db = get_db()
     row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?;", (bank_id,)).fetchone()
     bank_ref, bank_name = row['ref_num'], row['bank_name']
-    trade_date = str(date.today())
+    trade_date = str(ph_today())
     position = gather_position(db=db, trade_date=trade_date, bank_ref=bank_ref)
 
     return render_template('bank/account.html', position=position, bank_name=bank_name, bank_id=bank_id)
@@ -234,7 +235,7 @@ def transaction_list(bank_id, code):
         date_from = request.form.get('date_from', '')
         date_to = request.form.get('date_to', '')
     else:
-        today = date.today()
+        today = ph_today()
         date_from = str(today.replace(month=1, day=1))
         date_to = str(today.replace(month=12, day=31))
 
@@ -282,7 +283,7 @@ def download_transactions(bank_id, code):
     code_row = db.execute("SELECT ref_num, stock_name FROM tbl_code WHERE code=?;", (code,)).fetchone()
     code_ref, stock_name = code_row['ref_num'], code_row['stock_name']
 
-    today = date.today()
+    today = ph_today()
     date_from = request.args.get('date_from', str(today.replace(month=1, day=1)))
     date_to = request.args.get('date_to', str(today.replace(month=12, day=31)))
 

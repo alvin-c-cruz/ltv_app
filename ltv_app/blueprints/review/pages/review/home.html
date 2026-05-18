@@ -8,56 +8,66 @@
           style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
 
         <div>
-            <div class="ms-filter-label">Code</div>
-            <div class="ms-wrap" id="codeWrap">
-                <button type="button" class="ms-btn" onclick="msToggle('codeWrap')">
-                    <span id="codeLabel">
-                        {%- if not filter_codes %}All Codes
-                        {%- elif filter_codes|length == 1 %}{{ filter_codes[0] }}
-                        {%- else %}{{ filter_codes|length }} selected{%- endif %}
+            <div class="ms-filter-label">Filters</div>
+            <div class="ms-wrap" id="filterWrap">
+                <button type="button" class="ms-btn" onclick="msToggle('filterWrap')" style="min-width:180px;">
+                    <span id="filterLabel">
+                        {%- set active = (filter_banks|length) + (filter_codes|length) + (filter_types|length) %}
+                        {%- if active == 0 %}All Filters
+                        {%- elif active == 1 %}1 filter active
+                        {%- else %}{{ active }} filters active{%- endif %}
                     </span>
                     <span class="ms-arrow">&#9660;</span>
                 </button>
-                <div class="ms-panel">
-                    {% for c in codes %}
-                    <label class="ms-option">
-                        <input type="checkbox" name="code" value="{{ c }}"
-                               {% if c in filter_codes %}checked{% endif %}
-                               onchange="msUpdateLabel('codeWrap','codeLabel','All Codes')">
-                        {{ c }}
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        <div>
-            <div class="ms-filter-label">Type</div>
-            <div class="ms-wrap" id="typeWrap">
-                <button type="button" class="ms-btn" onclick="msToggle('typeWrap')">
-                    <span id="typeLabel">
-                        {%- if not filter_types %}All Types
-                        {%- elif filter_types|length == 1 %}{{ filter_types[0] }}
-                        {%- else %}{{ filter_types|length }} selected{%- endif %}
-                    </span>
-                    <span class="ms-arrow">&#9660;</span>
-                </button>
-                <div class="ms-panel">
-                    {% for t in txn_types %}
-                    <label class="ms-option">
-                        <input type="checkbox" name="txn_type" value="{{ t }}"
-                               {% if t in filter_types %}checked{% endif %}
-                               onchange="msUpdateLabel('typeWrap','typeLabel','All Types')">
-                        {{ t }}
-                    </label>
-                    {% endfor %}
+                <div class="ms-panel" style="min-width:540px; max-height:none; overflow:visible; padding:0;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr;">
+                        <div style="padding:12px; border-right:1px solid var(--border);">
+                            <div class="ms-filter-label" style="margin-bottom:6px;">Account</div>
+                            <div style="max-height:220px; overflow-y:auto;">
+                                {% for b in all_banks %}
+                                <label class="ms-option">
+                                    <input type="checkbox" name="bank" value="{{ b }}"
+                                           {% if b in filter_banks %}checked{% endif %}
+                                           onchange="updateFilterLabel()">
+                                    {{ b }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div style="padding:12px; border-right:1px solid var(--border);">
+                            <div class="ms-filter-label" style="margin-bottom:6px;">Code</div>
+                            <div style="max-height:220px; overflow-y:auto;">
+                                {% for c in codes %}
+                                <label class="ms-option">
+                                    <input type="checkbox" name="code" value="{{ c }}"
+                                           {% if c in filter_codes %}checked{% endif %}
+                                           onchange="updateFilterLabel()">
+                                    {{ c }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div style="padding:12px;">
+                            <div class="ms-filter-label" style="margin-bottom:6px;">Type</div>
+                            <div style="max-height:220px; overflow-y:auto;">
+                                {% for t in txn_types %}
+                                <label class="ms-option">
+                                    <input type="checkbox" name="txn_type" value="{{ t }}"
+                                           {% if t in filter_types %}checked{% endif %}
+                                           onchange="updateFilterLabel()">
+                                    {{ t }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div style="display:flex; gap:6px;">
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-            {% if filter_codes or filter_types %}
+            {% if filter_banks or filter_codes or filter_types %}
             <a href="{{ url_for('review.home') }}" class="btn btn-outline btn-sm">Clear</a>
             {% endif %}
         </div>
@@ -65,21 +75,26 @@
 
     <div style="margin-left:auto; display:flex; align-items:center; gap:12px; align-self:center;">
         <span class="text-muted" style="font-size:0.9rem;">
-            {% if total %}{{ total }} unreviewed transaction{{ 's' if total != 1 }}{% else %}All up to date{% endif %}
+            {% set grand_total = total + total_short + total_contracts %}
+            {% if grand_total %}{{ grand_total }} unreviewed{% else %}All up to date{% endif %}
         </span>
         {% if total %}
         <form method="post" action="{{ url_for('review.mark_all') }}"
               onsubmit="return confirm('Mark all {{ total }} transaction(s) as reviewed?')">
             {% for c in filter_codes %}<input type="hidden" name="code" value="{{ c }}">{% endfor %}
             {% for t in filter_types %}<input type="hidden" name="txn_type" value="{{ t }}">{% endfor %}
-            <button type="submit" class="btn btn-success">Mark All Reviewed</button>
+            {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
+            <button type="submit" class="btn btn-success">Mark All Transactions</button>
         </form>
         {% endif %}
     </div>
 </div>
 
-{% if grouped %}
+{% if grouped or grouped_short or grouped_contracts %}
 <div class="mt-3">
+
+{% if grouped %}
+<h2 style="margin-bottom:0.5rem">Transactions</h2>
 {% for bank_name, data in grouped.items() %}
 <div class="fixings-section">
     <div class="fixings-section-header">
@@ -87,7 +102,12 @@
         <span class="fixings-section-total">{{ data.count }} transaction{{ 's' if data.count != 1 }}</span>
     </div>
     <div class="table-wrap">
-        <table class="table">
+        <table class="table" style="table-layout:fixed;width:100%">
+            <colgroup>
+                <col style="width:10%"><col style="width:10%"><col style="width:6%">
+                <col style="width:18%"><col style="width:11%"><col style="width:9%">
+                <col style="width:9%"><col style="width:9%"><col style="width:18%">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Trade Date</th>
@@ -119,6 +139,7 @@
                           style="display:inline;">
                         {% for c in filter_codes %}<input type="hidden" name="code" value="{{ c }}">{% endfor %}
                         {% for tp in filter_types %}<input type="hidden" name="txn_type" value="{{ tp }}">{% endfor %}
+                        {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
                         <button type="submit" class="btn btn-outline btn-sm">&#10003; Reviewed</button>
                     </form>
                 </td>
@@ -129,15 +150,131 @@
     </div>
 </div>
 {% endfor %}
+{% endif %}
+
+{% if grouped_short %}
+<h2 style="margin-top:1.5rem;margin-bottom:0.5rem">Short Transactions</h2>
+<div style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;">
+    <form method="post" action="{{ url_for('review.mark_all_short') }}"
+          onsubmit="return confirm('Mark all {{ total_short }} short transaction(s) as reviewed?')">
+        {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
+        <button type="submit" class="btn btn-success btn-sm">Mark All Short Reviewed</button>
+    </form>
+</div>
+{% for bank_name, data in grouped_short.items() %}
+<div class="fixings-section">
+    <div class="fixings-section-header">
+        <span class="fixings-section-name">{{ bank_name }}</span>
+        <span class="fixings-section-total">{{ data.count }} transaction{{ 's' if data.count != 1 }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="table" style="table-layout:fixed;width:100%">
+            <colgroup>
+                <col style="width:10%"><col style="width:10%"><col style="width:6%">
+                <col style="width:18%"><col style="width:11%"><col style="width:9%">
+                <col style="width:9%"><col style="width:9%"><col style="width:18%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Trade Date</th><th>Value Date</th><th>Code</th><th>Stock Name</th>
+                    <th>Type</th><th class="text-right">Quantity</th>
+                    <th class="text-right">Price</th><th class="text-right">Amount</th>
+                    <th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in data.rows %}
+            <tr>
+                <td style="white-space:nowrap;">{{ t.trade_date }}</td>
+                <td style="white-space:nowrap;color:var(--text-muted);">{{ t.value_date }}</td>
+                <td><strong>{{ t.code }}</strong></td>
+                <td>{{ t.stock_name }}</td>
+                <td>{{ t.transaction_type }}</td>
+                <td class="text-right {% if t.qty_neg %}text-danger{% endif %}">{{ t.quantity }}</td>
+                <td class="text-right">{{ t.price }}</td>
+                <td class="text-right {% if t.amt_neg %}text-danger{% endif %}">{{ t.amount }}</td>
+                <td class="text-center">
+                    <form method="post" action="{{ url_for('review.mark_short', ref_num=t.id) }}"
+                          style="display:inline;">
+                        {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
+                        <button type="submit" class="btn btn-outline btn-sm">&#10003; Reviewed</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if grouped_contracts %}
+<h2 style="margin-top:1.5rem;margin-bottom:0.5rem">Term Sheets (Contracts)</h2>
+<div style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;">
+    <form method="post" action="{{ url_for('review.mark_all_contracts') }}"
+          onsubmit="return confirm('Mark all {{ total_contracts }} contract(s) as reviewed?')">
+        {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
+        <button type="submit" class="btn btn-success btn-sm">Mark All Contracts Reviewed</button>
+    </form>
+</div>
+{% for bank_name, data in grouped_contracts.items() %}
+<div class="fixings-section">
+    <div class="fixings-section-header">
+        <span class="fixings-section-name">{{ bank_name }}</span>
+        <span class="fixings-section-total">{{ data.count }} contract{{ 's' if data.count != 1 }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="table" style="table-layout:fixed;width:100%">
+            <colgroup>
+                <col style="width:12%"><col style="width:8%"><col style="width:18%">
+                <col style="width:10%"><col style="width:12%"><col style="width:12%">
+                <col style="width:12%"><col style="width:7%"><col style="width:9%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Trade Date</th><th>Code</th><th>Stock Name</th>
+                    <th>Type</th><th class="text-right">Shares/Day</th>
+                    <th class="text-right">Spot</th><th class="text-right">Strike</th>
+                    <th class="text-right">KO</th><th class="text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in data.rows %}
+            <tr>
+                <td style="white-space:nowrap;">{{ t.trade_date }}</td>
+                <td><strong>{{ t.code }}</strong></td>
+                <td>{{ t.stock_name }}</td>
+                <td>{{ t.transaction_type }}</td>
+                <td class="text-right">{{ t.shares }}</td>
+                <td class="text-right">{{ t.spot }}</td>
+                <td class="text-right">{{ t.strike }}</td>
+                <td class="text-right">{{ t.ko }}</td>
+                <td class="text-center">
+                    <form method="post" action="{{ url_for('review.mark_contract', ref_num=t.id) }}"
+                          style="display:inline;">
+                        {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
+                        <button type="submit" class="btn btn-outline btn-sm">&#10003; Reviewed</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
 </div>
 {% else %}
 <div class="mt-3" style="padding:40px; text-align:center; background:var(--surface);
      border:1px solid var(--border); border-radius:8px;">
     <p style="font-size:1.1rem; color:var(--text-muted); margin:0;">
-        {% if filter_code or filter_type %}
+        {% if filter_banks or filter_codes or filter_types %}
         No unreviewed transactions match the current filter.
         {% else %}
-        All transactions have been reviewed.
+        All transactions, contracts, and term sheets have been reviewed.
         {% endif %}
     </p>
 </div>
@@ -151,6 +288,9 @@
             <button class="modal-close" onclick="closeReviewModal()">&times;</button>
         </div>
         <form id="reviewEditForm" method="post" action="">
+            {% for c in filter_codes %}<input type="hidden" name="code" value="{{ c }}">{% endfor %}
+            {% for t in filter_types %}<input type="hidden" name="txn_type" value="{{ t }}">{% endfor %}
+            {% for b in filter_banks %}<input type="hidden" name="bank" value="{{ b }}">{% endfor %}
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:16px 20px;">
                 <div class="form-group">
                     <label class="form-label">Trade Date</label>
@@ -226,6 +366,12 @@
 </div>
 
 <script>
+function updateFilterLabel() {
+    var total = document.querySelectorAll('#filterWrap input[type=checkbox]:checked').length;
+    var label = document.getElementById('filterLabel');
+    label.textContent = total === 0 ? 'All Filters' : (total === 1 ? '1 filter active' : total + ' filters active');
+}
+
 function openReviewModal(refNum) {
     fetch('/review/' + refNum + '/data')
         .then(r => r.json())
@@ -253,8 +399,7 @@ function closeReviewModal() {
 function reComputeAmount() {
     var qty   = parseFloat(document.getElementById('re_quantity').value) || 0;
     var price = parseFloat(document.getElementById('re_price').value)    || 0;
-    var amt   = qty * price;
-    document.getElementById('re_amount_display').textContent = formatNum(amt, 2);
+    document.getElementById('re_amount_display').textContent = formatNum(qty * price, 2);
     reComputeCharges();
 }
 
@@ -266,11 +411,9 @@ function reComputeCharges() {
     var fgn   = parseFloat(document.getElementById('re_foreign_charge').value) || 0;
     var stamp = parseFloat(document.getElementById('re_stamp_duty').value)     || 0;
     var misc  = parseFloat(document.getElementById('re_misc').value)           || 0;
-    var amt     = qty * price;
     var charges = brok + comm + fgn + stamp + misc;
-    var net     = amt - charges;
     document.getElementById('re_charges_display').textContent = formatNum(charges, 2);
-    document.getElementById('re_net_display').textContent     = formatNum(net, 2);
+    document.getElementById('re_net_display').textContent     = formatNum(qty * price - charges, 2);
 }
 
 function formatNum(v, dp) {
@@ -290,14 +433,6 @@ function msToggle(id) {
     var isOpen = wrap.classList.contains('open');
     document.querySelectorAll('.ms-wrap.open').forEach(function(el) { el.classList.remove('open'); });
     if (!isOpen) wrap.classList.add('open');
-}
-
-function msUpdateLabel(wrapId, labelId, allText) {
-    var checked = document.querySelectorAll('#' + wrapId + ' input[type=checkbox]:checked');
-    var label = document.getElementById(labelId);
-    if (checked.length === 0) label.textContent = allText;
-    else if (checked.length === 1) label.textContent = checked[0].value;
-    else label.textContent = checked.length + ' selected';
 }
 
 document.addEventListener('click', function(e) {

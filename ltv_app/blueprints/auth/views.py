@@ -78,3 +78,14 @@ def login_required(view):
 		return view(**kwargs)
 	return wrapped_view
 
+
+def superuser_required(view):
+	@functools.wraps(view)
+	def wrapped_view(**kwargs):
+		if g.get('user') is None: return redirect(url_for('auth.login'))
+		if g.user.role != 'superuser':
+			from flask import abort
+			abort(403)
+		return view(**kwargs)
+	return wrapped_view
+

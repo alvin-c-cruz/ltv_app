@@ -1,8 +1,9 @@
 from flask import Blueprint, render_template, send_file, request, flash
-from datetime import timedelta, date
+from datetime import date, timedelta
 
 from .create_gain_loss import create_file
 from .. auth import login_required
+from ...tz import ph_today
 
 bp = Blueprint('gain_loss', __name__, template_folder='pages', url_prefix='/gain-loss')
 
@@ -40,7 +41,7 @@ def home():
         }
         return render_template('gain_loss/home.html', form=form)
     else:
-        date_now = date.today()
+        date_now = ph_today()
 
         date_from = date(date_now.year, date_now.month, 1)
 

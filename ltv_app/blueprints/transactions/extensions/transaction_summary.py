@@ -17,26 +17,28 @@ class TransactionSummary:
 
     def get_transactions(self, db, trade_date):
         sql = """
-          SELECT 
-            t.ref_num, 
+          SELECT
+            t.ref_num,
             currency.ccy_id,
-            bank.bank_id, 
-            bank.bank_name, 
-            stock.stock_name, 
-            stock.code, 
-            t.transaction_type, 
-            t.quantity, 
-            t.price 
-          FROM tbl_transaction AS t 
-          INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref 
-          INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref 
-          INNER JOIN tbl_currency AS currency ON currency.ref_num = stock.ccy_ref 
-          INNER JOIN tbl_transaction_type ON tbl_transaction_type.transaction_type = t.transaction_type 
-          WHERE trade_date=? 
-            AND (t.transaction_type LIKE "%Spot%" 
-                OR t.transaction_type LIKE "%Short%" 
+            bank.bank_id,
+            bank.bank_name,
+            stock.stock_name,
+            stock.code,
+            t.transaction_type,
+            t.quantity,
+            t.price,
+            t.brokerage, t.commission, t.foreign_charge, t.stamp_duty, t.misc,
+            t.locked
+          FROM tbl_transaction AS t
+          INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref
+          INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref
+          INNER JOIN tbl_currency AS currency ON currency.ref_num = stock.ccy_ref
+          INNER JOIN tbl_transaction_type ON tbl_transaction_type.transaction_type = t.transaction_type
+          WHERE trade_date=?
+            AND (t.transaction_type LIKE "%Spot%"
+                OR t.transaction_type LIKE "%Short%"
                 OR t.transaction_type LIKE "Transfer%"
-                OR t.transaction_type = "Stock Dividend") 
+                OR t.transaction_type = "Stock Dividend")
           ORDER BY currency.priority, tbl_transaction_type.priority, bank.priority, stock.code
           ;"""
 
@@ -51,7 +53,9 @@ class TransactionSummary:
             ref_num = row['ref_num']
             quantity = '{:,.0f}'.format(abs(row['quantity']))
             price = '{:,.4f}'.format(row['price'])
-            amount = '{:,.2f}'.format(abs(row['quantity']) * row['price'])
+            amt = abs(row['quantity']) * row['price']
+            charges = (row['brokerage'] or 0) + (row['commission'] or 0) + (row['foreign_charge'] or 0) + (row['stamp_duty'] or 0) + (row['misc'] or 0)
+            net = amt - charges
 
             if ccy_id not in self.transactions:
                 self.transactions[ccy_id] = {}
@@ -66,33 +70,38 @@ class TransactionSummary:
                 self.transactions[ccy_id][transaction_type][bank_name][stock] = []
 
             self.transactions[ccy_id][transaction_type][bank_name][stock].append({
-                "ref_num": ref_num,
-                "bank_id": row["bank_id"],
-                "code": row["code"],
-                "quantity": quantity,
-                "price": price,
-                "amount": amount,
+                "ref_num":    ref_num,
+                "bank_id":    row["bank_id"],
+                "code":       row["code"],
+                "quantity":   quantity,
+                "price":      price,
+                "amount":     '{:,.2f}'.format(amt),
+                "charges":    '{:,.2f}'.format(charges),
+                "net_amount": '{:,.2f}'.format(net),
+                "locked":     row["locked"],
             })
 
     def get_short_transactions(self, db, trade_date):
         sql = """
-          SELECT 
-            t.ref_num, 
+          SELECT
+            t.ref_num,
             currency.ccy_id,
-            bank.bank_id, 
-            bank.bank_name, 
-            stock.stock_name, 
-            stock.code, 
-            t.transaction_type, 
-            t.quantity, 
-            t.price 
-          FROM tbl_transaction_short AS t 
-          INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref 
-          INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref 
-          INNER JOIN tbl_currency AS currency ON currency.ref_num = stock.ccy_ref 
-          INNER JOIN tbl_transaction_type ON tbl_transaction_type.transaction_type = t.transaction_type 
-          WHERE trade_date=? 
-            AND (t.transaction_type LIKE "%Spot%" OR t.transaction_type LIKE "%Short%") 
+            bank.bank_id,
+            bank.bank_name,
+            stock.stock_name,
+            stock.code,
+            t.transaction_type,
+            t.quantity,
+            t.price,
+            t.brokerage, t.commission, t.foreign_charge, t.stamp_duty, t.misc,
+            t.locked
+          FROM tbl_transaction_short AS t
+          INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref
+          INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref
+          INNER JOIN tbl_currency AS currency ON currency.ref_num = stock.ccy_ref
+          INNER JOIN tbl_transaction_type ON tbl_transaction_type.transaction_type = t.transaction_type
+          WHERE trade_date=?
+            AND (t.transaction_type LIKE "%Spot%" OR t.transaction_type LIKE "%Short%")
           ORDER BY currency.priority, tbl_transaction_type.priority, bank.priority, stock.code
           ;"""
 
@@ -107,27 +116,32 @@ class TransactionSummary:
             ref_num = row['ref_num']
             quantity = '{:,.0f}'.format(abs(row['quantity']))
             price = '{:,.4f}'.format(row['price'])
-            amount = '{:,.2f}'.format(abs(row['quantity']) * row['price'])
+            amt = abs(row['quantity']) * row['price']
+            charges = (row['brokerage'] or 0) + (row['commission'] or 0) + (row['foreign_charge'] or 0) + (row['stamp_duty'] or 0) + (row['misc'] or 0)
+            net = amt - charges
 
-            if ccy_id not in self.transactions:
-                self.transactions[ccy_id] = {}
+            if ccy_id not in self.short_transactions:
+                self.short_transactions[ccy_id] = {}
 
-            if transaction_type not in self.transactions[ccy_id]:
-                self.transactions[ccy_id][transaction_type] = {}
+            if transaction_type not in self.short_transactions[ccy_id]:
+                self.short_transactions[ccy_id][transaction_type] = {}
 
-            if bank_name not in self.transactions[ccy_id][transaction_type]:
-                self.transactions[ccy_id][transaction_type][bank_name] = {}
+            if bank_name not in self.short_transactions[ccy_id][transaction_type]:
+                self.short_transactions[ccy_id][transaction_type][bank_name] = {}
 
-            if stock not in self.transactions[ccy_id][transaction_type][bank_name]:
-                self.transactions[ccy_id][transaction_type][bank_name][stock] = []
+            if stock not in self.short_transactions[ccy_id][transaction_type][bank_name]:
+                self.short_transactions[ccy_id][transaction_type][bank_name][stock] = []
 
-            self.transactions[ccy_id][transaction_type][bank_name][stock].append({
-                "ref_num": ref_num,
-                "bank_id": row["bank_id"],
-                "code": row["code"],
-                "quantity": quantity,
-                "price": price,
-                "amount": amount,
+            self.short_transactions[ccy_id][transaction_type][bank_name][stock].append({
+                "ref_num":    ref_num,
+                "bank_id":    row["bank_id"],
+                "code":       row["code"],
+                "quantity":   quantity,
+                "price":      price,
+                "amount":     '{:,.2f}'.format(amt),
+                "charges":    '{:,.2f}'.format(charges),
+                "net_amount": '{:,.2f}'.format(net),
+                "locked":     row["locked"],
             })
 
     def get_term_sheets(self, db, trade_date, _type):
@@ -148,6 +162,7 @@ class TransactionSummary:
               " c.ko_rate, " \
               " c.tenor, " \
               " c.gtd, " \
+              " c.locked, " \
               " tbl_currency.ccy_id " \
               "FROM tbl_stock_contract as c " \
               "INNER JOIN tbl_bank_account as a ON a.ref_num = c.bank_ref " \
@@ -178,7 +193,8 @@ class TransactionSummary:
                strike=f'{"{:,.4f}".format(row["spot"]*row["strike_rate"]/100)} ({"{:,.2f}".format(row["strike_rate"])}%)',
                ko=f'{"{:,.4f}".format(row["spot"] * row["ko_rate"] / 100)} ({"{:,.2f}".format(row["ko_rate"])}%)',
                tenor=row["tenor"],
-               gtd=row["gtd"]
+               gtd=row["gtd"],
+               locked=row["locked"],
             )
             term_sheets[ccy].append(ts)
 
@@ -199,3 +215,4 @@ class term_sheet:
     ko: str
     tenor: str
     gtd: str
+    locked: int = 0

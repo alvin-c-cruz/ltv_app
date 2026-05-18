@@ -15,36 +15,25 @@
 
             <li><a href="{{ url_for('fixings.home') }}">Fixings</a></li>
 
-            <li><a href="{{ url_for('review.home') }}">Review</a></li>
-
-            <li class="has-dropdown">
-                <span>Other Records</span>
-                <ul class="dropdown-menu">
-                    <li><a href="{{ url_for('stock_price.home') }}">Upload from Yahoo</a></li>
-                    <li><a href="{{ url_for('pricing.home') }}">Pricing</a></li>
-                    <li><a href="{{ url_for('dividends.home') }}">Cash Dividends</a></li>
-                    <li><a href="{{ url_for('holiday.home') }}">Holidays</a></li>
-                    <li><a href="{{ url_for('transaction_list.home') }}">Transaction Lists</a></li>
-                </ul>
-            </li>
-
-            <li class="has-dropdown">
-                <span>Banks</span>
-                <ul class="dropdown-menu">
-                    <li><a href="{{ url_for('bank.home') }}">Manage Bank</a></li>
-                    <li><div class="dropdown-divider"></div></li>
-                    {% for account in g.bank_accounts %}
-                    <li><a href="{{ url_for('bank.account_position', bank_id=account.bank_id) }}">{{ account.bank_name }}</a></li>
-                    {% endfor %}
-                </ul>
-            </li>
-
             <li class="has-dropdown">
                 <span>Term Sheets</span>
                 <ul class="dropdown-menu">
                     {% for account in g.bank_accounts %}
                     <li><a href="{{ url_for('term_sheet.home', bank_id=account.bank_id) }}">{{ account.bank_name }}</a></li>
                     {% endfor %}
+                </ul>
+            </li>
+
+            <li class="has-dropdown">
+                <span>Other Records</span>
+                <ul class="dropdown-menu">
+                    <li><a href="{{ url_for('review.home') }}">Review</a></li>
+                    <li><a href="{{ url_for('charges.home') }}">Charges</a></li>
+                    {% if g.user and g.user.role == 'superuser' %}
+                    <li><a href="{{ url_for('lock.home') }}">Lock</a></li>
+                    {% endif %}
+                    <li><a href="{{ url_for('stock_price.home') }}">Upload from Yahoo</a></li>
+                    <li><a href="{{ url_for('bank_accounts.home') }}">Bank Accounts</a></li>
                 </ul>
             </li>
 
@@ -56,12 +45,20 @@
                     <li><a href="{{ url_for('gain_loss.home') }}">Gain Loss</a></li>
                     <li><a href="{{ url_for('block_unblock.home') }}">Blocked / Unblocked</a></li>
                     <li><a href="{{ url_for('hkd_margin.home') }}">HKD Margin</a></li>
-                    <li><a href="{{ url_for('portfolio.home') }}">Portfolio</a></li>
-                    <li><a href="{{ url_for('transitory.unconfirmed') }}">No Charges List</a></li>
                 </ul>
             </li>
 
             <li class="nav-spacer"></li>
+
+            {% if g.user %}
+            <li style="display:flex;align-items:center;gap:0.4rem;padding:0 0.5rem;font-size:0.85rem;opacity:0.8;">
+                <span style="font-size:0.75rem;">&#128100;</span>
+                <span>{{ g.user.username }}</span>
+                {% if g.user.role == 'superuser' %}
+                <span style="font-size:0.65rem;background:var(--accent);color:var(--bg-primary);padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:0.04em;">ADMIN</span>
+                {% endif %}
+            </li>
+            {% endif %}
 
             <li><a href="{{ url_for('auth.logout') }}">Logout</a></li>
         </ul>

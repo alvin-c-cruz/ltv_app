@@ -22,6 +22,8 @@ class Transaction(Model):
     spot: float = 0.0
     ko: float = 0.0
     counter_bank_ref: int = None
+    locked: int = 0
+    no_charges: int = 0
 
     def __post_init__(self):
         self.table_name = "tbl_transaction"
@@ -154,6 +156,8 @@ class TransactionShort(Model):
     foreign_charge: float = 0.0
     stamp_duty: float = 0.0
     misc: float = 0.0
+    locked: int = 0
+    no_charges: int = 0
 
     def __post_init__(self):
         self.table_name = "tbl_transaction_short"

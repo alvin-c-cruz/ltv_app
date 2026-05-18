@@ -26,3 +26,6 @@ from . import pricing
 from . import upload
 from . import transitory
 from . import review
+from . import charges
+from . import lock
+from . import bank_accounts
