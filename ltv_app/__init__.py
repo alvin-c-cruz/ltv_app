@@ -9,7 +9,7 @@ def _get_version():
     try:
         base = os.path.dirname(os.path.abspath(__file__))
         count = subprocess.check_output(
-            ['git', 'rev-list', '--count', 'HEAD'],
+            ['git', 'rev-list', '--count', 'origin/main'],
             cwd=base, stderr=subprocess.DEVNULL
         ).decode().strip()
         return f"4.0.{count}"
