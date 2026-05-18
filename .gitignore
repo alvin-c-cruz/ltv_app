@@ -5,6 +5,7 @@
 !.gitignore
 !flask_app.py
 !VERSION
+!push.sh
 !/ltv_app/
 !/tests/
 
