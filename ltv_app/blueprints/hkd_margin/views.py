@@ -172,11 +172,17 @@ def single_double(db, hkd_margin):
               "WHERE c.code = ?" \
               "ORDER BY p.trade_date desc;"
         data = db.execute(sql, (code, )).fetchall()
-        prices = (
-            data[2][0],
-            data[1][0],
-            data[0][0]
-        )
+
+        # Ensure we have at least 3 price records, fill with None if not available
+        if len(data) >= 3:
+            prices = (data[2][0], data[1][0], data[0][0])
+        elif len(data) == 2:
+            prices = (data[1][0], data[1][0], data[0][0])
+        elif len(data) == 1:
+            prices = (data[0][0], data[0][0], data[0][0])
+        else:
+            prices = (None, None, None)
+
         return prices
 
     for ccy in hkd_margin:
