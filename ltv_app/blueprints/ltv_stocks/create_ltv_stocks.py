@@ -63,7 +63,7 @@ def _load_contracts(db, result: dict, price_map: dict):
         INNER JOIN tbl_code s         ON s.ref_num  = c.code_ref
         INNER JOIN tbl_currency cy    ON cy.ref_num = s.ccy_ref
         LEFT JOIN tbl_stock_contract_period p ON p.contract_ref = c.ref_num
-        WHERE c.status = 'active'
+        WHERE c.status != 'inactive'
         GROUP BY c.ref_num
         ORDER BY cy.priority, b.priority, s.code
     """).fetchall()
@@ -208,7 +208,7 @@ def _get_blocked_map(db) -> dict:
         INNER JOIN tbl_code s         ON s.ref_num  = c.code_ref
         LEFT JOIN tbl_stock_contract_period p ON p.contract_ref = c.ref_num
         WHERE c.transaction_type = 'DECU'
-          AND c.status = 'active'
+          AND c.status != 'inactive'
         GROUP BY c.ref_num
     """).fetchall()
 
