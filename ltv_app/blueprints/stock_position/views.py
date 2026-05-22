@@ -135,9 +135,9 @@ def create_excel_report(positions, db):
     # Write stock code to name mapping
     for code in sorted(all_codes):
         stock_name_row = db.execute(
-            "SELECT code_name FROM tbl_code WHERE code = ?", (code,)
+            "SELECT stock_name FROM tbl_code WHERE code = ?", (code,)
         ).fetchone()
-        stock_name = stock_name_row['code_name'] if stock_name_row else code
+        stock_name = stock_name_row['stock_name'] if stock_name_row else code
 
         ws_stocks[f'A{stocks_row}'] = code
         ws_stocks[f'B{stocks_row}'] = stock_name
