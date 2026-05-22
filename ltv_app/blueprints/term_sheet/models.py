@@ -149,6 +149,7 @@ class StockContract(Model):
             "next_date": next_date,
             "bank_doc": self.bank_doc,
             "reference": self.reference,
+            "status": self.status,
         }
 
         return dict_summary

@@ -274,6 +274,30 @@ def delete_period(contract_ref, period_ref):
     return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
 
 
+@bp.route("/<contract_ref>/set-inactive", methods=["POST"])
+@login_required
+def set_inactive(contract_ref):
+    db = get_db()
+
+    # Check if contract exists and get its current status
+    row = db.execute("SELECT status, locked FROM tbl_stock_contract WHERE ref_num=?", (contract_ref,)).fetchone()
+
+    if not row:
+        return jsonify({"success": False, "message": "Contract not found"}), 404
+
+    if row['locked'] and current_user.role != 'superuser':
+        return jsonify({"success": False, "message": "Contract is locked and cannot be modified"}), 403
+
+    if row['status'] != 'KO':
+        return jsonify({"success": False, "message": "Only contracts with KO status can be set to inactive"}), 400
+
+    # Update status to inactive
+    db.execute("UPDATE tbl_stock_contract SET status='inactive' WHERE ref_num=?", (contract_ref,))
+    db.commit()
+
+    return jsonify({"success": True, "message": "Contract status updated to inactive"})
+
+
 @bp.route("/<bank_id>/<transaction_type>/<code>", methods=["GET", "POST"])
 @login_required
 def term_sheet_summary(bank_id, transaction_type, code):

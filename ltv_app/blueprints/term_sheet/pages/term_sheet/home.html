@@ -20,7 +20,7 @@
         </thead>
         <tbody>
         {% for accu in accus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}">
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}">
             <td>{{ accu.stock_name }}</td>
             <td class="text-center">{{ accu.code }}</td>
             <td class="text-right">{{ accu.shares }}</td>
@@ -59,7 +59,7 @@
         </thead>
         <tbody>
         {% for decu in decus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}">
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}" data-contract-ref="{{ decu.ref_num }}" data-status="{{ decu.status }}">
             <td>{{ decu.stock_name }}</td>
             <td class="text-center">{{ decu.code }}</td>
             <td class="text-right">{{ decu.shares }}</td>
@@ -80,5 +80,70 @@
     </table>
 </div>
 {% endif %}
+
+<!-- Context Menu -->
+<div id="contextMenu" style="display: none; position: absolute; background: white; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000;">
+    <div id="setInactiveOption" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee;">
+        Set Inactive
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const contextMenu = document.getElementById('contextMenu');
+    const setInactiveOption = document.getElementById('setInactiveOption');
+    let currentContractRef = null;
+
+    // Handle right-click on table rows
+    document.querySelectorAll('tr.clickable-row').forEach(function(row) {
+        row.addEventListener('contextmenu', function(e) {
+            const status = this.getAttribute('data-status');
+
+            // Only show context menu for KO contracts
+            if (status === 'KO') {
+                e.preventDefault();
+                currentContractRef = this.getAttribute('data-contract-ref');
+
+                // Position and show context menu
+                contextMenu.style.left = e.pageX + 'px';
+                contextMenu.style.top = e.pageY + 'px';
+                contextMenu.style.display = 'block';
+            }
+        });
+    });
+
+    // Handle clicking "Set Inactive"
+    setInactiveOption.addEventListener('click', function() {
+        if (currentContractRef) {
+            if (confirm('Are you sure you want to set this contract to inactive?')) {
+                fetch(`{{ url_for('term_sheet.home', bank_id='') }}/../${currentContractRef}/set-inactive`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Contract status updated to inactive');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('An error occurred: ' + error);
+                });
+            }
+        }
+        contextMenu.style.display = 'none';
+    });
+
+    // Hide context menu when clicking elsewhere
+    document.addEventListener('click', function() {
+        contextMenu.style.display = 'none';
+    });
+});
+</script>
 
 {% endblock %}
