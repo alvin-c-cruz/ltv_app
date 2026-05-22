@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Stock Position Report</h1>
+
+<div class="card">
+    <div class="card-body">
+        <p>Generate a comprehensive stock position report showing all holdings across bank accounts.</p>
+
+        <p>The report includes:</p>
+        <ul>
+            <li>Current stock positions by bank account</li>
+            <li>Share quantities and average costs</li>
+            <li>Total value calculations</li>
+        </ul>
+
+        <a href="{{ url_for('stock_position.download') }}" class="btn btn-primary">
+            Download Stock Balance Report
+        </a>
+    </div>
+</div>
+
+{% endblock %}

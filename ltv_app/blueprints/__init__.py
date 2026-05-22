@@ -30,3 +30,4 @@ from . import charges
 from . import lock
 from . import bank_accounts
 from . import users
+from . import stock_position
