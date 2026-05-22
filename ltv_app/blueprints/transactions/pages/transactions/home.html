@@ -58,7 +58,7 @@
             <td class="text-center">
                 {% if ts.locked %}
                 <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                {% if g.user and g.user.role == 'superuser' %}
+                {% if current_user.role == 'superuser' %}
                 <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
                    onclick="return confirm('Delete this contract?')">Delete</a>
@@ -112,7 +112,7 @@
             <td class="text-center">
                 {% if ts.locked %}
                 <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                {% if g.user and g.user.role == 'superuser' %}
+                {% if current_user.role == 'superuser' %}
                 <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
                    onclick="return confirm('Delete this contract?')">Delete</a>
@@ -158,7 +158,7 @@
                 <td class="text-center">
                     {% if row['locked'] %}
                     <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                    {% if g.user and g.user.role == 'superuser' %}
+                    {% if current_user.role == 'superuser' %}
                     {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
                     <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
                     <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
@@ -219,7 +219,7 @@
                 <td class="text-center">
                     {% if row['locked'] %}
                     <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                    {% if g.user and g.user.role == 'superuser' %}
+                    {% if current_user.role == 'superuser' %}
                     <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
                     <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
                        onclick="return confirm('Delete this transaction?')">Delete</a>

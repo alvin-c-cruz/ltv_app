@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import btn_sm, btn_delete, empty_state, record_count %}
+
+{% block content %}
+<h1>Stock Codes</h1>
+
+<div class="mt-3" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
+    <a href="{{ url_for('stocks.add') }}" class="btn btn-primary">Add New Stock</a>
+    {{ record_count(stocks|length, 'stock', 'stocks') }}
+</div>
+
+{% if stocks %}
+<div class="table-wrap">
+    <table class="table" style="table-layout:auto; width:100%">
+        <thead>
+            <tr>
+                <th style="width:8%">Code</th>
+                <th style="width:25%">Company Name</th>
+                <th style="width:20%">Stock Name</th>
+                <th style="width:12%">Yahoo Ticker</th>
+                <th style="width:12%">Security Code</th>
+                <th style="width:10%">Currency</th>
+                <th class="text-center" style="width:13%">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for stock in stocks %}
+        <tr>
+            <td><strong>{{ stock.code }}</strong></td>
+            <td>{{ stock.company_name or '-' }}</td>
+            <td>{{ stock.stock_name or '-' }}</td>
+            <td>{{ stock.yahoo_ticker or '-' }}</td>
+            <td>{{ stock.security_code or '-' }}</td>
+            <td>{{ stock.ccy_name or '-' }}</td>
+            <td class="text-center" style="white-space:nowrap">
+                {{ btn_sm('Edit', url_for('stocks.edit', ref_num=stock.ref_num)) }}
+                {{ btn_delete(
+                    url_for('stocks.delete', ref_num=stock.ref_num),
+                    confirm_message='Delete stock code "' ~ stock.code ~ '"? This action cannot be undone.'
+                ) }}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ empty_state('No stock codes found. Click "Add New Stock" to create one.') }}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,208 @@
+{# ============================================ #}
+{# FORM MACROS                                #}
+{# ============================================ #}
+
+{# Form input field with label and error handling #}
+{% macro form_field(field, label=None, placeholder=None, required=False, help_text=None) %}
+<div class="form-group">
+    <label class="form-label">
+        {{ label or field.label.text or field.name }}
+        {% if required %}<span style="color:var(--danger)">*</span>{% endif %}
+        {% if help_text %}
+        <span style="font-size:0.8rem; color:var(--text-muted); font-weight:400;">
+            — {{ help_text }}
+        </span>
+        {% endif %}
+    </label>
+    {{ field(class="form-control", placeholder=placeholder or '') }}
+    {% if field.errors %}
+        {% for error in field.errors %}
+        <p style="color:var(--danger); font-size:0.85rem; margin-top:0.25rem;">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Simple text input #}
+{% macro text_input(name, label, value='', placeholder='', required=False, help_text=None) %}
+<div class="form-group">
+    <label class="form-label">
+        {{ label }}
+        {% if required %}<span style="color:var(--danger)">*</span>{% endif %}
+        {% if help_text %}
+        <span style="font-size:0.8rem; color:var(--text-muted); font-weight:400;">
+            — {{ help_text }}
+        </span>
+        {% endif %}
+    </label>
+    <input type="text" name="{{ name }}" class="form-control"
+           value="{{ value }}" placeholder="{{ placeholder }}"
+           {% if required %}required{% endif %}>
+</div>
+{% endmacro %}
+
+{# Select dropdown #}
+{% macro select_input(name, label, options, selected='', required=False, help_text=None) %}
+<div class="form-group">
+    <label class="form-label">
+        {{ label }}
+        {% if required %}<span style="color:var(--danger)">*</span>{% endif %}
+        {% if help_text %}
+        <span style="font-size:0.8rem; color:var(--text-muted); font-weight:400;">
+            — {{ help_text }}
+        </span>
+        {% endif %}
+    </label>
+    <select name="{{ name }}" class="form-control" {% if required %}required{% endif %}>
+        <option value="">-- Select --</option>
+        {% for opt in options %}
+        <option value="{{ opt.value }}" {% if opt.value == selected %}selected{% endif %}>
+            {{ opt.label }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{# ============================================ #}
+{# BUTTON MACROS                              #}
+{# ============================================ #}
+
+{# Primary action button #}
+{% macro btn_primary(text, type='submit') %}
+<button type="{{ type }}" class="btn btn-primary">{{ text }}</button>
+{% endmacro %}
+
+{# Secondary/Outline button #}
+{% macro btn_outline(text, url=None, type='button') %}
+{% if url %}
+<a href="{{ url }}" class="btn btn-outline">{{ text }}</a>
+{% else %}
+<button type="{{ type }}" class="btn btn-outline">{{ text }}</button>
+{% endif %}
+{% endmacro %}
+
+{# Small button #}
+{% macro btn_sm(text, url=None, style='outline') %}
+{% if url %}
+<a href="{{ url }}" class="btn btn-{{ style }} btn-sm">{{ text }}</a>
+{% else %}
+<button class="btn btn-{{ style }} btn-sm">{{ text }}</button>
+{% endif %}
+{% endmacro %}
+
+{# Danger button with confirmation #}
+{% macro btn_danger(text, url, confirm_message) %}
+<a href="{{ url }}" class="btn btn-danger btn-sm"
+   onclick="return confirm('{{ confirm_message }}')">{{ text }}</a>
+{% endmacro %}
+
+{# Delete button form (POST request) #}
+{% macro btn_delete(url, confirm_message='Are you sure you want to delete this item?', text='Delete') %}
+<form method="post" action="{{ url }}" style="display:inline">
+    <button type="submit" class="btn btn-danger btn-sm"
+            onclick="return confirm('{{ confirm_message }}')">{{ text }}</button>
+</form>
+{% endmacro %}
+
+{# ============================================ #}
+{# FORM ACTION BUTTONS GROUP                  #}
+{# ============================================ #}
+
+{# Standard form buttons: Submit + Cancel #}
+{% macro form_actions(submit_text='Save', cancel_url=None, cancel_text='Cancel') %}
+<div style="display:flex; gap:0.5rem; margin-top:1rem">
+    {{ btn_primary(submit_text) }}
+    {% if cancel_url %}
+    {{ btn_outline(cancel_text, cancel_url) }}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# ============================================ #}
+{# TABLE MACROS                               #}
+{# ============================================ #}
+
+{# Simple data table wrapper #}
+{% macro table_wrap(content) %}
+<div class="table-wrap">
+    {{ content }}
+</div>
+{% endmacro %}
+
+{# Table action cell with Edit/Delete buttons #}
+{% macro table_actions(edit_url=None, delete_url=None, delete_confirm=None, extra_actions='') %}
+<td class="text-center" style="white-space:nowrap">
+    {% if edit_url %}
+    <a href="{{ edit_url }}" class="btn btn-outline btn-sm">Edit</a>
+    {% endif %}
+    {{ extra_actions }}
+    {% if delete_url %}
+    {{ btn_delete(delete_url, delete_confirm or 'Delete this item?') }}
+    {% endif %}
+</td>
+{% endmacro %}
+
+{# Empty state message #}
+{% macro empty_state(message='No records found.') %}
+<div style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+    <p>{{ message }}</p>
+</div>
+{% endmacro %}
+
+{# ============================================ #}
+{# CARD MACROS                                #}
+{# ============================================ #}
+
+{# Card wrapper with optional max width #}
+{% macro card(content, max_width='480px') %}
+<div class="card" {% if max_width %}style="max-width:{{ max_width }}"{% endif %}>
+    <div class="card-body">
+        {{ content }}
+    </div>
+</div>
+{% endmacro %}
+
+{# ============================================ #}
+{# FILTER/TAB MACROS                          #}
+{# ============================================ #}
+
+{# Tab/Filter button group #}
+{% macro tab_group(tabs, current) %}
+<div style="display:flex; gap:6px;">
+    {% for tab in tabs %}
+    <a href="{{ tab.url }}"
+       class="btn btn-sm {% if current == tab.value %}btn-primary{% else %}btn-outline{% endif %}">
+        {{ tab.label }}
+    </a>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Record count display #}
+{% macro record_count(count, singular='item', plural='items') %}
+<span class="text-muted" style="font-size:0.85rem;">
+    {{ count }} {{ singular if count == 1 else plural }}
+</span>
+{% endmacro %}
+
+{# ============================================ #}
+{# UTILITY MACROS                             #}
+{# ============================================ #}
+
+{# Number formatting #}
+{% macro format_number(value, decimals=2) %}
+{{ '{:,.{prec}f}'.format(value, prec=decimals) }}
+{% endmacro %}
+
+{# Integer formatting #}
+{% macro format_int(value) %}
+{{ '{:,.0f}'.format(value) }}
+{% endmacro %}
+
+{# Badge/Tag #}
+{% macro badge(text, color='primary') %}
+<span style="font-size:0.75rem; background:var(--{{ color }}); color:var(--bg-primary); padding:2px 6px; border-radius:3px; font-weight:600;">
+    {{ text }}
+</span>
+{% endmacro %}

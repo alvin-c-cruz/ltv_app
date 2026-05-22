@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import text_input, select_input, form_actions %}
+
+{% block content %}
+<h1>{% if mode == 'add' %}Add New Stock Code{% else %}Edit Stock Code{% endif %}</h1>
+
+<div class="card" style="max-width:600px">
+    <div class="card-body">
+        <form method="post">
+            {{ text_input(
+                'code',
+                'Stock Code',
+                value=stock.code if stock else '',
+                required=True,
+                placeholder='e.g., 0001, AAPL'
+            ) }}
+
+            {{ text_input(
+                'company_name',
+                'Company Name',
+                value=stock.company_name if stock else '',
+                placeholder='e.g., CK Hutchison Holdings Limited'
+            ) }}
+
+            {{ text_input(
+                'stock_name',
+                'Stock Name',
+                value=stock.stock_name if stock else '',
+                placeholder='e.g., CK Hutchison'
+            ) }}
+
+            {{ text_input(
+                'yahoo_ticker',
+                'Yahoo Ticker',
+                value=stock.yahoo_ticker if stock else '',
+                placeholder='e.g., 0001.HK',
+                help_text='Used for fetching stock prices from Yahoo Finance'
+            ) }}
+
+            {{ text_input(
+                'security_code',
+                'Security Code',
+                value=stock.security_code if stock else '',
+                placeholder='Internal security identifier'
+            ) }}
+
+            <div class="form-group">
+                <label class="form-label">Currency</label>
+                <select name="ccy_ref" class="form-control">
+                    <option value="">-- Select Currency --</option>
+                    {% for currency in currencies %}
+                    <option value="{{ currency.ref_num }}"
+                            {% if stock and stock.ccy_ref == currency.ref_num %}selected{% endif %}>
+                        {{ currency.ccy_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {{ form_actions(
+                submit_text='Save Stock Code',
+                cancel_url=url_for('stocks.home')
+            ) }}
+        </form>
+    </div>
+</div>
+
+{% if stock %}
+<div style="margin-top:2rem; padding:1rem; background:var(--bg-secondary); border-radius:6px; max-width:600px;">
+    <h3 style="font-size:0.9rem; margin-bottom:0.5rem;">Stock Information</h3>
+    <table class="table" style="font-size:0.85rem;">
+        <tbody>
+            <tr><th style="width:35%">Reference Number</th><td>{{ stock.ref_num }}</td></tr>
+            <tr><th>Current Code</th><td><strong>{{ stock.code }}</strong></td></tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}
