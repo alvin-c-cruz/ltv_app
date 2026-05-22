@@ -1,7 +1,29 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>{{ bank_name }}</h1>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+        {% if prev_bank_id %}
+        <a href="{{ url_for('term_sheet.home', bank_id=prev_bank_id) }}" class="btn btn-secondary">
+            &larr; Previous
+        </a>
+        {% else %}
+        <button class="btn btn-secondary" disabled>&larr; Previous</button>
+        {% endif %}
+    </div>
+
+    <h1 style="margin: 0;">{{ bank_name }}</h1>
+
+    <div>
+        {% if next_bank_id %}
+        <a href="{{ url_for('term_sheet.home', bank_id=next_bank_id) }}" class="btn btn-secondary">
+            Next &rarr;
+        </a>
+        {% else %}
+        <button class="btn btn-secondary" disabled>Next &rarr;</button>
+        {% endif %}
+    </div>
+</div>
 
 {% if accus %}
 <h2>Accumulators</h2>

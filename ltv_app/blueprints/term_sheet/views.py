@@ -16,8 +16,22 @@ bp = Blueprint("term_sheet", __name__, template_folder="pages", url_prefix="/ter
 def home(bank_id):
     db = get_db()
 
-    row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?", (bank_id,)).fetchone()
-    bank_ref, bank_name = row['ref_num'], row['bank_name']
+    row = db.execute("SELECT ref_num, bank_name, priority FROM tbl_bank_account WHERE bank_id=?", (bank_id,)).fetchone()
+    bank_ref, bank_name, current_priority = row['ref_num'], row['bank_name'], row['priority']
+
+    # Get previous bank (higher priority number = lower priority, so we want priority - 1)
+    prev_bank = db.execute(
+        "SELECT bank_id FROM tbl_bank_account WHERE priority < ? ORDER BY priority DESC LIMIT 1",
+        (current_priority,)
+    ).fetchone()
+    prev_bank_id = prev_bank['bank_id'] if prev_bank else None
+
+    # Get next bank (lower priority number = higher priority, so we want priority + 1)
+    next_bank = db.execute(
+        "SELECT bank_id FROM tbl_bank_account WHERE priority > ? ORDER BY priority ASC LIMIT 1",
+        (current_priority,)
+    ).fetchone()
+    next_bank_id = next_bank['bank_id'] if next_bank else None
 
     if request.method == "POST":
         status = "all"
@@ -38,7 +52,12 @@ def home(bank_id):
         status=status
     ).web()
 
-    return render_template('term_sheet/home.html', bank_name=bank_name, accus=accus, decus=decus)
+    return render_template('term_sheet/home.html',
+                         bank_name=bank_name,
+                         accus=accus,
+                         decus=decus,
+                         prev_bank_id=prev_bank_id,
+                         next_bank_id=next_bank_id)
 
 
 @bp.route("/add", methods=["GET", "POST"])
