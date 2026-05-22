@@ -288,8 +288,24 @@ def set_inactive(contract_ref):
     if row['locked'] and current_user.role != 'superuser':
         return jsonify({"success": False, "message": "Contract is locked and cannot be modified"}), 403
 
-    if row['status'] != 'KO':
-        return jsonify({"success": False, "message": "Only contracts with KO status can be set to inactive"}), 400
+    # Check if contract is KO or if all periods are completed (DONE)
+    if row['status'] == 'KO':
+        # KO status can be set to inactive
+        pass
+    else:
+        # Check if all periods are completed (DONE)
+        total_periods = db.execute(
+            "SELECT COUNT(*) as total FROM tbl_stock_contract_period WHERE contract_ref=?",
+            (contract_ref,)
+        ).fetchone()['total']
+
+        completed_periods = db.execute(
+            "SELECT COUNT(*) as completed FROM tbl_stock_contract_period WHERE contract_ref=? AND received != ''",
+            (contract_ref,)
+        ).fetchone()['completed']
+
+        if total_periods == 0 or completed_periods < total_periods:
+            return jsonify({"success": False, "message": "Only contracts with KO status or all periods completed (DONE) can be set to inactive"}), 400
 
     # Update status to inactive
     db.execute("UPDATE tbl_stock_contract SET status='inactive' WHERE ref_num=?", (contract_ref,))

@@ -20,7 +20,7 @@
         </thead>
         <tbody>
         {% for accu in accus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}">
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}" data-next-date="{{ accu.next_date }}">
             <td>{{ accu.stock_name }}</td>
             <td class="text-center">{{ accu.code }}</td>
             <td class="text-right">{{ accu.shares }}</td>
@@ -59,7 +59,7 @@
         </thead>
         <tbody>
         {% for decu in decus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}" data-contract-ref="{{ decu.ref_num }}" data-status="{{ decu.status }}">
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}" data-contract-ref="{{ decu.ref_num }}" data-status="{{ decu.status }}" data-next-date="{{ decu.next_date }}">
             <td>{{ decu.stock_name }}</td>
             <td class="text-center">{{ decu.code }}</td>
             <td class="text-right">{{ decu.shares }}</td>
@@ -98,9 +98,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('tr.clickable-row').forEach(function(row) {
         row.addEventListener('contextmenu', function(e) {
             const status = this.getAttribute('data-status');
+            const nextDate = this.getAttribute('data-next-date');
 
-            // Only show context menu for KO contracts
-            if (status === 'KO') {
+            // Only show context menu for KO contracts or DONE contracts
+            if (status === 'KO' || nextDate === 'DONE') {
                 e.preventDefault();
                 currentContractRef = this.getAttribute('data-contract-ref');
 
