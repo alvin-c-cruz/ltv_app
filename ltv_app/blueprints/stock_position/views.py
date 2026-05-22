@@ -5,7 +5,7 @@ import openpyxl
 import os
 import tempfile
 
-from ltv_app.db import get_db
+from ..database import get_db
 
 bp = Blueprint("stock_position", __name__, template_folder="pages", url_prefix="/stock-position")
 
