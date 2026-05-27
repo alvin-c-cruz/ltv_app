@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Stock Closing Prices</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="post">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" value="{{ trade_date }}" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">View Prices</button>
+                </div>
+            </div>
+        </form>
+
+        {% if available_dates %}
+        <div class="mt-2">
+            <small class="text-muted">Recent dates:
+                {% for date in available_dates[:5] %}
+                <a href="#" onclick="document.querySelector('input[name=trade_date]').value='{{ date }}'; document.querySelector('form').submit(); return false;">{{ date }}</a>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </small>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if stock_prices %}
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Prices for {{ trade_date }}</h5>
+        <p class="text-muted">{{ stock_prices|length }} stocks</p>
+
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Stock Name</th>
+                        <th>Currency</th>
+                        <th class="text-right">Closing Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for price in stock_prices %}
+                    <tr>
+                        <td>{{ price.code }}</td>
+                        <td>{{ price.stock_name }}</td>
+                        <td>{{ price.ccy_id }}</td>
+                        <td class="text-right">{{ "%.4f"|format(price.closing_price) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    No stock prices found for {{ trade_date }}. Please select a different date or upload prices first.
+</div>
+{% endif %}
+
+{% endblock %}

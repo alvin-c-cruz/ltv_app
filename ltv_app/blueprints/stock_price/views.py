@@ -27,6 +27,49 @@ def home():
     return render_template("stock_price/home.html", **context)
 
 
+@bp.route("/view", methods=["GET", "POST"])
+@login_required
+def view():
+    """View stock closing prices for a specific date"""
+    db = get_db()
+
+    # Get the selected date from form or default to today
+    if request.method == "POST":
+        trade_date = request.form.get("trade_date")
+    else:
+        trade_date = datetime.now().strftime("%Y-%m-%d")
+
+    # Get all stock prices for the selected date
+    sql = """
+        SELECT
+            c.code,
+            c.stock_name,
+            p.closing_price,
+            p.trade_date,
+            curr.ccy_id
+        FROM tbl_stock_price p
+        INNER JOIN tbl_code c ON c.ref_num = p.code_ref
+        INNER JOIN tbl_currency curr ON curr.ref_num = c.ccy_ref
+        WHERE p.trade_date = ?
+        ORDER BY c.code
+    """
+
+    stock_prices = db.execute(sql, (trade_date,)).fetchall()
+
+    # Get list of available dates
+    available_dates = db.execute(
+        "SELECT DISTINCT trade_date FROM tbl_stock_price ORDER BY trade_date DESC LIMIT 30"
+    ).fetchall()
+
+    context = {
+        "stock_prices": stock_prices,
+        "trade_date": trade_date,
+        "available_dates": [row['trade_date'] for row in available_dates]
+    }
+
+    return render_template("stock_price/view.html", **context)
+
+
 def upload_yahoo_csv(csv_files):
     db = get_db()
     data = []
