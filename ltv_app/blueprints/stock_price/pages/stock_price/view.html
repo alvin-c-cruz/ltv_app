@@ -5,53 +5,38 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        <form method="post">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Trade Date</label>
-                    <input type="date" name="trade_date" value="{{ trade_date }}" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <button type="submit" class="btn btn-primary">View Prices</button>
-                </div>
-            </div>
-        </form>
-
-        {% if available_dates %}
-        <div class="mt-2">
-            <small class="text-muted">Recent dates:
-                {% for date in available_dates[:5] %}
-                <a href="#" onclick="document.querySelector('input[name=trade_date]').value='{{ date }}'; document.querySelector('form').submit(); return false;">{{ date }}</a>{% if not loop.last %}, {% endif %}
-                {% endfor %}
-            </small>
-        </div>
-        {% endif %}
+        <p class="text-muted">Showing last 10 trading days</p>
     </div>
 </div>
 
-{% if stock_prices %}
+{% if date_list %}
 <div class="card">
     <div class="card-body">
-        <h5 class="card-title">Prices for {{ trade_date }}</h5>
-        <p class="text-muted">{{ stock_prices|length }} stocks</p>
-
-        <div class="table-responsive">
-            <table class="table table-striped">
+        <div style="overflow-x: auto;">
+            <table class="table table-bordered table-sm" style="font-size: 0.85rem;">
                 <thead>
                     <tr>
-                        <th>Code</th>
-                        <th>Stock Name</th>
-                        <th>Currency</th>
-                        <th class="text-right">Closing Price</th>
+                        <th style="position: sticky; left: 0; background: white; z-index: 10;">CODE</th>
+                        <th style="position: sticky; left: 60px; background: white; z-index: 10;">STOCK NAME</th>
+                        {% for date in date_list %}
+                        <th class="text-center" style="min-width: 90px;">{{ date[5:] }}</th>
+                        {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for price in stock_prices %}
+                    {% for code, data in price_data.items() %}
                     <tr>
-                        <td>{{ price.code }}</td>
-                        <td>{{ price.stock_name }}</td>
-                        <td>{{ price.ccy_id }}</td>
-                        <td class="text-right">{{ "%.4f"|format(price.closing_price) }}</td>
+                        <td style="position: sticky; left: 0; background: white; font-weight: 600;">{{ code }}</td>
+                        <td style="position: sticky; left: 60px; background: white; white-space: nowrap;">{{ data.stock_name }}</td>
+                        {% for date in date_list %}
+                        <td class="text-right">
+                            {% if date in data.prices %}
+                            {{ "%.2f"|format(data.prices[date]) }}
+                            {% else %}
+                            <span style="color: #ccc;">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -61,8 +46,24 @@
 </div>
 {% else %}
 <div class="alert alert-info">
-    No stock prices found for {{ trade_date }}. Please select a different date or upload prices first.
+    No stock prices found in the database. Please upload prices first.
 </div>
 {% endif %}
+
+<style>
+    .table-bordered th, .table-bordered td {
+        border: 1px solid #dee2e6;
+        padding: 0.4rem;
+    }
+
+    .table thead th {
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+    }
+
+    tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+</style>
 
 {% endblock %}

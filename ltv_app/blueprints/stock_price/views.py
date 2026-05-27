@@ -30,7 +30,8 @@ def home():
 @bp.route("/view", methods=["GET", "POST"])
 @login_required
 def view():
-    """View stock closing prices for a specific date"""
+    """View stock closing prices for a specific date range"""
+    from datetime import timedelta
     db = get_db()
 
     # Get the selected date from form or default to today
@@ -39,32 +40,53 @@ def view():
     else:
         trade_date = datetime.now().strftime("%Y-%m-%d")
 
-    # Get all stock prices for the selected date
-    sql = """
-        SELECT
-            c.code,
-            c.stock_name,
-            p.closing_price,
-            p.trade_date,
-            curr.ccy_id
-        FROM tbl_stock_price p
-        INNER JOIN tbl_code c ON c.ref_num = p.code_ref
-        INNER JOIN tbl_currency curr ON curr.ref_num = c.ccy_ref
-        WHERE p.trade_date = ?
-        ORDER BY c.code
-    """
-
-    stock_prices = db.execute(sql, (trade_date,)).fetchall()
-
-    # Get list of available dates
+    # Get last 10 trading days to show last week and this week
     available_dates = db.execute(
-        "SELECT DISTINCT trade_date FROM tbl_stock_price ORDER BY trade_date DESC LIMIT 30"
+        "SELECT DISTINCT trade_date FROM tbl_stock_price ORDER BY trade_date DESC LIMIT 10"
     ).fetchall()
 
+    date_list = [row['trade_date'] for row in available_dates]
+    date_list.reverse()  # Show oldest to newest (left to right)
+
+    # Get all stock codes
+    all_stocks = db.execute("""
+        SELECT DISTINCT c.code, c.stock_name, curr.ccy_id
+        FROM tbl_code c
+        INNER JOIN tbl_currency curr ON curr.ref_num = c.ccy_ref
+        WHERE c.ref_num IN (SELECT DISTINCT code_ref FROM tbl_stock_price)
+        ORDER BY c.code
+    """).fetchall()
+
+    # Build a dictionary of prices: {code: {date: price}}
+    price_data = {}
+    for stock in all_stocks:
+        code = stock['code']
+        price_data[code] = {
+            'stock_name': stock['stock_name'],
+            'currency': stock['ccy_id'],
+            'prices': {}
+        }
+
+    # Fetch all prices for the date range
+    if date_list:
+        placeholders = ','.join(['?' for _ in date_list])
+        sql = f"""
+            SELECT c.code, p.trade_date, p.closing_price
+            FROM tbl_stock_price p
+            INNER JOIN tbl_code c ON c.ref_num = p.code_ref
+            WHERE p.trade_date IN ({placeholders})
+        """
+        prices = db.execute(sql, date_list).fetchall()
+
+        for price in prices:
+            code = price['code']
+            if code in price_data:
+                price_data[code]['prices'][price['trade_date']] = price['closing_price']
+
     context = {
-        "stock_prices": stock_prices,
+        "price_data": price_data,
+        "date_list": date_list,
         "trade_date": trade_date,
-        "available_dates": [row['trade_date'] for row in available_dates]
     }
 
     return render_template("stock_price/view.html", **context)
