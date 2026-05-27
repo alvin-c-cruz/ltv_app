@@ -35,6 +35,11 @@ def upload_yahoo_csv(csv_files):
         df.drop(["Trade Date", "Purchase Price", "Quantity", "Commission", "High Limit", "Low Limit", "Comment"],
                 axis=1,
                 inplace=True)
+
+        # Convert string columns to numeric, replacing errors with NaN
+        df["Current Price"] = pd.to_numeric(df["Current Price"], errors='coerce')
+        df["Change"] = pd.to_numeric(df["Change"], errors='coerce')
+
         df["Prev Close"] = df["Current Price"] - df["Change"]
         df["Percent"] = df["Change"] / df["Prev Close"]
         data.append(df)
