@@ -94,7 +94,20 @@ def upload_yahoo_csv(csv_files):
             continue
 
         code_ref = db.execute("SELECT ref_num FROM tbl_code WHERE yahoo_ticker=?;", (row["Symbol"], )).fetchone()[0]
-        trade_date = datetime.strptime(row["Date"], "%Y/%m/%d").strftime("%Y-%m-%d")
+
+        # Try parsing date in multiple formats
+        date_str = row["Date"]
+        trade_date = None
+        for date_format in ["%Y/%m/%d", "%m/%d/%Y", "%Y-%m-%d", "%m-%d-%Y"]:
+            try:
+                trade_date = datetime.strptime(date_str, date_format).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+
+        if not trade_date:
+            flash(f"Could not parse date: {date_str}", category="errors")
+            continue
 
         # Check if already in database
         if db.execute("SELECT COUNT(*) FROM tbl_stock_price WHERE trade_date=? AND code_ref=?",
