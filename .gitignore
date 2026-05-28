@@ -1,13 +1,28 @@
 # Ignore everything at the root level (instance/, localhost/, venv/, etc.)
 /*
 
-# Keep this file and the Flask app source only
+# Keep essential files for the application
 !.gitignore
 !flask_app.py
 !VERSION
 !push.sh
+!CLAUDE.md
+!conftest.py
+!pytest.ini
+!flask_test.cfg
+
+# Keep source code and tests
 !/ltv_app/
 !/tests/
+
+# Keep documentation
+!/docs/
+
+# Keep Excel templates needed by the application
+!/instance/
+/instance/*
+!/instance/excel_templates/
+!/instance/excel_templates/*.xlsx
 
 # Compiled Python — never commit these
 __pycache__/
