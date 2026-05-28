@@ -302,7 +302,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Type</label>
-                    <input type="text" name="transaction_type" id="re_type" class="form-control" required>
+                    <input type="text" name="transaction_type" id="re_type" class="form-control" required onchange="reComputeCharges()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Quantity</label>
@@ -351,7 +351,7 @@
                         <div class="computed-value" id="re_charges_display">—</div>
                     </div>
                     <div style="text-align:center;">
-                        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:2px;">Net Amount</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:2px;" id="re_net_label">Net Amount</div>
                         <div class="computed-value" id="re_net_display">—</div>
                     </div>
                 </div>
@@ -411,9 +411,23 @@ function reComputeCharges() {
     var fgn   = parseFloat(document.getElementById('re_foreign_charge').value) || 0;
     var stamp = parseFloat(document.getElementById('re_stamp_duty').value)     || 0;
     var misc  = parseFloat(document.getElementById('re_misc').value)           || 0;
+    var type  = document.getElementById('re_type').value.toLowerCase();
+
     var charges = brok + comm + fgn + stamp + misc;
     document.getElementById('re_charges_display').textContent = formatNum(charges, 2);
-    document.getElementById('re_net_display').textContent     = formatNum(qty * price - charges, 2);
+
+    // Determine if this is a Buy or Sell transaction
+    var isBuy = type.includes('buy') || type.includes('accu');
+
+    if (isBuy) {
+        // Buy: Amount + Charges = Total (you pay more)
+        document.getElementById('re_net_label').textContent = 'Total';
+        document.getElementById('re_net_display').textContent = formatNum(qty * price + charges, 2);
+    } else {
+        // Sell: Amount - Charges = Net Amount (you receive less)
+        document.getElementById('re_net_label').textContent = 'Net Amount';
+        document.getElementById('re_net_display').textContent = formatNum(qty * price - charges, 2);
+    }
 }
 
 function formatNum(v, dp) {
