@@ -544,8 +544,11 @@ class WriteKnockouts:
                 cell.border = thin_border
                 cell.font = Font(size=11)
 
-                # Alignment - all cells centered both horizontally and vertically
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+                # Alignment - Bank Account and Stock left-aligned with indent, others centered
+                if column_letter in ("C", "D"):
+                    cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                else:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
 
                 # Number formatting
                 if column_letter in ("F", "K"):
@@ -567,7 +570,7 @@ class WriteKnockouts:
         self.ws.column_dimensions['A'].width = 6   # No.
         self.ws.column_dimensions['B'].width = 10  # TYPE
         self.ws.column_dimensions['C'].width = 30  # BANK ACCOUNT
-        self.ws.column_dimensions['D'].width = 20  # STOCK
+        self.ws.column_dimensions['D'].width = 40  # STOCK (doubled from 20)
         self.ws.column_dimensions['E'].width = 10  # CODE
         self.ws.column_dimensions['F'].width = 12  # SHARES
         self.ws.column_dimensions['G'].width = 12  # SPOT
