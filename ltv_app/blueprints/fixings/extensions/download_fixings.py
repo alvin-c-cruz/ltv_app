@@ -7,6 +7,8 @@ from openpyxl.styles import Font, Alignment
 from openpyxl.styles.fills import PatternFill
 from openpyxl.styles.borders import Border, Side
 from openpyxl.utils.cell import get_column_letter
+from openpyxl.cell.rich_text import TextBlock, CellRichText
+from openpyxl.cell.text import InlineFont
 
 from .fixing_average import FixingAverage
 
@@ -46,7 +48,7 @@ class DownloadFixings:
         wb = load_workbook(self.template_file)
 
         self.process_fixings(wb)
-        WriteKnockouts(self.db, wb, self.knockouts)
+        WriteKnockouts(self.db, wb, self.knockouts, self.trade_date)
 
         wb.save(self.filename)
         wb.close()
@@ -183,12 +185,32 @@ class DownloadFixings:
 
                     for col, value in cols.items():
                         cell = ws[f"{col}{row_num}"]
-                        cell.value = value
+
+                        # Special handling for column A (Underlying) with "(KO)"
+                        if col == "A" and "(KO)" in str(value):
+                            # Split the text to apply different colors
+                            text_str = str(value)
+                            ko_index = text_str.index("(KO)")
+
+                            # Create rich text with black for main text and red for "(KO)"
+                            black_text = text_str[:ko_index]
+                            ko_text = text_str[ko_index:]
+
+                            rich_text = CellRichText(
+                                TextBlock(InlineFont(sz=11, b=True), black_text),
+                                TextBlock(InlineFont(sz=11, b=True, color=RED_FONT), ko_text)
+                            )
+                            cell.value = rich_text
+                        else:
+                            cell.value = value
+
                         cell.border = thin_border
 
                         # Font
                         if col in ("A", "B", "D", "E", "F", "H"):
-                            cell.font = Font(size=11, bold=True)
+                            # Don't set font for column A if it has rich text
+                            if not (col == "A" and "(KO)" in str(value)):
+                                cell.font = Font(size=11, bold=True)
                         elif col in ("L", ):
                             if value == "Done":
                                 cell.font = Font(size=11, color=GREEN_FONT, bold=True)
@@ -389,27 +411,59 @@ def get_balance(db, account_code, code, trade_date):
 
 
 class WriteKnockouts:
-    def __init__(self, db, wb, knockouts):
+    def __init__(self, db, wb, knockouts, trade_date):
         if knockouts:
             wb.create_sheet("Knockouts")
             self.db = db
             self.ws = wb["Knockouts"]
             self.knockouts = knockouts
+            self.trade_date = trade_date
 
             self.row_num = 0
             self.write_headers()
             self.write_details()
+            self.format_columns()
+
+    def get_previous_business_day(self, date_str):
+        """Get the previous HK business day, accounting for holidays"""
+        d = datetime.datetime.strptime(str(date_str)[:10], '%Y-%m-%d') - datetime.timedelta(days=1)
+
+        # Load holidays
+        holidays = {
+            str(r['holi_date'])[:10]
+            for r in self.db.execute(
+                "SELECT holi_date FROM tbl_holiday "
+                "INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_holiday.ccy_ref "
+                "WHERE tbl_currency.ccy_id = 'HKD'"
+            ).fetchall()
+        }
+
+        # Skip weekends and holidays
+        while str(d)[:10] in holidays or d.isoweekday() in (6, 7):
+            d -= datetime.timedelta(days=1)
+
+        return str(d)[:10]
 
     def write_headers(self):
+        # Title row
         self.row_num += 1
         cell = self.ws[f"A{self.row_num}"]
         cell.value = "Knock Out Summary"
+        cell.font = Font(size=14, bold=True)
 
+        # Date row - use previous business day
         self.row_num += 1
+        prev_business_day = self.get_previous_business_day(self.trade_date)
+        date_obj = datetime.datetime.strptime(prev_business_day, '%Y-%m-%d')
         cell = self.ws[f"A{self.row_num}"]
-        cell.value = f"Date: {datetime.datetime.now().strftime('%B %d, %Y')}"
+        cell.value = f"Date: {date_obj.strftime('%B %d, %Y')}"
+        cell.font = Font(size=14, bold=True)
 
-        self.row_num += 2
+        # Empty row
+        self.row_num += 1
+
+        # Header row
+        self.row_num += 1
         columns = {
             "A": "No.",
             "B": "TYPE",
@@ -427,17 +481,51 @@ class WriteKnockouts:
         for column_letter, value in columns.items():
             cell = self.ws[f"{column_letter}{self.row_num}"]
             cell.value = value
+            cell.font = Font(size=11, bold=True)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
 
-        self.row_num += 1
-        self.ws.row_dimensions[self.row_num].height = 0.01
+            # Add pink/red fill color for KO and Closing columns
+            if column_letter in ("I", "J"):
+                cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor="00FFC7CE")
+
+    def get_closing_price(self, code_ref, trade_date):
+        """Get closing price for a stock on a given date, with fallback to previous date"""
+        d = str(trade_date)[:10]
+
+        # Try to get closing price for the date
+        result = self.db.execute(
+            "SELECT closing_price FROM tbl_stock_price WHERE code_ref=? AND trade_date=?",
+            (code_ref, d)
+        ).fetchone()
+
+        if result:
+            return result[0]
+
+        # Fallback: get most recent price before this date
+        result = self.db.execute(
+            "SELECT closing_price FROM tbl_stock_price WHERE code_ref=? AND trade_date<? "
+            "ORDER BY trade_date DESC LIMIT 1",
+            (code_ref, d)
+        ).fetchone()
+
+        return result[0] if result else None
 
     def write_details(self):
-        for fixing in self.knockouts:
+        prev_business_day = self.get_previous_business_day(self.trade_date)
+
+        for idx, fixing in enumerate(self.knockouts, start=1):
             account = self.db.execute("SELECT bank_name FROM tbl_bank_account WHERE bank_id=?;",
                                       (fixing["account_code"], )).fetchone()[0]
+
+            # Get code_ref for closing price lookup
+            code_ref = self.db.execute("SELECT ref_num FROM tbl_code WHERE code=?",
+                                       (fixing["code"],)).fetchone()[0]
+            closing_price = self.get_closing_price(code_ref, prev_business_day)
+
             self.row_num += 1
             columns = {
-                "A": f'=INDIRECT("A"&ROW()-1)+1',
+                "A": idx,  # Use index directly instead of formula
                 "B": fixing["transaction_type"],
                 "C": account,
                 "D": fixing["stock_name"],
@@ -446,9 +534,44 @@ class WriteKnockouts:
                 "G": fixing["spot"],
                 "H": fixing["strike"],
                 "I": fixing["ko"],
-                "J": "",
+                "J": closing_price if closing_price else "",
                 "K": fixing["shares_fixing"],
             }
+
             for column_letter, value in columns.items():
                 cell = self.ws[f"{column_letter}{self.row_num}"]
                 cell.value = value
+                cell.border = thin_border
+                cell.font = Font(size=11)
+
+                # Alignment - all cells centered both horizontally and vertically
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+                # Number formatting
+                if column_letter in ("F", "K"):
+                    cell.number_format = "#,##0"
+                elif column_letter in ("G", "H", "I"):
+                    cell.number_format = "#,##0.0000"
+                elif column_letter == "J":
+                    cell.number_format = "#,##0.00"
+
+                # Add pink/red fill color for KO and Closing columns
+                if column_letter in ("I", "J"):
+                    cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor="00FFC7CE")
+
+            # Set row height to double (default is ~15, set to 30)
+            self.ws.row_dimensions[self.row_num].height = 30
+
+    def format_columns(self):
+        # Set column widths
+        self.ws.column_dimensions['A'].width = 6   # No.
+        self.ws.column_dimensions['B'].width = 10  # TYPE
+        self.ws.column_dimensions['C'].width = 30  # BANK ACCOUNT
+        self.ws.column_dimensions['D'].width = 20  # STOCK
+        self.ws.column_dimensions['E'].width = 10  # CODE
+        self.ws.column_dimensions['F'].width = 12  # SHARES
+        self.ws.column_dimensions['G'].width = 12  # SPOT
+        self.ws.column_dimensions['H'].width = 12  # STRIKE
+        self.ws.column_dimensions['I'].width = 12  # KO
+        self.ws.column_dimensions['J'].width = 12  # Closing
+        self.ws.column_dimensions['K'].width = 12  # SHARES
