@@ -134,7 +134,7 @@ def _xl_contracts(ws, contracts, title, row,
                   price_map_multi, trading_dates,
                   BOLD, BOLD_SM, NORM, NORM_SM, FILL_TITLE, FILL_HDR, FILL_CLOSE,
                   FONT_WHITE, BOX, CTR, LFT):
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Font, PatternFill, Alignment
     from datetime import date as _date
 
     N_dates = len(trading_dates)
