@@ -267,12 +267,29 @@ def _load_transactions(db, result: dict, start_date: date, end_date: date):
 # ---------------------------------------------------------------------------
 
 def _get_two_week_dates(report_date: date) -> list:
-    """Mon-Fri of previous week + Mon-Fri of current week up to report_date."""
-    mon = report_date - timedelta(days=report_date.weekday())
-    prev_mon = mon - timedelta(days=7)
-    dates = [prev_mon + timedelta(days=i) for i in range(5)]
-    dates += [mon + timedelta(days=i) for i in range(5) if mon + timedelta(days=i) <= report_date]
-    return dates
+    """
+    Legacy-style date range: previous full week (Mon-Fri) + current week to report_date.
+
+    Example: report_date = Tuesday, June 2, 2026
+    Returns: [May 25 (Mon), May 26 (Tue), May 27 (Wed), May 28 (Thu), May 29 (Fri),
+              June 1 (Mon), June 2 (Tue), ...up to 10 dates total]
+    """
+    # Go back to previous Monday (6 days + weekday offset)
+    start = report_date - timedelta(days=6 + report_date.weekday())
+
+    # Return exactly 10 dates as legacy does
+    return [
+        start,
+        start + timedelta(days=1),
+        start + timedelta(days=2),
+        start + timedelta(days=3),
+        start + timedelta(days=4),
+        start + timedelta(days=7),
+        start + timedelta(days=8),
+        start + timedelta(days=9),
+        start + timedelta(days=10),
+        start + timedelta(days=11),
+    ]
 
 
 def _load_closing_prices_multi(db, dates: list) -> dict:

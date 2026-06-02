@@ -115,14 +115,14 @@ def _generate_excel(data: dict, report_date: date,
             row = _xl_positions(ws, bank_data['positions'], report_date, row,
                                  BOLD, NORM, FILL_POS, FILL_HDR, FONT_WHITE, BOX, CTR, LFT)
 
-            # Fixed columns A-L; date columns M onwards at 8 wide each
+            # Fixed columns A-M; date columns N onwards at 8 wide each
             from openpyxl.utils import get_column_letter
             base_widths = {'A': 26, 'B': 7, 'C': 12, 'D': 10, 'E': 10,
-                           'F': 10, 'G': 11, 'H': 11, 'I': 8, 'J': 8, 'K': 8, 'L': 12}
+                           'F': 10, 'G': 10, 'H': 11, 'I': 11, 'J': 8, 'K': 8, 'L': 8, 'M': 12}
             for col, w in base_widths.items():
                 ws.column_dimensions[col].width = w
             for i in range(len(trading_dates)):
-                ws.column_dimensions[get_column_letter(13 + i)].width = 8
+                ws.column_dimensions[get_column_letter(14 + i)].width = 8
 
     output = io.BytesIO()
     wb.save(output)
@@ -134,46 +134,70 @@ def _xl_contracts(ws, contracts, title, row,
                   price_map_multi, trading_dates,
                   BOLD, BOLD_SM, NORM, NORM_SM, FILL_TITLE, FILL_HDR, FILL_CLOSE,
                   FONT_WHITE, BOX, CTR, LFT):
-    from openpyxl.styles import Font
+    from openpyxl.styles import Font, PatternFill
     from datetime import date as _date
 
     N_dates = len(trading_dates)
-    # Columns: A=Name B=Code C=Shares/Day D=Spot E=Strike F=K/O G=Start H=End
-    #          I=RCVD J=REM K=Total L=Next  M+=closing dates
-    TOTAL_COLS = 12 + N_dates
+    # Columns: A=Name B=Code C=Bank Ref D=Shares/Day E=Spot F=Strike G=K/O H=Start I=End
+    #          J=RCVD K=REM L=Total M=Next  N+=closing dates
+    TOTAL_COLS = 13 + N_dates
 
-    # ── Row 1: section title ──────────────────────────────────────────
+    # Stock-specific colors (legacy feature)
+    STOCK_COLORS = {
+        '2333': 'FFE5E39F',  # Light tan
+        '0700': '00FFFFCC',  # Light yellow (Tencent)
+        '1024': '009999FF',  # Light blue
+        '0388': '00CC99FF',  # Light purple
+        '3993': '00FFCC99',  # Light orange
+        '0175': '00CCFFFF',  # Light cyan
+        '9988': '00008080',  # Teal (Alibaba)
+    }
+
+    # ── Row 1: Active contract count formula (legacy feature) ────────
+    if contracts:
+        count_row = row
+        next_col_start = count_row + 4
+        next_col_end = next_col_start + len(contracts) - 1
+        formula = f'={len(contracts)}-COUNTIF(M{next_col_start}:M{next_col_end},"*DONE*")'
+        c = ws.cell(row, 1, formula)
+        c.font = Font(name='Arial', size=7, bold=False)
+        c.number_format = '0'
+        c.alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[row].height = 10.5
+        row += 1
+
+    # ── Row 2: section title ──────────────────────────────────────────
     c = ws.cell(row, 1, title)
     c.font = FONT_WHITE; c.fill = FILL_TITLE; c.alignment = LFT
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=TOTAL_COLS)
     row += 1
 
-    # ── Row 2: main column headers ────────────────────────────────────
-    single_hdrs = {1: 'Stock Name', 2: 'Code', 3: 'Shares / Day',
-                   4: 'Spot Price', 5: 'Strike Price', 6: 'K/O Price',
-                   7: 'Start Date', 8: 'End Date', 12: 'Date of Next Mo.'}
+    # ── Row 3: main column headers ────────────────────────────────────
+    single_hdrs = {1: 'Stock Name', 2: 'Code', 3: 'Bank Reference',
+                   4: 'Shares / Day', 5: 'Spot Price', 6: 'Strike Price',
+                   7: 'K/O Price', 8: 'Start Date', 9: 'End Date', 13: 'Date of Next Mo.'}
     for col, h in single_hdrs.items():
         c = ws.cell(row, col, h)
         c.font = BOLD_SM; c.fill = FILL_HDR; c.alignment = CTR; c.border = BOX
         ws.merge_cells(start_row=row, start_column=col, end_row=row+1, end_column=col)
 
-    c = ws.cell(row, 9, 'Life Term of Contract')
+    c = ws.cell(row, 10, 'Life Term of Contract')
     c.font = BOLD_SM; c.fill = FILL_HDR; c.alignment = CTR; c.border = BOX
-    ws.merge_cells(start_row=row, start_column=9, end_row=row, end_column=11)
+    ws.merge_cells(start_row=row, start_column=10, end_row=row, end_column=12)
 
     if N_dates > 0:
-        c = ws.cell(row, 13, 'Closing Price')
+        c = ws.cell(row, 14, 'Closing Price')
         c.font = BOLD_SM; c.fill = FILL_CLOSE; c.alignment = CTR; c.border = BOX
-        ws.merge_cells(start_row=row, start_column=13, end_row=row, end_column=12 + N_dates)
+        ws.merge_cells(start_row=row, start_column=14, end_row=row, end_column=13 + N_dates)
     row += 1
 
-    # ── Row 3: sub-headers ────────────────────────────────────────────
-    for col, h in [(9, 'Rcvd mos.'), (10, 'Rem mos.'), (11, 'Total mos.')]:
+    # ── Row 4: sub-headers ────────────────────────────────────────────
+    for col, h in [(10, 'Rcvd mos.'), (11, 'Rem mos.'), (12, 'Total mos.')]:
         c = ws.cell(row, col, h)
         c.font = BOLD_SM; c.fill = FILL_HDR; c.alignment = CTR; c.border = BOX
 
     for i, d in enumerate(trading_dates):
-        c = ws.cell(row, 13 + i, d)
+        c = ws.cell(row, 14 + i, d)
         c.font = BOLD_SM; c.fill = FILL_CLOSE; c.alignment = CTR; c.border = BOX
         c.number_format = 'd-mmm'
     row += 1
@@ -200,16 +224,17 @@ def _xl_contracts(ws, contracts, title, row,
         entries = [
             (1,  ct['stock_name'],       NORM,        LFT, None),
             (2,  ct['code'],             NORM,        CTR, '@'),
-            (3,  ct['shares_day'],       NORM,        CTR, None),
-            (4,  ct['spot_raw'],         NORM,        CTR, '#,##0.0000'),
-            (5,  ct['strike_raw'],       STRIKE_FONT, CTR, '#,##0.0000'),
-            (6,  ct['ko_raw'],           NORM,        CTR, '#,##0.0000'),
-            (7,  ct['start_date_raw'],   NORM,        CTR, 'd-mmm-yy'),
-            (8,  ct['last_end_date_raw'],NORM,        CTR, 'd-mmm-yy'),
-            (9,  ct['received_months'],  NORM,        CTR, '0.0'),
-            (10, ct['remaining_months'], NORM,        CTR, '0.0'),
-            (11, ct['total_months'],     NORM,        CTR, '0.0'),
-            (12, next_val,               NORM,        CTR, next_fmt),
+            (3,  ct['bank_doc'],         NORM,        CTR, None),
+            (4,  ct['shares_day'],       NORM,        CTR, None),
+            (5,  ct['spot_raw'],         NORM,        CTR, '#,##0.0000'),
+            (6,  ct['strike_raw'],       STRIKE_FONT, CTR, '#,##0.0000'),
+            (7,  ct['ko_raw'],           NORM,        CTR, '#,##0.0000'),
+            (8,  ct['start_date_raw'],   NORM,        CTR, 'd-mmm-yy'),
+            (9,  ct['last_end_date_raw'],NORM,        CTR, 'd-mmm-yy'),
+            (10, ct['received_months'],  NORM,        CTR, '0.0'),
+            (11, ct['remaining_months'], NORM,        CTR, '0.0'),
+            (12, ct['total_months'],     NORM,        CTR, '0.0'),
+            (13, next_val,               NORM,        CTR, next_fmt),
         ]
         for col, val, fnt, aln, fmt in entries:
             c = ws.cell(row, col, val)
@@ -217,10 +242,14 @@ def _xl_contracts(ws, contracts, title, row,
             if fmt:
                 c.number_format = fmt
 
+            # Apply stock-specific colors to column A (Stock Name)
+            if col == 1 and ct['code'] in STOCK_COLORS:
+                c.fill = PatternFill('solid', fgColor=STOCK_COLORS[ct['code']])
+
         code_prices = price_map_multi.get(ct['code_ref'], {})
         for i, d in enumerate(trading_dates):
             price = code_prices.get(str(d))
-            c = ws.cell(row, 13 + i, price)
+            c = ws.cell(row, 14 + i, price)
             c.font = NORM; c.alignment = CTR; c.border = BOX
             if price is not None:
                 c.number_format = '#,##0.00'
