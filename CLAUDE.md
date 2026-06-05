@@ -78,7 +78,13 @@ blueprints/{name}/
 
 ### Database Architecture
 
-**Location:** `ltv_database/LTV Stocks.db` (SQLite)
+**Location:** `instance/LTV Stocks.db` (SQLite) - **UNIFIED DATABASE** (consolidated 2026-06-05)
+
+**CRITICAL:** Both ltv_app and localhost/ now use the same database (`instance/LTV Stocks.db`). Before making ANY database structure changes:
+1. ✅ **Analyze localhost/ first** - Some features exist only in legacy code
+2. ✅ Check if schema changes affect existing localhost/ scripts
+3. ✅ Test changes with both ltv_app AND localhost/ applications
+4. ✅ See [docs/database_divergence_analysis.md](docs/database_divergence_analysis.md) for consolidation history
 
 **Core tables:**
 - `tbl_user` - User accounts (username, email, password, level, role)
@@ -102,6 +108,7 @@ Models use Python `dataclass` with automatic field mapping to SQLite columns.
 
 ### Database Connection Pattern
 
+**ltv_app (modern):**
 ```python
 from ltv_app.blueprints.database.views import get_db
 
@@ -112,7 +119,19 @@ def my_view():
     results = cursor.fetchall()
 ```
 
-**Important:** Always use `get_db()` from the database blueprint, not direct sqlite3.connect().
+**localhost/ (legacy):**
+```python
+from database import database
+
+db = database()
+db.Open
+results = db.Execute("SELECT ...")
+db.Close
+```
+
+**Important:**
+- Always use `get_db()` in ltv_app, not direct sqlite3.connect()
+- Both connection patterns now access the same unified database (`instance/LTV Stocks.db`)
 
 ### Authentication
 
@@ -135,11 +154,16 @@ Test fixtures provide:
 
 ### Legacy Code Structure
 
-The `localhost/` directory contains legacy modules still in use:
-- `localhost/modules/` - Business logic (fixings, term_sheet calculations, stock_balance)
+The `localhost/` directory contains legacy modules **still in use** with features not yet ported to ltv_app:
+- `localhost/modules/` - Business logic (fixings, term_sheet calculations, stock_balance, ltv_stocks2.py)
 - `localhost/DB/db.py` - Database helpers
+- `localhost/database.py` - Database connection class (now uses `instance/LTV Stocks.db`)
 
-When working with older features, you may need to reference or refactor these modules.
+**IMPORTANT:** When working with older features:
+1. Reference localhost/ to understand existing behavior
+2. Check if feature exists only in localhost/ before modifying database schema
+3. Some reports and calculations only exist in legacy code (e.g., ltv_stocks2.py has features not yet in ltv_app)
+4. Legacy scripts still actively used - test changes with both applications
 
 ## Common Development Patterns
 
@@ -203,6 +227,8 @@ SECRET_KEY = 'do-i-really-need-this'
 ## Recent Development Focus
 
 Recent commits show active development on:
+- **Database consolidation** (2026-06-05) - Unified ltv_app and localhost/ to single database
+- **LTV Stocks Excel improvements** - Ported legacy features (active contract count, bank reference, stock colors, date range)
 - Stock price viewing (last 10 trading days grid format)
 - CSV upload date format handling
 - Stock price data quality (string-to-float conversions)
@@ -248,7 +274,10 @@ See `ltv_app/blueprints/fixings/extensions/download_fixings.py` for a complete e
 
 ## Important Notes
 
-- **Database file path:** Code references `c:\envs\LTV\server\ltv_database\LTV Stocks.db`
+- **Database file path:** `instance/LTV Stocks.db` - **UNIFIED DATABASE** used by both ltv_app and localhost/ (consolidated 2026-06-05)
+  - ⚠️ **Before ANY database schema changes:** Analyze localhost/ first - some features exist only in legacy code
+  - Old path `ltv_database/LTV Stocks.db` is deprecated (backup preserved)
+  - See [docs/database_divergence_analysis.md](docs/database_divergence_analysis.md) for details
 - **Entry point:** Use `flask_app.py` (not `app.py`) for running the application
 - **Version tracking:** Update `VERSION` file when releasing - **IMPORTANT: Update VERSION before pushing to GitHub (displayed in navbar)**
 - **Reports directory:** `ltv_database/Reports/` stores generated Excel files
