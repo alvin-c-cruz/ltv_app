@@ -506,16 +506,54 @@
 
 <script>
 var _today = '{{ trade_date }}';
-var _d = new Date(_today);
-var _vd = new Date(_d); _vd.setDate(_vd.getDate() + 2);
-var _vdStr = _vd.toISOString().slice(0,10);
 var _sdStr = (function(){ var d=new Date(_today); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
+
+function updateValueDate(modal) {
+    var stockSelect = modal.querySelector('select[name="code_ref"]');
+    var tradeDateInput = modal.querySelector('input[name="trade_date"]');
+    var valueDateInput = modal.querySelector('.modal-value-date');
+
+    if (!stockSelect || !tradeDateInput || !valueDateInput) return;
+
+    var codeRef = stockSelect.value;
+    var tradeDate = tradeDateInput.value;
+
+    if (codeRef && tradeDate) {
+        fetch('/trades/api/next-banking-day?code_ref=' + codeRef + '&trade_date=' + tradeDate)
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                if (data.value_date) {
+                    valueDateInput.value = data.value_date;
+                }
+            })
+            .catch(function(err){ console.error('Error calculating value date:', err); });
+    }
+}
 
 function openTxnModal(id) {
     var m = document.getElementById(id);
     m.querySelectorAll('.modal-date').forEach(function(el){ el.value = _today; });
-    m.querySelectorAll('.modal-value-date').forEach(function(el){ el.value = _vdStr; });
     m.querySelectorAll('.modal-start-date').forEach(function(el){ el.value = _sdStr; });
+
+    // Set up listeners for stock and trade date changes
+    var stockSelect = m.querySelector('select[name="code_ref"]');
+    var tradeDateInput = m.querySelector('input[name="trade_date"]');
+
+    if (stockSelect) {
+        stockSelect.addEventListener('change', function(){ updateValueDate(m); });
+    }
+    if (tradeDateInput) {
+        tradeDateInput.addEventListener('change', function(){ updateValueDate(m); });
+    }
+
+    // Initial value date calculation if stock is already selected
+    if (stockSelect && stockSelect.value) {
+        updateValueDate(m);
+    } else {
+        // Default: set to trade date initially
+        m.querySelectorAll('.modal-value-date').forEach(function(el){ el.value = _today; });
+    }
+
     m.classList.add('active');
 }
 function closeTxnModal(id) {

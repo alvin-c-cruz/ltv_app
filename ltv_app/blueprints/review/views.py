@@ -12,40 +12,37 @@ _JOIN = (
 )
 
 
-def _build_filter(filter_codes, filter_types, filter_banks=None):
+def _build_filter(date_from=None, date_to=None):
     where = "WHERE T.reviewed = 0"
     params = []
-    if filter_codes:
-        where += " AND C.code IN ({})".format(','.join('?' * len(filter_codes)))
-        params.extend(filter_codes)
-    if filter_types:
-        where += " AND T.transaction_type IN ({})".format(','.join('?' * len(filter_types)))
-        params.extend(filter_types)
-    if filter_banks:
-        where += " AND B.bank_name IN ({})".format(','.join('?' * len(filter_banks)))
-        params.extend(filter_banks)
+    if date_from:
+        where += " AND T.trade_date >= ?"
+        params.append(date_from)
+    if date_to:
+        where += " AND T.trade_date <= ?"
+        params.append(date_to)
     return where, params
 
 
-def _bank_update_cond(filter_banks):
-    """WHERE fragment + params for UPDATE statements that can't join to bank table."""
-    if not filter_banks:
-        return '', []
-    ph = ','.join('?' * len(filter_banks))
-    return (
-        f" AND bank_ref IN (SELECT ref_num FROM tbl_bank_account WHERE bank_name IN ({ph}))",
-        list(filter_banks),
-    )
+def _date_cond(date_from=None, date_to=None):
+    """WHERE fragment + params for queries without T alias."""
+    cond = ""
+    params = []
+    if date_from:
+        cond += " AND trade_date >= ?"
+        params.append(date_from)
+    if date_to:
+        cond += " AND trade_date <= ?"
+        params.append(date_to)
+    return cond, params
 
 
-def _filter_args(filter_codes, filter_types, filter_banks):
+def _filter_args(date_from, date_to):
     args = {}
-    if filter_codes:
-        args['code'] = filter_codes
-    if filter_types:
-        args['txn_type'] = filter_types
-    if filter_banks:
-        args['bank'] = filter_banks
+    if date_from:
+        args['date_from'] = date_from
+    if date_to:
+        args['date_to'] = date_to
     return args
 
 
@@ -67,29 +64,13 @@ def _fmt_date(s):
 @login_required
 def home():
     db = get_db()
-    filter_codes = request.args.getlist('code')
-    filter_types = request.args.getlist('txn_type')
-    filter_banks = request.args.getlist('bank')
-
-    codes = [r[0] for r in db.execute(
-        "SELECT DISTINCT C.code " + _JOIN + "WHERE T.reviewed = 0 ORDER BY C.code"
-    ).fetchall()]
-    txn_types = [r[0] for r in db.execute(
-        "SELECT DISTINCT T.transaction_type FROM tbl_transaction T "
-        "WHERE T.reviewed = 0 ORDER BY T.transaction_type"
-    ).fetchall()]
-    all_banks = [r[0] for r in db.execute(
-        "SELECT DISTINCT B.bank_name FROM tbl_bank_account B WHERE B.ref_num IN ("
-        "  SELECT bank_ref FROM tbl_transaction      WHERE reviewed = 0 "
-        "  UNION "
-        "  SELECT bank_ref FROM tbl_transaction_short WHERE reviewed = 0 "
-        "  UNION "
-        "  SELECT bank_ref FROM tbl_stock_contract   WHERE reviewed = 0 "
-        ") ORDER BY B.priority"
-    ).fetchall()]
+    # Default to today if no date provided
+    today = datetime.today().strftime('%Y-%m-%d')
+    date_from = request.args.get('date_from') or today
+    date_to = request.args.get('date_to') or today
 
     # Spot transactions
-    where, params = _build_filter(filter_codes, filter_types, filter_banks)
+    where, params = _build_filter(date_from, date_to)
     rows = db.execute(
         "SELECT T.ref_num, T.trade_date, T.value_date, "
         "       B.bank_name, B.priority AS bank_priority, "
@@ -124,7 +105,7 @@ def home():
     total = sum(g['count'] for g in grouped.values())
 
     # Short transactions
-    short_bank_cond = (" AND B.bank_name IN ({})".format(','.join('?' * len(filter_banks))) if filter_banks else '')
+    short_cond, short_params = _date_cond(date_from, date_to)
     short_rows = db.execute(
         "SELECT T.ref_num, T.trade_date, T.value_date, "
         "       B.bank_name, B.priority, C.code, C.stock_name, "
@@ -133,9 +114,9 @@ def home():
         "FROM tbl_transaction_short T "
         "INNER JOIN tbl_bank_account B ON B.ref_num = T.bank_ref "
         "INNER JOIN tbl_code C ON C.ref_num = T.code_ref "
-        f"WHERE T.reviewed = 0{short_bank_cond} "
+        f"WHERE T.reviewed = 0{short_cond} "
         "ORDER BY B.priority, T.trade_date DESC, C.code",
-        list(filter_banks)
+        short_params
     ).fetchall()
 
     grouped_short = {}
@@ -161,7 +142,7 @@ def home():
     total_short = sum(g['count'] for g in grouped_short.values())
 
     # Contracts (term sheets)
-    contract_bank_cond = (" AND a.bank_name IN ({})".format(','.join('?' * len(filter_banks))) if filter_banks else '')
+    contract_cond, contract_params = _date_cond(date_from, date_to)
     contract_rows = db.execute(
         "SELECT c.ref_num, c.trade_date, a.bank_name, a.priority, "
         "       s.code, s.stock_name, c.transaction_type, "
@@ -169,9 +150,9 @@ def home():
         "FROM tbl_stock_contract c "
         "INNER JOIN tbl_bank_account a ON a.ref_num = c.bank_ref "
         "INNER JOIN tbl_code s ON s.ref_num = c.code_ref "
-        f"WHERE c.reviewed = 0{contract_bank_cond} "
+        f"WHERE c.reviewed = 0{contract_cond} "
         "ORDER BY a.priority, c.trade_date DESC, s.code",
-        list(filter_banks)
+        contract_params
     ).fetchall()
 
     grouped_contracts = {}
@@ -204,9 +185,7 @@ def home():
                            grouped=grouped, total=total,
                            grouped_short=grouped_short, total_short=total_short,
                            grouped_contracts=grouped_contracts, total_contracts=total_contracts,
-                           codes=codes, txn_types=txn_types, all_banks=all_banks,
-                           filter_codes=filter_codes, filter_types=filter_types,
-                           filter_banks=filter_banks)
+                           date_from=date_from, date_to=date_to)
 
 
 @bp.route('/<int:ref_num>/data')
@@ -257,9 +236,8 @@ def edit(ref_num):
     db.commit()
     flash("Transaction updated.")
     return redirect(url_for('review.home', **_filter_args(
-        request.form.getlist('code'),
-        request.form.getlist('txn_type'),
-        request.form.getlist('bank'),
+        request.form.get('date_from'),
+        request.form.get('date_to'),
     )))
 
 
@@ -270,9 +248,8 @@ def mark(ref_num):
     db.execute("UPDATE tbl_transaction SET reviewed = 1 WHERE ref_num = ?", (ref_num,))
     db.commit()
     return redirect(url_for('review.home', **_filter_args(
-        request.form.getlist('code'),
-        request.form.getlist('txn_type'),
-        request.form.getlist('bank'),
+        request.form.get('date_from'),
+        request.form.get('date_to'),
     )))
 
 
@@ -280,10 +257,9 @@ def mark(ref_num):
 @login_required
 def mark_all():
     db = get_db()
-    filter_codes = request.form.getlist('code')
-    filter_types = request.form.getlist('txn_type')
-    filter_banks = request.form.getlist('bank')
-    where, params = _build_filter(filter_codes, filter_types, filter_banks)
+    date_from = request.form.get('date_from')
+    date_to = request.form.get('date_to')
+    where, params = _build_filter(date_from, date_to)
 
     n = db.execute("SELECT COUNT(*) " + _JOIN + where, params).fetchone()[0]
     db.execute(
@@ -293,7 +269,7 @@ def mark_all():
     )
     db.commit()
     flash(f"Marked {n} transaction{'s' if n != 1 else ''} as reviewed.")
-    return redirect(url_for('review.home', **_filter_args(filter_codes, filter_types, filter_banks)))
+    return redirect(url_for('review.home', **_filter_args(date_from, date_to)))
 
 
 @bp.route('/short/<int:ref_num>/mark', methods=['POST'])
@@ -303,7 +279,8 @@ def mark_short(ref_num):
     db.execute("UPDATE tbl_transaction_short SET reviewed = 1 WHERE ref_num = ?", (ref_num,))
     db.commit()
     return redirect(url_for('review.home', **_filter_args(
-        [], [], request.form.getlist('bank')
+        request.form.get('date_from'),
+        request.form.get('date_to'),
     )))
 
 
@@ -311,13 +288,14 @@ def mark_short(ref_num):
 @login_required
 def mark_all_short():
     db = get_db()
-    filter_banks = request.form.getlist('bank')
-    cond, params = _bank_update_cond(filter_banks)
+    date_from = request.form.get('date_from')
+    date_to = request.form.get('date_to')
+    cond, params = _date_cond(date_from, date_to)
     n = db.execute(f"SELECT COUNT(*) FROM tbl_transaction_short WHERE reviewed = 0{cond}", params).fetchone()[0]
     db.execute(f"UPDATE tbl_transaction_short SET reviewed = 1 WHERE reviewed = 0{cond}", params)
     db.commit()
     flash(f"Marked {n} short transaction{'s' if n != 1 else ''} as reviewed.")
-    return redirect(url_for('review.home', **_filter_args([], [], filter_banks)))
+    return redirect(url_for('review.home', **_filter_args(date_from, date_to)))
 
 
 @bp.route('/contract/<int:ref_num>/mark', methods=['POST'])
@@ -327,7 +305,8 @@ def mark_contract(ref_num):
     db.execute("UPDATE tbl_stock_contract SET reviewed = 1 WHERE ref_num = ?", (ref_num,))
     db.commit()
     return redirect(url_for('review.home', **_filter_args(
-        [], [], request.form.getlist('bank')
+        request.form.get('date_from'),
+        request.form.get('date_to'),
     )))
 
 
@@ -335,10 +314,11 @@ def mark_contract(ref_num):
 @login_required
 def mark_all_contracts():
     db = get_db()
-    filter_banks = request.form.getlist('bank')
-    cond, params = _bank_update_cond(filter_banks)
+    date_from = request.form.get('date_from')
+    date_to = request.form.get('date_to')
+    cond, params = _date_cond(date_from, date_to)
     n = db.execute(f"SELECT COUNT(*) FROM tbl_stock_contract WHERE reviewed = 0{cond}", params).fetchone()[0]
     db.execute(f"UPDATE tbl_stock_contract SET reviewed = 1 WHERE reviewed = 0{cond}", params)
     db.commit()
     flash(f"Marked {n} contract{'s' if n != 1 else ''} as reviewed.")
-    return redirect(url_for('review.home', **_filter_args([], [], filter_banks)))
+    return redirect(url_for('review.home', **_filter_args(date_from, date_to)))

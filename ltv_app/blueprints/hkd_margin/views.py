@@ -46,7 +46,7 @@ def home():
 
     # Generate excel file
     filename = os.path.join(current_app.instance_path, 'temp', 'hkd_margin.xlsx')
-    HKDMarginToExcel(data=hkd_margin, filename=filename)
+    HKDMarginToExcel(data=hkd_margin, filename=filename, db=db)
 
     return send_file('{}'.format(filename), as_attachment=True)
 
@@ -55,9 +55,12 @@ def home():
 class HKDMarginToExcel:
     data: any
     filename: str = None
-    accounts = ['CB1', 'CB2', 'CB3', 'CBBH', 'CBSG', 'DBPe', 'SHK', 'SHK2', 'MST2', 'BOS', 'DBPL', 'MST1', 'MSPL']
+    db: any = None
 
     def __post_init__(self):
+        # Dynamically fetch bank accounts ordered by priority
+        self.accounts = self._get_bank_accounts()
+
         wb = Workbook()
         del wb['Sheet']
 
@@ -66,6 +69,11 @@ class HKDMarginToExcel:
 
         wb.save(self.filename)
         wb.close()
+
+    def _get_bank_accounts(self):
+        """Fetch bank accounts from database ordered by priority"""
+        sql = "SELECT bank_id FROM tbl_bank_account ORDER BY priority"
+        return [row['bank_id'] for row in self.db.execute(sql).fetchall()]
 
     def create_sheets(self, wb):
         for ccy in self.data:

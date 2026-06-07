@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g, jsonify
 from flask_login import current_user
-from datetime import timedelta
+from datetime import timedelta, datetime
 from ...tz import ph_today
 
 from .models import Transaction, TransactionShort
@@ -527,3 +527,61 @@ def add_stock_dividends():
     }
 
     return render_template('transactions/add_stock_dividends.html', **context)
+
+
+@bp.route('/api/next-banking-day', methods=['GET'])
+@login_required
+def next_banking_day():
+    """Calculate next banking day based on trade date and stock currency"""
+    trade_date_str = request.args.get('trade_date')
+    code_ref = request.args.get('code_ref')
+
+    if not trade_date_str or not code_ref:
+        return jsonify({'error': 'Missing parameters'}), 400
+
+    from ..database import get_db
+    db = get_db()
+
+    # Get the stock's currency
+    stock = db.execute(
+        'SELECT c.ccy_ref FROM tbl_code c WHERE c.ref_num = ?',
+        (code_ref,)
+    ).fetchone()
+
+    if not stock:
+        return jsonify({'error': 'Stock not found'}), 404
+
+    ccy_ref = stock['ccy_ref']
+
+    # Get holidays for this currency
+    holidays = db.execute(
+        'SELECT holi_date FROM tbl_holiday WHERE ccy_ref = ?',
+        (ccy_ref,)
+    ).fetchall()
+    holiday_dates = set(row['holi_date'] for row in holidays)
+
+    # Calculate next banking day (skip weekends and holidays)
+    trade_date = datetime.strptime(trade_date_str, '%Y-%m-%d')
+    value_date = trade_date + timedelta(days=1)
+
+    # Keep adding days until we find a banking day
+    max_iterations = 10  # Safety limit
+    iterations = 0
+    while iterations < max_iterations:
+        # Check if it's a weekend (Saturday=5, Sunday=6)
+        if value_date.weekday() >= 5:
+            value_date += timedelta(days=1)
+            iterations += 1
+            continue
+
+        # Check if it's a holiday
+        value_date_str = value_date.strftime('%Y-%m-%d')
+        if value_date_str in holiday_dates:
+            value_date += timedelta(days=1)
+            iterations += 1
+            continue
+
+        # Found a banking day
+        break
+
+    return jsonify({'value_date': value_date.strftime('%Y-%m-%d')})
