@@ -415,7 +415,10 @@ def review_txn(source, ref_num):
     db.execute(f"UPDATE {table} SET reviewed=1 WHERE ref_num=?", (ref_num,))
     db.commit()
     flash("Transaction reviewed.")
-    return redirect(url_for('workflow.home'))
+    # Preserve date range
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
 
 @bp.route('/review-multiple', methods=['POST'])
@@ -425,9 +428,13 @@ def review_multiple():
     transactions_json = request.form.get('transactions', '[]')
     transactions = json.loads(transactions_json)
 
+    # Preserve date range
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+
     if not transactions:
         flash("No transactions selected.")
-        return redirect(url_for('workflow.home'))
+        return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
     table_map = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}
     reviewed_count = 0
@@ -441,7 +448,7 @@ def review_multiple():
 
     db.commit()
     flash(f"{reviewed_count} transaction{'s' if reviewed_count != 1 else ''} reviewed.")
-    return redirect(url_for('workflow.home'))
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
 
 # Charges actions
@@ -503,7 +510,10 @@ def edit_charges(source, ref_num):
 
     total = sum(fields.values())
     flash(f"Charges updated. Total: {total:,.2f}")
-    return redirect(url_for('workflow.home'))
+    # Preserve date range
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
 
 @bp.route('/charges/<source>/<int:ref_num>/no_charges', methods=['POST'])
@@ -514,7 +524,10 @@ def mark_no_charges(source, ref_num):
     db.execute(f"UPDATE {table} SET no_charges=1 WHERE ref_num=?", (ref_num,))
     db.commit()
     flash("Transaction marked as no charges.")
-    return redirect(url_for('workflow.home'))
+    # Preserve date range
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
 
 # Edit actions
@@ -641,7 +654,10 @@ def save_edit(source, ref_num):
         db.commit()
         flash("Transaction updated successfully.")
 
-    return redirect(url_for('workflow.home'))
+    # Preserve date range
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
 
 # Lock actions
@@ -652,9 +668,13 @@ def lock_multiple():
     transactions_json = request.form.get('transactions', '[]')
     transactions = json.loads(transactions_json)
 
+    # Preserve date range
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+
     if not transactions:
         flash("No transactions selected.")
-        return redirect(url_for('workflow.home'))
+        return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
     table_map = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}
     locked_count = 0
@@ -668,4 +688,4 @@ def lock_multiple():
 
     db.commit()
     flash(f"{locked_count} transaction{'s' if locked_count != 1 else ''} locked.")
-    return redirect(url_for('workflow.home'))
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))

@@ -101,7 +101,7 @@
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
                         <form method="post"
-                              action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num) }}"
+                              action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
                               style="display:inline">
                             <button type="submit" class="btn btn-primary btn-sm"
                                     onclick="return confirm('Mark this transaction as reviewed?')">Review</button>
@@ -174,7 +174,7 @@
                             Edit Charges
                         </button>
                         <form method="post"
-                              action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num) }}"
+                              action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
                               style="display:inline">
                             <button type="submit" class="btn btn-sm"
                                     style="background:var(--accent-muted);color:var(--text-primary)"
@@ -408,7 +408,7 @@ function reviewSelected() {
 
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '{{ url_for("workflow.review_multiple") }}';
+    form.action = '{{ url_for("workflow.review_multiple", date_from=date_from, date_to=date_to) }}';
 
     const input = document.createElement('input');
     input.type = 'hidden';
@@ -476,7 +476,7 @@ function lockSelected() {
 
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '{{ url_for("workflow.lock_multiple") }}';
+    form.action = '{{ url_for("workflow.lock_multiple", date_from=date_from, date_to=date_to) }}';
 
     const input = document.createElement('input');
     input.type = 'hidden';
@@ -510,8 +510,13 @@ function openChargesModal(source, refNum) {
             document.getElementById('chargesStampDuty').value = data.stamp_duty || 0;
             document.getElementById('chargesMisc').value = data.misc || 0;
 
-            // Set form action
-            document.getElementById('chargesForm').action = `/workflow/charges/${source}/${refNum}`;
+            // Set form action with date parameters
+            const dateFrom = '{{ date_from or "" }}';
+            const dateTo = '{{ date_to or "" }}';
+            const params = new URLSearchParams();
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            document.getElementById('chargesForm').action = `/workflow/charges/${source}/${refNum}?${params.toString()}`;
 
             // Show modal
             document.getElementById('chargesModal').style.display = 'flex';
@@ -597,8 +602,13 @@ function openEditModal(source, refNum) {
                 document.getElementById('editMisc').value = data.misc || 0;
             }
 
-            // Set form action
-            document.getElementById('editForm').action = `/workflow/edit/${source}/${refNum}`;
+            // Set form action with date parameters
+            const dateFrom = '{{ date_from or "" }}';
+            const dateTo = '{{ date_to or "" }}';
+            const params = new URLSearchParams();
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            document.getElementById('editForm').action = `/workflow/edit/${source}/${refNum}?${params.toString()}`;
 
             // Show modal
             document.getElementById('editModal').style.display = 'flex';
