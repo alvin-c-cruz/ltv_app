@@ -55,18 +55,19 @@
             <td class="text-right">{{ ts.ko }}</td>
             <td>{{ ts.tenor }}</td>
             <td>{{ ts.gtd }}</td>
-            <td class="text-center">
+            <td class="text-center" style="white-space:nowrap;">
                 {% if ts.locked %}
-                <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                {% if current_user.role == 'superuser' %}
-                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
-                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
-                   onclick="return confirm('Delete this contract?')">Delete</a>
-                {% endif %}
+                    {# Locked: View for all, Unlock for admin only #}
+                    <a href="{{ url_for('term_sheet.view', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">View</a>
+                    {% if current_user.role == 'superuser' %}
+                    <a href="{{ url_for('term_sheet.unlock', contract_ref=ts.id) }}" class="btn btn-outline btn-sm"
+                       onclick="return confirm('Unlock this contract?')">Unlock</a>
+                    {% endif %}
                 {% else %}
-                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
-                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
-                   onclick="return confirm('Delete this contract?')">Delete</a>
+                    {# Unlocked: Edit and Delete #}
+                    <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this contract?')">Delete</a>
                 {% endif %}
             </td>
         </tr>
@@ -109,18 +110,19 @@
             <td class="text-right">{{ ts.ko }}</td>
             <td>{{ ts.tenor }}</td>
             <td>{{ ts.gtd }}</td>
-            <td class="text-center">
+            <td class="text-center" style="white-space:nowrap;">
                 {% if ts.locked %}
-                <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                {% if current_user.role == 'superuser' %}
-                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
-                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
-                   onclick="return confirm('Delete this contract?')">Delete</a>
-                {% endif %}
+                    {# Locked: View for all, Unlock for admin only #}
+                    <a href="{{ url_for('term_sheet.view', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">View</a>
+                    {% if current_user.role == 'superuser' %}
+                    <a href="{{ url_for('term_sheet.unlock', contract_ref=ts.id) }}" class="btn btn-outline btn-sm"
+                       onclick="return confirm('Unlock this contract?')">Unlock</a>
+                    {% endif %}
                 {% else %}
-                <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
-                <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
-                   onclick="return confirm('Delete this contract?')">Delete</a>
+                    {# Unlocked: Edit and Delete #}
+                    <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this contract?')">Delete</a>
                 {% endif %}
             </td>
         </tr>
@@ -155,30 +157,34 @@
                 <td class="text-right">{{ row['amount'] }}</td>
                 <td class="text-right">{{ row['charges'] }}</td>
                 <td class="text-right">{{ row['net_amount'] }}</td>
-                <td class="text-center">
+                <td class="text-center" style="white-space:nowrap;">
                     {% if row['locked'] %}
-                    <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
-                    {% if current_user.role == 'superuser' %}
-                    {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
-                    <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                        {# Locked: View for all, Unlock for admin only #}
+                        {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
+                        <a href="{{ url_for('transactions.view_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">View</a>
+                        {% else %}
+                        <a href="{{ url_for('transactions.view', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">View</a>
+                        {% endif %}
+                        {% if current_user.role == 'superuser' %}
+                        {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
+                        <a href="{{ url_for('transactions.unlock_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm"
+                           onclick="return confirm('Unlock this transaction?')">Unlock</a>
+                        {% else %}
+                        <a href="{{ url_for('transactions.unlock', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm"
+                           onclick="return confirm('Unlock this transaction?')">Unlock</a>
+                        {% endif %}
+                        {% endif %}
                     {% else %}
-                    <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                    <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this transaction?')">Delete</a>
-                    {% endif %}
-                    {% endif %}
-                    {% else %}
-                    {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
-                    <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this transaction?')">Delete</a>
-                    {% else %}
-                    <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                    <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this transaction?')">Delete</a>
-                    {% endif %}
+                        {# Unlocked: Edit and Delete #}
+                        {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
+                        <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                        <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                           onclick="return confirm('Delete this transaction?')">Delete</a>
+                        {% else %}
+                        <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
+                        <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
+                           onclick="return confirm('Delete this transaction?')">Delete</a>
+                        {% endif %}
                     {% endif %}
                 </td>
             </tr>

@@ -26,7 +26,8 @@ def home():
           "     T.transaction_type, " \
           "     T.quantity, T.price, " \
           "     T.brokerage, T.commission, T.foreign_charge, T.stamp_duty, T.misc, " \
-          "     (T.quantity * T.price) AS Amount " \
+          "     (T.quantity * T.price) AS Amount, " \
+          "     T.locked " \
           "FROM tbl_transaction AS T " \
           "INNER JOIN tbl_bank_account AS B ON B.ref_num = T.bank_ref " \
           "INNER JOIN tbl_code AS C ON C.ref_num = T.code_ref " \
@@ -66,6 +67,7 @@ def home():
             'bank_ref':         row['bank_ref'],
             'code_ref':         row['code_ref'],
             'trade_date_raw':   row['trade_date'],
+            'locked':           row['locked'],
             'value_date_raw':   row['value_date'],
             'qty_raw':          row['quantity'],
             'price_raw':        row['price'],
@@ -147,6 +149,24 @@ def delete(ref_num):
     transaction.delete()
 
     flash(f"Fixing #{ref_num} has been deleted.")
+    return redirect(url_for('fixings.home'))
+
+
+@bp.route('/<ref_num>/unlock', methods=['GET'])
+@login_required
+def unlock(ref_num):
+    from flask import abort
+    from flask_login import current_user
+
+    # Only superusers can unlock
+    if current_user.role != 'superuser':
+        abort(403)
+
+    db = get_db()
+    db.execute("UPDATE tbl_transaction SET locked=0 WHERE ref_num=?", (ref_num,))
+    db.commit()
+
+    flash(f"Transaction #{ref_num} has been unlocked.")
     return redirect(url_for('fixings.home'))
 
 

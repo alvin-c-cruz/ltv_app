@@ -57,24 +57,51 @@
                 <td class="text-right {% if t.charges_neg %}text-danger{% endif %}">{{ t.charges }}</td>
                 <td class="text-right {% if t.net_neg %}text-danger{% endif %}"><strong>{{ t.net_amount }}</strong></td>
                 <td class="text-center" style="white-space:nowrap;">
-                    <button type="button" class="btn btn-outline btn-sm"
-                        onclick="openFixingModal({
-                            id: {{ t.id }},
-                            trade_date: '{{ t.trade_date_raw }}',
-                            value_date: '{{ t.value_date_raw }}',
-                            bank_ref: {{ t.bank_ref }},
-                            code_ref: {{ t.code_ref }},
-                            transaction_type: '{{ t.transaction_type }}',
-                            qty: {{ t.qty_raw }},
-                            price: {{ t.price_raw }},
-                            brokerage: {{ t.brokerage }},
-                            commission: {{ t.commission }},
-                            foreign_charge: {{ t.foreign_charge }},
-                            stamp_duty: {{ t.stamp_duty }},
-                            misc: {{ t.misc }}
-                        })">Edit</button>
-                    <a href="{{ url_for('fixings.delete', ref_num=t.id) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this fixing?')">Delete</a>
+                    {% if t.locked %}
+                        {# Locked transactions: View for all, Unlock for admin only #}
+                        <button type="button" class="btn btn-outline btn-sm"
+                            onclick="openFixingModal({
+                                id: {{ t.id }},
+                                trade_date: '{{ t.trade_date_raw }}',
+                                value_date: '{{ t.value_date_raw }}',
+                                bank_ref: {{ t.bank_ref }},
+                                code_ref: {{ t.code_ref }},
+                                transaction_type: '{{ t.transaction_type }}',
+                                qty: {{ t.qty_raw }},
+                                price: {{ t.price_raw }},
+                                brokerage: {{ t.brokerage }},
+                                commission: {{ t.commission }},
+                                foreign_charge: {{ t.foreign_charge }},
+                                stamp_duty: {{ t.stamp_duty }},
+                                misc: {{ t.misc }},
+                                locked: true
+                            })">View</button>
+                        {% if current_user.role == 'superuser' %}
+                        <a href="{{ url_for('fixings.unlock', ref_num=t.id) }}" class="btn btn-outline btn-sm"
+                           onclick="return confirm('Unlock this transaction?')">Unlock</a>
+                        {% endif %}
+                    {% else %}
+                        {# Unlocked transactions: Edit and Delete #}
+                        <button type="button" class="btn btn-outline btn-sm"
+                            onclick="openFixingModal({
+                                id: {{ t.id }},
+                                trade_date: '{{ t.trade_date_raw }}',
+                                value_date: '{{ t.value_date_raw }}',
+                                bank_ref: {{ t.bank_ref }},
+                                code_ref: {{ t.code_ref }},
+                                transaction_type: '{{ t.transaction_type }}',
+                                qty: {{ t.qty_raw }},
+                                price: {{ t.price_raw }},
+                                brokerage: {{ t.brokerage }},
+                                commission: {{ t.commission }},
+                                foreign_charge: {{ t.foreign_charge }},
+                                stamp_duty: {{ t.stamp_duty }},
+                                misc: {{ t.misc }},
+                                locked: false
+                            })">Edit</button>
+                        <a href="{{ url_for('fixings.delete', ref_num=t.id) }}" class="btn btn-danger btn-sm"
+                           onclick="return confirm('Delete this fixing?')">Delete</a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -201,6 +228,7 @@
 
 <script>
 function openFixingModal(d) {
+    const isLocked = d.locked || false;
     document.getElementById('modal-ref').textContent = '#' + d.id;
     document.getElementById('editFixingForm').action = '/fixings/' + d.id + '/edit';
     document.getElementById('m_trade_date').value = d.trade_date;
@@ -216,6 +244,17 @@ function openFixingModal(d) {
     document.getElementById('m_stamp_duty').value = d.stamp_duty;
     document.getElementById('m_misc').value = d.misc;
     computeTotals();
+
+    // Disable all form inputs if locked
+    const form = document.getElementById('editFixingForm');
+    const inputs = form.querySelectorAll('input, select, button[type="submit"]');
+    inputs.forEach(input => {
+        input.disabled = isLocked;
+    });
+
+    // Update modal title
+    document.querySelector('.modal-title').textContent = isLocked ? 'View Fixing #' + d.id : 'Edit Fixing #' + d.id;
+
     document.getElementById('editModal').classList.add('active');
 }
 
