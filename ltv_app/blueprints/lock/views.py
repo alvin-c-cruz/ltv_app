@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 
@@ -8,8 +9,31 @@ from .. database import get_db
 bp = Blueprint('lock', __name__, template_folder='pages', url_prefix='/lock')
 
 
-def _fetch_all(db):
-    spot = db.execute("""
+def _fetch_all(db, date_from=None, date_to=None):
+    params_spot = []
+    params_short = []
+    params_contracts = []
+
+    date_cond_spot = ""
+    date_cond_short = ""
+    date_cond_contracts = ""
+
+    if date_from:
+        date_cond_spot += " AND T.trade_date >= ?"
+        params_spot.append(date_from)
+        date_cond_short += " AND T.trade_date >= ?"
+        params_short.append(date_from)
+        date_cond_contracts += " AND c.trade_date >= ?"
+        params_contracts.append(date_from)
+    if date_to:
+        date_cond_spot += " AND T.trade_date <= ?"
+        params_spot.append(date_to)
+        date_cond_short += " AND T.trade_date <= ?"
+        params_short.append(date_to)
+        date_cond_contracts += " AND c.trade_date <= ?"
+        params_contracts.append(date_to)
+
+    spot = db.execute(f"""
         SELECT T.ref_num, 'spot' AS source,
                B.bank_name, B.priority,
                C.code, C.stock_name, T.trade_date,
@@ -22,10 +46,11 @@ def _fetch_all(db):
         WHERE T.reviewed = 1
           AND T.locked = 0
           AND (T.no_charges = 1 OR (T.brokerage+T.commission+T.foreign_charge+T.stamp_duty+T.misc) > 0)
+          {date_cond_spot}
         ORDER BY B.priority, T.trade_date DESC, C.code, T.transaction_type
-    """).fetchall()
+    """, params_spot).fetchall()
 
-    short = db.execute("""
+    short = db.execute(f"""
         SELECT T.ref_num, 'short' AS source,
                B.bank_name, B.priority,
                C.code, C.stock_name, T.trade_date,
@@ -38,10 +63,11 @@ def _fetch_all(db):
         WHERE T.reviewed = 1
           AND T.locked = 0
           AND (T.no_charges = 1 OR (T.brokerage+T.commission+T.foreign_charge+T.stamp_duty+T.misc) > 0)
+          {date_cond_short}
         ORDER BY B.priority, T.trade_date DESC, C.code, T.transaction_type
-    """).fetchall()
+    """, params_short).fetchall()
 
-    contracts = db.execute("""
+    contracts = db.execute(f"""
         SELECT c.ref_num, 'contract' AS source,
                a.bank_name, a.priority,
                s.code, s.stock_name, c.trade_date,
@@ -53,8 +79,9 @@ def _fetch_all(db):
         INNER JOIN tbl_code         s ON s.ref_num = c.code_ref
         WHERE c.reviewed = 1
           AND c.locked = 0
+          {date_cond_contracts}
         ORDER BY a.priority, c.trade_date DESC, s.code, c.transaction_type
-    """).fetchall()
+    """, params_contracts).fetchall()
 
     def fmt(rows):
         result = []
@@ -93,29 +120,22 @@ def _group_by_bank(rows):
 @superuser_required
 def home():
     db = get_db()
-    all_rows = _fetch_all(db)
 
-    # collect all bank names in priority order (deduplicated)
-    seen = {}
-    for r in all_rows:
-        if r['bank_name'] not in seen:
-            seen[r['bank_name']] = r['priority']
-    all_banks = sorted(seen.keys(), key=lambda b: seen[b])
+    # Get date range from query params, default to today
+    today = datetime.today().strftime('%Y-%m-%d')
+    date_from = request.args.get('date_from') or today
+    date_to = request.args.get('date_to') or today
 
-    filter_banks = request.args.getlist('bank')
+    all_rows = _fetch_all(db, date_from, date_to)
 
-    rows = all_rows
-    if filter_banks:
-        rows = [r for r in all_rows if r['bank_name'] in filter_banks]
-
-    grouped = _group_by_bank(rows)
+    grouped = _group_by_bank(all_rows)
     total = sum(d['count'] for d in grouped.values())
 
     return render_template('lock/home.html',
                            grouped=grouped,
                            total=total,
-                           all_banks=all_banks,
-                           filter_banks=filter_banks)
+                           date_from=date_from,
+                           date_to=date_to)
 
 
 @bp.route('/<source>/<int:ref_num>/lock', methods=['POST'])
@@ -126,9 +146,43 @@ def lock_txn(source, ref_num):
     db.execute(f"UPDATE {table} SET locked=1 WHERE ref_num=?", (ref_num,))
     db.commit()
     flash("Transaction locked.")
-    filter_banks = request.form.getlist('bank')
-    args = {'bank': filter_banks} if filter_banks else {}
-    return redirect(url_for('lock.home', **args))
+    return redirect(url_for('lock.home'))
+
+
+@bp.route('/lock-multiple', methods=['POST'])
+@superuser_required
+def lock_multiple():
+    import json
+    db = get_db()
+
+    # Parse transactions JSON
+    transactions_json = request.form.get('transactions', '[]')
+    transactions = json.loads(transactions_json)
+
+    if not transactions:
+        flash("No transactions selected.")
+        return redirect(url_for('lock.home'))
+
+    # Lock each transaction
+    table_map = {
+        'spot': 'tbl_transaction',
+        'short': 'tbl_transaction_short',
+        'contract': 'tbl_stock_contract'
+    }
+
+    locked_count = 0
+    for txn in transactions:
+        source = txn.get('source')
+        ref_num = txn.get('ref_num')
+
+        if source in table_map and ref_num:
+            table = table_map[source]
+            db.execute(f"UPDATE {table} SET locked=1 WHERE ref_num=?", (ref_num,))
+            locked_count += 1
+
+    db.commit()
+    flash(f"{locked_count} transaction{'s' if locked_count != 1 else ''} locked.")
+    return redirect(url_for('lock.home'))
 
 
 @bp.route('/<source>/<int:ref_num>/unlock', methods=['POST'])

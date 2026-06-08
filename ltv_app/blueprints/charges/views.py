@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, g
 
@@ -11,7 +12,20 @@ _CHARGE_FIELDS = ('brokerage', 'commission', 'foreign_charge', 'stamp_duty', 'mi
 _NO_CHARGES_COND = " AND ".join(f"T.{f}=0" for f in _CHARGE_FIELDS)
 
 
-def _query(db, table):
+def _query(db, table, date_from=None, date_to=None):
+    params = []
+    where_clause = f"""WHERE T.reviewed = 1
+          AND T.locked = 0
+          AND ({_NO_CHARGES_COND})
+          AND T.no_charges = 0"""
+
+    if date_from:
+        where_clause += " AND T.trade_date >= ?"
+        params.append(date_from)
+    if date_to:
+        where_clause += " AND T.trade_date <= ?"
+        params.append(date_to)
+
     sql = f"""
         SELECT T.ref_num, T.trade_date, T.no_charges,
                B.bank_name, B.priority AS bank_priority,
@@ -22,21 +36,24 @@ def _query(db, table):
         INNER JOIN tbl_bank_account B ON B.ref_num = T.bank_ref
         INNER JOIN tbl_code         C ON C.ref_num = T.code_ref
         INNER JOIN tbl_currency    CY ON CY.ref_num = C.ccy_ref
-        WHERE T.reviewed = 1
-          AND T.locked = 0
-          AND ({_NO_CHARGES_COND})
-          AND T.no_charges = 0
+        {where_clause}
         ORDER BY T.trade_date DESC, B.priority, C.code, T.transaction_type
     """
-    return db.execute(sql).fetchall()
+    return db.execute(sql, params).fetchall()
 
 
 @bp.route('/')
 @login_required
 def home():
     db = get_db()
-    rows_spot  = _query(db, 'tbl_transaction')
-    rows_short = _query(db, 'tbl_transaction_short')
+
+    # Get date range from query params, default to today
+    today = datetime.today().strftime('%Y-%m-%d')
+    date_from = request.args.get('date_from') or today
+    date_to = request.args.get('date_to') or today
+
+    rows_spot  = _query(db, 'tbl_transaction', date_from, date_to)
+    rows_short = _query(db, 'tbl_transaction_short', date_from, date_to)
 
     def fmt(rows, source):
         result = []
@@ -57,17 +74,8 @@ def home():
 
     all_rows = fmt(rows_spot, 'spot') + fmt(rows_short, 'short')
 
-    seen = {}
-    for r in all_rows:
-        if r['bank_name'] not in seen:
-            seen[r['bank_name']] = r['priority']
-    all_banks = sorted(seen.keys(), key=lambda b: seen[b])
-
-    filter_banks = request.args.getlist('bank')
-    rows = all_rows if not filter_banks else [r for r in all_rows if r['bank_name'] in filter_banks]
-
     grouped = defaultdict(lambda: {'rows': [], 'count': 0, 'priority': 0})
-    for r in rows:
+    for r in all_rows:
         bank = r['bank_name']
         grouped[bank]['rows'].append(r)
         grouped[bank]['count'] += 1
@@ -79,8 +87,8 @@ def home():
     return render_template('charges/home.html',
                            grouped=grouped,
                            total=total,
-                           all_banks=all_banks,
-                           filter_banks=filter_banks)
+                           date_from=date_from,
+                           date_to=date_to)
 
 
 @bp.route('/<source>/<int:ref_num>/no_charges', methods=['POST'])
@@ -91,9 +99,7 @@ def mark_no_charges(source, ref_num):
     db.execute(f"UPDATE {table} SET no_charges=1 WHERE ref_num=?", (ref_num,))
     db.commit()
     flash("Transaction marked as no charges.")
-    filter_banks = request.form.getlist('bank')
-    args = {'bank': filter_banks} if filter_banks else {}
-    return redirect(url_for('charges.home', **args))
+    return redirect(url_for('charges.home'))
 
 
 @bp.route('/<source>/<int:ref_num>/edit', methods=['GET', 'POST'])

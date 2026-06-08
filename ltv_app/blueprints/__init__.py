@@ -28,6 +28,7 @@ from . import transitory
 from . import review
 from . import charges
 from . import lock
+from . import workflow
 from . import bank_accounts
 from . import users
 from . import stock_position

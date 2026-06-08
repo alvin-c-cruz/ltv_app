@@ -1,0 +1,778 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Transaction Workflow</h1>
+
+<div class="mt-3" style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+    <form method="get" action="{{ url_for('workflow.home') }}"
+          style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+
+        <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size:0.85rem; margin-bottom:4px;">Trade Date From</label>
+            <input type="date" name="date_from" class="form-control"
+                   value="{{ date_from or '' }}" style="min-width:150px;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size:0.85rem; margin-bottom:4px;">Trade Date To</label>
+            <input type="date" name="date_to" class="form-control"
+                   value="{{ date_to or '' }}" style="min-width:150px;">
+        </div>
+
+        <div style="display:flex; gap:6px;">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            {% if date_from or date_to %}
+            <a href="{{ url_for('workflow.home') }}" class="btn btn-outline btn-sm">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- SECTION 1: REVIEW -->
+<div class="mt-4">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="font-size:1.3rem; margin:0; color:var(--text-primary); border-bottom:2px solid var(--primary); padding-bottom:0.5rem; flex:1;">
+            1. Review Transactions
+            <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
+                ({{ review_total }} pending)
+            </span>
+        </h2>
+        <button type="button" id="reviewSelectedBtn" class="btn btn-primary btn-sm" style="display:none; margin-left:1rem;"
+                onclick="reviewSelected()">
+            Review Selected (<span id="reviewSelectedCount">0</span>)
+        </button>
+    </div>
+
+    {% if review_grouped %}
+    {% for bank_name, data in review_grouped.items() %}
+    <div class="fixings-section">
+        <div class="fixings-section-header">
+            <span class="fixings-section-name">{{ bank_name }}</span>
+            <span class="fixings-section-total">{{ data.count }} record{{ 's' if data.count != 1 }}</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table" style="table-layout:fixed;width:100%">
+                <colgroup>
+                    <col style="width:4%">
+                    <col style="width:9%">
+                    <col style="width:9%">
+                    <col style="width:20%">
+                    <col style="width:12%">
+                    <col style="width:8%">
+                    <col style="width:9%">
+                    <col style="width:10%">
+                    <col style="width:19%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="text-center">
+                            <input type="checkbox" class="select-all-review"
+                                   onchange="toggleAllReview(this, '{{ bank_name }}')"
+                                   title="Select all in {{ bank_name }}">
+                        </th>
+                        <th>Trade Date</th>
+                        <th>Value Date</th>
+                        <th>Stock</th>
+                        <th>Type</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in data.rows %}
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="review-checkbox"
+                               data-source="{{ row.source }}"
+                               data-ref="{{ row.ref_num }}"
+                               data-bank="{{ bank_name }}"
+                               onchange="updateReviewCount()">
+                    </td>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td style="white-space:nowrap">{{ row.value_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
+                        <form method="post"
+                              action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-primary btn-sm"
+                                    onclick="return confirm('Mark this transaction as reviewed?')">Review</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding:20px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
+        <p style="color:var(--text-muted); margin:0;">No transactions to review.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SECTION 2: CHARGES -->
+<div class="mt-4">
+    <h2 style="font-size:1.3rem; margin-bottom:1rem; color:var(--text-primary); border-bottom:2px solid var(--accent); padding-bottom:0.5rem;">
+        2. Encode Charges
+        <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
+            ({{ charges_total }} pending)
+        </span>
+    </h2>
+
+    {% if charges_grouped %}
+    {% for bank_name, data in charges_grouped.items() %}
+    <div class="fixings-section">
+        <div class="fixings-section-header">
+            <span class="fixings-section-name">{{ bank_name }}</span>
+            <span class="fixings-section-total">{{ data.count }} record{{ 's' if data.count != 1 }}</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table" style="table-layout:fixed;width:100%">
+                <colgroup>
+                    <col style="width:9%">
+                    <col style="width:24%">
+                    <col style="width:13%">
+                    <col style="width:8%">
+                    <col style="width:9%">
+                    <col style="width:10%">
+                    <col style="width:27%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Stock</th>
+                        <th>Type</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in data.rows %}
+                <tr>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openChargesModal('{{ row.source }}', {{ row.ref_num }})">
+                            Edit Charges
+                        </button>
+                        <form method="post"
+                              action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-sm"
+                                    style="background:var(--accent-muted);color:var(--text-primary)"
+                                    onclick="return confirm('Mark this transaction as having no charges?')">
+                                No Charges
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding:20px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
+        <p style="color:var(--text-muted); margin:0;">All charges encoded.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SECTION 3: LOCK -->
+<div class="mt-4">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="font-size:1.3rem; margin:0; color:var(--text-primary); border-bottom:2px solid var(--danger); padding-bottom:0.5rem; flex:1;">
+            3. Lock Transactions
+            <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
+                ({{ lock_total }} pending)
+            </span>
+        </h2>
+        <button type="button" id="lockSelectedBtn" class="btn btn-danger btn-sm" style="display:none; margin-left:1rem;"
+                onclick="lockSelected()">
+            Lock Selected (<span id="lockSelectedCount">0</span>)
+        </button>
+    </div>
+
+    {% if lock_grouped %}
+    {% for bank_name, data in lock_grouped.items() %}
+    <div class="fixings-section">
+        <div class="fixings-section-header">
+            <span class="fixings-section-name">{{ bank_name }}</span>
+            <span class="fixings-section-total">{{ data.count }} record{{ 's' if data.count != 1 }}</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table" style="table-layout:fixed;width:100%">
+                <colgroup>
+                    <col style="width:4%">
+                    <col style="width:9%">
+                    <col style="width:17%">
+                    <col style="width:12%">
+                    <col style="width:7%">
+                    <col style="width:8%">
+                    <col style="width:8%">
+                    <col style="width:8%">
+                    <col style="width:27%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="text-center">
+                            <input type="checkbox" class="select-all-lock"
+                                   onchange="toggleAllLock(this, '{{ bank_name }}')"
+                                   title="Select all in {{ bank_name }}">
+                        </th>
+                        <th>Date</th>
+                        <th>Stock</th>
+                        <th>Type</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-right">Charges</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in data.rows %}
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="lock-checkbox"
+                               data-source="{{ row.source }}"
+                               data-ref="{{ row.ref_num }}"
+                               data-bank="{{ bank_name }}"
+                               onchange="updateLockCount()">
+                    </td>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding:20px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
+        <p style="color:var(--text-muted); margin:0;">No transactions ready to lock.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SECTION 4: LOCKED -->
+<div class="mt-4 mb-4">
+    <h2 style="font-size:1.3rem; margin-bottom:1rem; color:var(--text-primary); border-bottom:2px solid var(--success); padding-bottom:0.5rem;">
+        4. Locked Transactions
+        <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
+            ({{ locked_total }} locked)
+        </span>
+    </h2>
+
+    {% if locked_grouped %}
+    {% for bank_name, data in locked_grouped.items() %}
+    <div class="fixings-section">
+        <div class="fixings-section-header">
+            <span class="fixings-section-name">{{ bank_name }}</span>
+            <span class="fixings-section-total">{{ data.count }} record{{ 's' if data.count != 1 }}</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table" style="table-layout:fixed;width:100%">
+                <colgroup>
+                    <col style="width:9%">
+                    <col style="width:20%">
+                    <col style="width:13%">
+                    <col style="width:8%">
+                    <col style="width:10%">
+                    <col style="width:10%">
+                    <col style="width:10%">
+                    <col style="width:20%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Stock</th>
+                        <th>Type</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-right">Charges</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in data.rows %}
+                <tr style="opacity:0.7;">
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-center">
+                        <span style="color:var(--success);font-weight:500;">✓ Locked</span>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="padding:20px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
+        <p style="color:var(--text-muted); margin:0;">No locked transactions in this date range.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Review section
+function updateReviewCount() {
+    const checkboxes = document.querySelectorAll('.review-checkbox:checked');
+    const count = checkboxes.length;
+    const countSpan = document.getElementById('reviewSelectedCount');
+    const reviewBtn = document.getElementById('reviewSelectedBtn');
+
+    countSpan.textContent = count;
+    reviewBtn.style.display = count > 0 ? 'inline-block' : 'none';
+
+    // Update select-all checkboxes state
+    document.querySelectorAll('.select-all-review').forEach(function(selectAll) {
+        const table = selectAll.closest('table');
+        if (table) {
+            const firstCheckbox = table.querySelector('.review-checkbox');
+            if (firstCheckbox) {
+                const bank = firstCheckbox.dataset.bank;
+                const bankCheckboxes = document.querySelectorAll('.review-checkbox[data-bank="' + bank + '"]');
+                const bankChecked = Array.from(bankCheckboxes).filter(cb => cb.checked).length;
+                selectAll.checked = bankChecked === bankCheckboxes.length && bankCheckboxes.length > 0;
+                selectAll.indeterminate = bankChecked > 0 && bankChecked < bankCheckboxes.length;
+            }
+        }
+    });
+}
+
+function toggleAllReview(selectAllCheckbox, bankName) {
+    const checkboxes = document.querySelectorAll('.review-checkbox[data-bank="' + bankName + '"]');
+    checkboxes.forEach(function(cb) {
+        cb.checked = selectAllCheckbox.checked;
+    });
+    updateReviewCount();
+}
+
+function reviewSelected() {
+    const checkboxes = document.querySelectorAll('.review-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one transaction to review.');
+        return;
+    }
+
+    const count = checkboxes.length;
+    if (!confirm('Review ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?')) {
+        return;
+    }
+
+    const transactions = [];
+    checkboxes.forEach(function(cb) {
+        transactions.push({
+            source: cb.dataset.source,
+            ref_num: cb.dataset.ref
+        });
+    });
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("workflow.review_multiple") }}';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'transactions';
+    input.value = JSON.stringify(transactions);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Lock section
+function updateLockCount() {
+    const checkboxes = document.querySelectorAll('.lock-checkbox:checked');
+    const count = checkboxes.length;
+    const countSpan = document.getElementById('lockSelectedCount');
+    const lockBtn = document.getElementById('lockSelectedBtn');
+
+    countSpan.textContent = count;
+    lockBtn.style.display = count > 0 ? 'inline-block' : 'none';
+
+    // Update select-all checkboxes state
+    document.querySelectorAll('.select-all-lock').forEach(function(selectAll) {
+        const table = selectAll.closest('table');
+        if (table) {
+            const firstCheckbox = table.querySelector('.lock-checkbox');
+            if (firstCheckbox) {
+                const bank = firstCheckbox.dataset.bank;
+                const bankCheckboxes = document.querySelectorAll('.lock-checkbox[data-bank="' + bank + '"]');
+                const bankChecked = Array.from(bankCheckboxes).filter(cb => cb.checked).length;
+                selectAll.checked = bankChecked === bankCheckboxes.length && bankCheckboxes.length > 0;
+                selectAll.indeterminate = bankChecked > 0 && bankChecked < bankCheckboxes.length;
+            }
+        }
+    });
+}
+
+function toggleAllLock(selectAllCheckbox, bankName) {
+    const checkboxes = document.querySelectorAll('.lock-checkbox[data-bank="' + bankName + '"]');
+    checkboxes.forEach(function(cb) {
+        cb.checked = selectAllCheckbox.checked;
+    });
+    updateLockCount();
+}
+
+function lockSelected() {
+    const checkboxes = document.querySelectorAll('.lock-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one transaction to lock.');
+        return;
+    }
+
+    const count = checkboxes.length;
+    if (!confirm('Lock ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?')) {
+        return;
+    }
+
+    const transactions = [];
+    checkboxes.forEach(function(cb) {
+        transactions.push({
+            source: cb.dataset.source,
+            ref_num: cb.dataset.ref
+        });
+    });
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("workflow.lock_multiple") }}';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'transactions';
+    input.value = JSON.stringify(transactions);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Charges modal functions
+function openChargesModal(source, refNum) {
+    // Fetch transaction details
+    fetch(`/workflow/charges/${source}/${refNum}/data`)
+        .then(response => response.json())
+        .then(data => {
+            // Populate modal
+            document.getElementById('chargesModalTitle').textContent = 'Edit Charges';
+            document.getElementById('chargesBankName').textContent = data.bank_name;
+            document.getElementById('chargesStock').textContent = data.stock;
+            document.getElementById('chargesType').textContent = data.transaction_type;
+            document.getElementById('chargesQty').textContent = data.quantity;
+            document.getElementById('chargesPrice').textContent = data.price;
+            document.getElementById('chargesAmount').textContent = data.amount;
+
+            // Populate form fields
+            document.getElementById('chargesBrokerage').value = data.brokerage || 0;
+            document.getElementById('chargesCommission').value = data.commission || 0;
+            document.getElementById('chargesForeignCharge').value = data.foreign_charge || 0;
+            document.getElementById('chargesStampDuty').value = data.stamp_duty || 0;
+            document.getElementById('chargesMisc').value = data.misc || 0;
+
+            // Set form action
+            document.getElementById('chargesForm').action = `/workflow/charges/${source}/${refNum}`;
+
+            // Show modal
+            document.getElementById('chargesModal').style.display = 'flex';
+        })
+        .catch(error => {
+            console.error('Error fetching transaction data:', error);
+            alert('Error loading transaction data. Please try again.');
+        });
+}
+
+function closeChargesModal() {
+    document.getElementById('chargesModal').style.display = 'none';
+}
+
+// Edit modal functions
+function openEditModal(source, refNum) {
+    // Fetch transaction details
+    fetch(`/workflow/edit/${source}/${refNum}/data`)
+        .then(response => response.json())
+        .then(data => {
+            // Populate modal
+            document.getElementById('editModalTitle').textContent =
+                data.source === 'contract' ? 'Edit Term Sheet' : 'Edit Transaction';
+
+            // Populate form fields
+            document.getElementById('editTradeDate').value = data.trade_date;
+            document.getElementById('editValueDate').value = data.value_date;
+            document.getElementById('editQuantity').value = data.quantity_raw;
+            document.getElementById('editPrice').value = data.price_raw;
+
+            // Populate bank dropdown
+            const bankSelect = document.getElementById('editBankRef');
+            bankSelect.innerHTML = '<option value="">-- Select Account --</option>';
+            data.banks.forEach(bank => {
+                const option = document.createElement('option');
+                option.value = bank.ref_num;
+                option.textContent = bank.bank_name;
+                if (bank.ref_num === data.bank_ref) {
+                    option.selected = true;
+                }
+                bankSelect.appendChild(option);
+            });
+
+            // Populate stock dropdown
+            const stockSelect = document.getElementById('editCodeRef');
+            stockSelect.innerHTML = '<option value="">-- Select Stock --</option>';
+            data.stocks.forEach(stock => {
+                const option = document.createElement('option');
+                option.value = stock.ref_num;
+                option.textContent = `${stock.stock_name} (${stock.code})`;
+                if (stock.ref_num === data.code_ref) {
+                    option.selected = true;
+                }
+                stockSelect.appendChild(option);
+            });
+
+            // Populate transaction type dropdown
+            const typeSelect = document.getElementById('editTransactionType');
+            typeSelect.innerHTML = '<option value="">-- Select Type --</option>';
+            data.transaction_types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                if (type === data.transaction_type) {
+                    option.selected = true;
+                }
+                typeSelect.appendChild(option);
+            });
+
+            // Calculate and show amount
+            updateEditAmount();
+
+            // Show/hide charges section based on source
+            const chargesSection = document.getElementById('editChargesSection');
+            if (data.source === 'contract') {
+                chargesSection.style.display = 'none';
+            } else {
+                chargesSection.style.display = 'block';
+                document.getElementById('editBrokerage').value = data.brokerage || 0;
+                document.getElementById('editCommission').value = data.commission || 0;
+                document.getElementById('editForeignCharge').value = data.foreign_charge || 0;
+                document.getElementById('editStampDuty').value = data.stamp_duty || 0;
+                document.getElementById('editMisc').value = data.misc || 0;
+            }
+
+            // Set form action
+            document.getElementById('editForm').action = `/workflow/edit/${source}/${refNum}`;
+
+            // Show modal
+            document.getElementById('editModal').style.display = 'flex';
+        })
+        .catch(error => {
+            console.error('Error fetching transaction data:', error);
+            alert('Error loading transaction data. Please try again.');
+        });
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+function updateEditAmount() {
+    const qty = parseFloat(document.getElementById('editQuantity').value) || 0;
+    const price = parseFloat(document.getElementById('editPrice').value) || 0;
+    const amount = Math.abs(qty) * price;
+    document.getElementById('editAmount').value = amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// Update amount when quantity or price changes
+document.addEventListener('DOMContentLoaded', function() {
+    const qtyInput = document.getElementById('editQuantity');
+    const priceInput = document.getElementById('editPrice');
+
+    if (qtyInput) qtyInput.addEventListener('input', updateEditAmount);
+    if (priceInput) priceInput.addEventListener('input', updateEditAmount);
+});
+</script>
+
+<!-- Charges Edit Modal -->
+<div id="chargesModal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
+    <div style="background:#ffffff; border-radius:8px; max-width:520px; width:90%; max-height:90vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.5); opacity:1;">
+        <div style="padding:1.5rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <h2 id="chargesModalTitle" style="margin:0; font-size:1.3rem;">Edit Charges</h2>
+            <button onclick="closeChargesModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+        </div>
+
+        <div style="padding:1.5rem;">
+            <table class="table mb-3" style="table-layout:fixed">
+                <tbody>
+                    <tr><th style="width:35%">Account</th><td id="chargesBankName"></td></tr>
+                    <tr><th>Stock</th><td id="chargesStock"></td></tr>
+                    <tr><th>Type</th><td id="chargesType"></td></tr>
+                    <tr><th>Quantity</th><td class="text-right" id="chargesQty"></td></tr>
+                    <tr><th>Price</th><td class="text-right" id="chargesPrice"></td></tr>
+                    <tr><th>Amount</th><td class="text-right" id="chargesAmount"></td></tr>
+                </tbody>
+            </table>
+
+            <form id="chargesForm" method="post" action="">
+                <div class="form-group">
+                    <label>Brokerage</label>
+                    <input type="number" step="0.01" name="brokerage" id="chargesBrokerage" class="form-control" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Commission</label>
+                    <input type="number" step="0.01" name="commission" id="chargesCommission" class="form-control" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Foreign Charge</label>
+                    <input type="number" step="0.01" name="foreign_charge" id="chargesForeignCharge" class="form-control" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Stamp Duty</label>
+                    <input type="number" step="0.01" name="stamp_duty" id="chargesStampDuty" class="form-control" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Misc</label>
+                    <input type="number" step="0.01" name="misc" id="chargesMisc" class="form-control" value="0">
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-top:1rem">
+                    <button type="submit" class="btn btn-primary">Save Charges</button>
+                    <button type="button" onclick="closeChargesModal()" class="btn btn-outline">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Transaction Modal -->
+<div id="editModal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
+    <div style="background:#ffffff; border-radius:8px; max-width:900px; width:90%; max-height:90vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.5); opacity:1;">
+        <div style="padding:1.5rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <h2 id="editModalTitle" style="margin:0; font-size:1.3rem;">Edit Transaction</h2>
+            <button onclick="closeEditModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+        </div>
+
+        <div style="padding:1.5rem;">
+            <form id="editForm" method="post" action="">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                    <div class="form-group">
+                        <label>Trade Date</label>
+                        <input type="date" name="trade_date" id="editTradeDate" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Value Date</label>
+                        <input type="date" name="value_date" id="editValueDate" class="form-control" required>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                    <div class="form-group">
+                        <label>Account</label>
+                        <select name="bank_ref" id="editBankRef" class="form-control" required>
+                            <option value="">-- Select Account --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <select name="code_ref" id="editCodeRef" class="form-control" required>
+                            <option value="">-- Select Stock --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                    <div class="form-group">
+                        <label>Transaction Type</label>
+                        <select name="transaction_type" id="editTransactionType" class="form-control" required>
+                            <option value="">-- Select Type --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" step="1" name="quantity" id="editQuantity" class="form-control" required>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                    <div class="form-group">
+                        <label>Price</label>
+                        <input type="number" step="0.0001" name="price" id="editPrice" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (Calculated)</label>
+                        <input type="text" id="editAmount" class="form-control" readonly style="background:#f5f5f5;">
+                    </div>
+                </div>
+
+                <div id="editChargesSection" style="border-top:1px solid var(--border); padding-top:1.5rem; margin-top:1.5rem;">
+                    <h3 style="font-size:1.1rem; margin-bottom:1rem;">Charges</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+                        <div class="form-group">
+                            <label>Brokerage</label>
+                            <input type="number" step="0.01" name="brokerage" id="editBrokerage" class="form-control" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Commission</label>
+                            <input type="number" step="0.01" name="commission" id="editCommission" class="form-control" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Foreign Charge</label>
+                            <input type="number" step="0.01" name="foreign_charge" id="editForeignCharge" class="form-control" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Stamp Duty</label>
+                            <input type="number" step="0.01" name="stamp_duty" id="editStampDuty" class="form-control" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Misc</label>
+                            <input type="number" step="0.01" name="misc" id="editMisc" class="form-control" value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:0.5rem;margin-top:1.5rem;">
+                    <button type="submit" class="btn btn-primary">Save Transaction</button>
+                    <button type="button" onclick="closeEditModal()" class="btn btn-outline">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

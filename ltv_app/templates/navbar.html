@@ -11,6 +11,10 @@
         <ul class="nav-list">
             <li><a href="/">Home</a></li>
 
+            {% if current_user.is_authenticated and current_user.role == 'superuser' %}
+            <li><a href="{{ url_for('workflow.home') }}">Workflow</a></li>
+            {% endif %}
+
             <li><a href="{{ url_for('transactions.home') }}">Trades Done</a></li>
 
             <li><a href="{{ url_for('fixings.home') }}">Fixings</a></li>
