@@ -179,11 +179,11 @@ def add():
 
 @bp.route("/edit/<contract_ref>", methods=["GET", "POST"])
 @login_required
-def edit(contract_ref):
+def edit(contract_ref, view_only=False):
     db = get_db()
     ts = StockContract(db=db)
     ts.get(ref_num=contract_ref)
-    if ts.locked and current_user.role != 'superuser':
+    if ts.locked and current_user.role != 'superuser' and not view_only:
         flash("This contract is locked and cannot be edited.")
         return redirect(url_for('transactions.home'))
     ts = StockContract(db=db)
@@ -278,6 +278,32 @@ def edit(contract_ref):
     return render_template('term_sheet/edit.html', ts=ts, contract_ref=contract_ref,
                            codes=codes, tenors=tenors, frequencies=frequencies,
                            gtds=gtds, bank_id=bank_id)
+
+
+@bp.route("/<contract_ref>/view", methods=["GET"])
+@login_required
+def view(contract_ref):
+    """View a locked contract (read-only)."""
+    # Reuse edit route logic but pass view_only flag
+    return edit(contract_ref, view_only=True)
+
+
+@bp.route("/<contract_ref>/unlock", methods=["GET"])
+@login_required
+def unlock(contract_ref):
+    """Unlock a contract (superuser only)."""
+    from flask import abort
+
+    # Only superusers can unlock
+    if current_user.role != 'superuser':
+        abort(403)
+
+    db = get_db()
+    db.execute("UPDATE tbl_stock_contract SET locked=0 WHERE ref_num=?", (contract_ref,))
+    db.commit()
+
+    flash(f"Contract #{contract_ref} has been unlocked.")
+    return redirect(url_for('transactions.home'))
 
 
 @bp.route("/<contract_ref>/delete", methods=["GET", "POST"])

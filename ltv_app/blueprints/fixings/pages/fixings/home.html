@@ -245,7 +245,7 @@ function openFixingModal(d) {
     document.getElementById('m_misc').value = d.misc;
     computeTotals();
 
-    // Disable all form inputs if locked
+    // Set form inputs disabled state based on locked status
     const form = document.getElementById('editFixingForm');
     const inputs = form.querySelectorAll('input, select, button[type="submit"]');
     inputs.forEach(input => {
@@ -253,13 +253,22 @@ function openFixingModal(d) {
     });
 
     // Update modal title
-    document.querySelector('.modal-title').textContent = isLocked ? 'View Fixing #' + d.id : 'Edit Fixing #' + d.id;
+    const modalTitleEl = document.querySelector('#editModal .modal-title');
+    if (modalTitleEl) {
+        modalTitleEl.textContent = isLocked ? 'View Fixing #' + d.id : 'Edit Fixing #' + d.id;
+    }
 
     document.getElementById('editModal').classList.add('active');
 }
 
 function closeModal() {
     document.getElementById('editModal').classList.remove('active');
+    // Re-enable all form inputs when closing modal
+    const form = document.getElementById('editFixingForm');
+    const inputs = form.querySelectorAll('input, select, button[type="submit"]');
+    inputs.forEach(input => {
+        input.disabled = false;
+    });
 }
 
 function computeTotals() {

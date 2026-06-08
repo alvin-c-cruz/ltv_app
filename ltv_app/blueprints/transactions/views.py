@@ -303,6 +303,61 @@ def edit(ref_num):
     return render_template('transactions/edit.html', **context)
 
 
+@bp.route('/<ref_num>/view', methods=['GET'])
+@login_required
+def view(ref_num):
+    """View a locked transaction (read-only)."""
+    from .. database import get_db
+    transaction = Transaction(db=get_db())
+    transaction.get(ref_num=ref_num)
+
+    transaction_types = [(i, i) for i in ['Buy (Spot)', 'Sell (Spot)', 'Transfer-In', 'Transfer-Out', "Stock Dividend"]]
+
+    form = {
+        "trade_date": transaction.trade_date,
+        "value_date": transaction.value_date,
+        "bank_ref": transaction.bank_ref,
+        "code_ref": transaction.code_ref,
+        "transaction_type": transaction.transaction_type,
+        "quantity": transaction.quantity,
+        "price": transaction.price,
+        "brokerage": transaction.brokerage,
+        "commission": transaction.commission,
+        "foreign_charge": transaction.foreign_charge,
+        "stamp_duty": transaction.stamp_duty,
+        "misc": transaction.misc,
+        "counter_bank_ref": transaction.counter_bank_ref,
+    }
+
+    context = {
+        "form": form,
+        "transaction_types": transaction_types,
+        "ref_num": ref_num,
+        "view_only": True  # Flag for template to disable inputs
+    }
+
+    return render_template('transactions/edit.html', **context)
+
+
+@bp.route('/<ref_num>/unlock', methods=['GET'])
+@login_required
+def unlock(ref_num):
+    """Unlock a transaction (superuser only)."""
+    from flask import abort
+    from .. database import get_db
+
+    # Only superusers can unlock
+    if current_user.role != 'superuser':
+        abort(403)
+
+    db = get_db()
+    db.execute("UPDATE tbl_transaction SET locked=0 WHERE ref_num=?", (ref_num,))
+    db.commit()
+
+    flash(f"Transaction #{ref_num} has been unlocked.")
+    return redirect(url_for('transactions.home'))
+
+
 @bp.route('/<ref_num>/delete', methods=['GET', 'POST'])
 @login_required
 def delete(ref_num):
@@ -408,6 +463,60 @@ def edit_short(ref_num):
     }
 
     return render_template('transactions/edit_short.html', **context)
+
+
+@bp.route('/short/<ref_num>/view', methods=['GET'])
+@login_required
+def view_short(ref_num):
+    """View a locked short transaction (read-only)."""
+    from .. database import get_db
+    transaction = TransactionShort(db=get_db())
+    transaction.get(ref_num=ref_num)
+
+    transaction_types = [(i, i) for i in ['Buy (Pay Short)', 'Sell (Short)']]
+
+    form = {
+        "trade_date": transaction.trade_date,
+        "value_date": transaction.value_date,
+        "bank_ref": transaction.bank_ref,
+        "code_ref": transaction.code_ref,
+        "transaction_type": transaction.transaction_type,
+        "quantity": transaction.quantity,
+        "price": transaction.price,
+        "brokerage": transaction.brokerage,
+        "commission": transaction.commission,
+        "foreign_charge": transaction.foreign_charge,
+        "stamp_duty": transaction.stamp_duty,
+        "misc": transaction.misc,
+    }
+
+    context = {
+        "form": form,
+        "transaction_types": transaction_types,
+        "ref_num": ref_num,
+        "view_only": True  # Flag for template to disable inputs
+    }
+
+    return render_template('transactions/edit_short.html', **context)
+
+
+@bp.route('/short/<ref_num>/unlock', methods=['GET'])
+@login_required
+def unlock_short(ref_num):
+    """Unlock a short transaction (superuser only)."""
+    from flask import abort
+    from .. database import get_db
+
+    # Only superusers can unlock
+    if current_user.role != 'superuser':
+        abort(403)
+
+    db = get_db()
+    db.execute("UPDATE tbl_transaction_short SET locked=0 WHERE ref_num=?", (ref_num,))
+    db.commit()
+
+    flash(f"Short transaction #{ref_num} has been unlocked.")
+    return redirect(url_for('transactions.home'))
 
 
 @bp.route('/short/<ref_num>/delete', methods=['GET', 'POST'])
