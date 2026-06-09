@@ -80,8 +80,11 @@
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
+                {% set spot_rows     = data.rows | rejectattr('is_fixing') | rejectattr('source', 'equalto', 'contract') | list %}
+                {% set fixing_rows   = data.rows | selectattr('is_fixing') | list %}
+                {% set contract_rows = data.rows | selectattr('source', 'equalto', 'contract') | list %}
                 <tbody>
-                {% for row in data.rows %}
+                {% for row in spot_rows %}
                 <tr>
                     <td class="text-center">
                         <input type="checkbox" class="review-checkbox"
@@ -109,6 +112,68 @@
                     </td>
                 </tr>
                 {% endfor %}
+                {% if fixing_rows %}
+                <tr><td colspan="9" class="wf-subheader">FIXINGS (ACCU / DECU)</td></tr>
+                {% for row in fixing_rows %}
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="review-checkbox"
+                               data-source="{{ row.source }}"
+                               data-ref="{{ row.ref_num }}"
+                               data-bank="{{ bank_name }}"
+                               onchange="updateReviewCount()">
+                    </td>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td style="white-space:nowrap">{{ row.value_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openFixingWfModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
+                        <form method="post"
+                              action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-primary btn-sm"
+                                    onclick="return confirm('Mark this fixing as reviewed?')">Review</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                {% if contract_rows %}
+                <tr><td colspan="9" class="wf-subheader">TERM SHEETS (ACCU / DECU)</td></tr>
+                {% for row in contract_rows %}
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="review-checkbox"
+                               data-source="{{ row.source }}"
+                               data-ref="{{ row.ref_num }}"
+                               data-bank="{{ bank_name }}"
+                               onchange="updateReviewCount()">
+                    </td>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td style="white-space:nowrap">{{ row.value_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
+                        <form method="post"
+                              action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-primary btn-sm"
+                                    onclick="return confirm('Mark this term sheet as reviewed?')">Review</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
                 </tbody>
             </table>
         </div>
@@ -159,8 +224,10 @@
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
+                {% set regular_rows = data.rows | rejectattr('is_fixing') | list %}
+                {% set fixing_rows  = data.rows | selectattr('is_fixing') | list %}
                 <tbody>
-                {% for row in data.rows %}
+                {% for row in regular_rows %}
                 <tr>
                     <td style="white-space:nowrap">{{ row.trade_date }}</td>
                     <td>{{ row.stock }}</td>
@@ -185,6 +252,38 @@
                     </td>
                 </tr>
                 {% endfor %}
+                {% if fixing_rows %}
+                <tr>
+                    <td colspan="7"
+                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
+                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
+                        FIXINGS (ACCU / DECU)
+                    </td>
+                </tr>
+                {% for row in fixing_rows %}
+                <tr>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <a href="{{ url_for('fixings.home', trade_date=row.trade_date) }}"
+                           class="btn btn-outline btn-sm">Fixings Page</a>
+                        <form method="post"
+                              action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-sm"
+                                    style="background:var(--accent-muted);color:var(--text-primary)"
+                                    onclick="return confirm('Mark this fixing as having no charges?')">
+                                No Charges
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
                 </tbody>
             </table>
         </div>
@@ -249,8 +348,11 @@
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
+                {% set spot_rows     = data.rows | rejectattr('is_fixing') | rejectattr('source', 'equalto', 'contract') | list %}
+                {% set fixing_rows   = data.rows | selectattr('is_fixing') | list %}
+                {% set contract_rows = data.rows | selectattr('source', 'equalto', 'contract') | list %}
                 <tbody>
-                {% for row in data.rows %}
+                {% for row in spot_rows %}
                 <tr>
                     <td class="text-center">
                         <input type="checkbox" class="lock-checkbox"
@@ -269,9 +371,89 @@
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
+                        <form method="post"
+                              action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Lock this transaction?')">Lock</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
+                {% if fixing_rows %}
+                <tr>
+                    <td colspan="9"
+                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
+                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
+                        FIXINGS (ACCU / DECU)
+                    </td>
+                </tr>
+                {% for row in fixing_rows %}
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="lock-checkbox"
+                               data-source="{{ row.source }}"
+                               data-ref="{{ row.ref_num }}"
+                               data-bank="{{ bank_name }}"
+                               onchange="updateLockCount()">
+                    </td>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openFixingWfModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
+                        <form method="post"
+                              action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Lock this fixing?')">Lock</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                {% if contract_rows %}
+                <tr>
+                    <td colspan="9"
+                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
+                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
+                        TERM SHEETS (ACCU / DECU)
+                    </td>
+                </tr>
+                {% for row in contract_rows %}
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="lock-checkbox"
+                               data-source="{{ row.source }}"
+                               data-ref="{{ row.ref_num }}"
+                               data-bank="{{ bank_name }}"
+                               onchange="updateLockCount()">
+                    </td>
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
+                        <form method="post"
+                              action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Lock this contract?')">Lock</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
                 </tbody>
             </table>
         </div>
@@ -324,8 +506,11 @@
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
+                {% set spot_rows     = data.rows | rejectattr('is_fixing') | rejectattr('source', 'equalto', 'contract') | list %}
+                {% set fixing_rows   = data.rows | selectattr('is_fixing') | list %}
+                {% set contract_rows = data.rows | selectattr('source', 'equalto', 'contract') | list %}
                 <tbody>
-                {% for row in data.rows %}
+                {% for row in spot_rows %}
                 <tr style="opacity:0.7;">
                     <td style="white-space:nowrap">{{ row.trade_date }}</td>
                     <td>{{ row.stock }}</td>
@@ -339,6 +524,52 @@
                     </td>
                 </tr>
                 {% endfor %}
+                {% if fixing_rows %}
+                <tr>
+                    <td colspan="8"
+                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
+                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
+                        FIXINGS (ACCU / DECU)
+                    </td>
+                </tr>
+                {% for row in fixing_rows %}
+                <tr style="opacity:0.7;">
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-center">
+                        <span style="color:var(--success);font-weight:500;">✓ Locked</span>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                {% if contract_rows %}
+                <tr>
+                    <td colspan="8"
+                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
+                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
+                        TERM SHEETS (ACCU / DECU)
+                    </td>
+                </tr>
+                {% for row in contract_rows %}
+                <tr style="opacity:0.7;">
+                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
+                    <td>{{ row.stock }}</td>
+                    <td>{{ row.transaction_type }}</td>
+                    <td class="text-right">{{ row.quantity }}</td>
+                    <td class="text-right">{{ row.price }}</td>
+                    <td class="text-right">{{ row.amount }}</td>
+                    <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-center">
+                        <span style="color:var(--success);font-weight:500;">✓ Locked</span>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
                 </tbody>
             </table>
         </div>
@@ -586,9 +817,6 @@ function openEditModal(source, refNum) {
                 typeSelect.appendChild(option);
             });
 
-            // Calculate and show amount
-            updateEditAmount();
-
             // Show/hide charges section based on source
             const chargesSection = document.getElementById('editChargesSection');
             if (data.source === 'contract') {
@@ -611,7 +839,8 @@ function openEditModal(source, refNum) {
             document.getElementById('editForm').action = `/workflow/edit/${source}/${refNum}?${params.toString()}`;
 
             // Show modal
-            document.getElementById('editModal').style.display = 'flex';
+            updateEditAmount();
+            document.getElementById('editModal').classList.add('active');
         })
         .catch(error => {
             console.error('Error fetching transaction data:', error);
@@ -620,24 +849,220 @@ function openEditModal(source, refNum) {
 }
 
 function closeEditModal() {
-    document.getElementById('editModal').style.display = 'none';
+    document.getElementById('editModal').classList.remove('active');
 }
 
 function updateEditAmount() {
-    const qty = parseFloat(document.getElementById('editQuantity').value) || 0;
-    const price = parseFloat(document.getElementById('editPrice').value) || 0;
-    const amount = Math.abs(qty) * price;
-    document.getElementById('editAmount').value = amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const qty   = parseFloat(document.getElementById('editQuantity').value)  || 0;
+    const price = parseFloat(document.getElementById('editPrice').value)      || 0;
+    const brok  = parseFloat(document.getElementById('editBrokerage').value)  || 0;
+    const comm  = parseFloat(document.getElementById('editCommission').value) || 0;
+    const fc    = parseFloat(document.getElementById('editForeignCharge').value) || 0;
+    const sd    = parseFloat(document.getElementById('editStampDuty').value)  || 0;
+    const misc  = parseFloat(document.getElementById('editMisc').value)       || 0;
+    const net   = qty * price + brok + comm + fc + sd + misc;
+    function fmt(v) {
+        const abs = Math.abs(v).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+        return v < 0 ? '(' + abs + ')' : abs;
+    }
+    document.getElementById('editAmount').value = fmt(Math.abs(qty) * price);
+    const netEl = document.getElementById('editNetAmount');
+    netEl.textContent = fmt(net);
+    netEl.style.color = net < 0 ? 'var(--danger)' : 'var(--text)';
 }
 
-// Update amount when quantity or price changes
-document.addEventListener('DOMContentLoaded', function() {
-    const qtyInput = document.getElementById('editQuantity');
-    const priceInput = document.getElementById('editPrice');
-
-    if (qtyInput) qtyInput.addEventListener('input', updateEditAmount);
-    if (priceInput) priceInput.addEventListener('input', updateEditAmount);
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { closeEditModal(); closeFixingWfModal(); closeContractWfModal(); }
 });
+
+// ── Contract (ACCU / DECU term sheet) edit modal ──────────────────────────────
+function openContractWfModal(refNum) {
+    fetch(`/workflow/edit/contract/${refNum}/data`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('cwModalTitle').textContent = 'Edit Contract #' + refNum;
+
+            document.getElementById('cwTradeDate').value   = data.trade_date;
+            document.getElementById('cwStartDate').value   = data.value_date;
+            document.getElementById('cwDailyShares').value = data.quantity_raw;
+            document.getElementById('cwSpot').value        = data.price_raw;
+            document.getElementById('cwStrikeRate').value  = data.strike_rate || 0;
+            document.getElementById('cwKoRate').value      = data.ko_rate     || 0;
+            document.getElementById('cwReference').value   = data.reference   || '';
+            document.getElementById('cwBankDoc').value     = data.bank_doc    || '';
+
+            // Account
+            const bankSel = document.getElementById('cwBankRef');
+            bankSel.innerHTML = '<option value="">— select —</option>';
+            data.banks.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.ref_num; opt.textContent = b.bank_name;
+                if (b.ref_num === data.bank_ref) opt.selected = true;
+                bankSel.appendChild(opt);
+            });
+
+            // Stock
+            const stockSel = document.getElementById('cwCodeRef');
+            stockSel.innerHTML = '<option value="">— select —</option>';
+            data.stocks.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.ref_num; opt.textContent = `${s.stock_name} (${s.code})`;
+                if (s.ref_num === data.code_ref) opt.selected = true;
+                stockSel.appendChild(opt);
+            });
+
+            // Type — ACCU/DECU only
+            const typeSel = document.getElementById('cwTransactionType');
+            Array.from(typeSel.options).forEach(opt => {
+                opt.selected = opt.value === data.transaction_type;
+            });
+
+            // Status
+            const statusSel = document.getElementById('cwStatus');
+            Array.from(statusSel.options).forEach(opt => {
+                opt.selected = opt.value === (data.status || 'active');
+            });
+
+            // Tenor
+            const tenorSel = document.getElementById('cwTenor');
+            Array.from(tenorSel.options).forEach(opt => {
+                opt.selected = opt.value === (data.tenor || '');
+            });
+
+            // Frequency
+            const freqSel = document.getElementById('cwFrequency');
+            Array.from(freqSel.options).forEach(opt => {
+                opt.selected = opt.value === (data.frequency || '');
+            });
+
+            // Leveraged
+            const levSel = document.getElementById('cwLeveraged');
+            Array.from(levSel.options).forEach(opt => {
+                opt.selected = opt.value === (data.leveraged || 'No');
+            });
+
+            // GTD
+            const gtdSel = document.getElementById('cwGtd');
+            Array.from(gtdSel.options).forEach(opt => {
+                opt.selected = opt.value === (data.gtd || 'No');
+            });
+
+            const dateFrom = '{{ date_from or "" }}';
+            const dateTo   = '{{ date_to or "" }}';
+            const params   = new URLSearchParams();
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo)   params.append('date_to',   dateTo);
+            document.getElementById('cwForm').action = `/workflow/edit/contract/${refNum}?${params.toString()}`;
+
+            updateCwPrices();
+            document.getElementById('editContractWfModal').classList.add('active');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error loading contract data. Please try again.');
+        });
+}
+
+function closeContractWfModal() {
+    document.getElementById('editContractWfModal').classList.remove('active');
+}
+
+function updateCwPrices() {
+    const spot = parseFloat(document.getElementById('cwSpot').value)       || 0;
+    const sr   = parseFloat(document.getElementById('cwStrikeRate').value) || 0;
+    const kor  = parseFloat(document.getElementById('cwKoRate').value)     || 0;
+    document.getElementById('cwStrikePrice').value = (spot && sr)  ? (spot * sr  / 100).toFixed(4) : '';
+    document.getElementById('cwKoPrice').value     = (spot && kor) ? (spot * kor / 100).toFixed(4) : '';
+}
+
+// ── Fixing-specific edit modal (ACCU / DECU) ─────────────────────────────────
+const FW_TYPES = ['Buy (Accu)', 'Buy (Accu-KO)', 'Sell (Decu)', 'Sell (Decu-KO)'];
+
+function openFixingWfModal(source, refNum) {
+    fetch(`/workflow/edit/${source}/${refNum}/data`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('fwModalTitle').textContent = 'Edit Fixing #' + refNum;
+
+            document.getElementById('fwTradeDate').value  = data.trade_date;
+            document.getElementById('fwValueDate').value  = data.value_date;
+            document.getElementById('fwQuantity').value   = data.quantity_raw;
+            document.getElementById('fwPrice').value      = data.price_raw;
+            document.getElementById('fwBrokerage').value     = data.brokerage     || 0;
+            document.getElementById('fwCommission').value    = data.commission    || 0;
+            document.getElementById('fwForeignCharge').value = data.foreign_charge || 0;
+            document.getElementById('fwStampDuty').value     = data.stamp_duty    || 0;
+            document.getElementById('fwMisc').value          = data.misc          || 0;
+
+            // Populate Account dropdown
+            const bankSel = document.getElementById('fwBankRef');
+            bankSel.innerHTML = '<option value="">— select —</option>';
+            data.banks.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.ref_num; opt.textContent = b.bank_name;
+                if (b.ref_num === data.bank_ref) opt.selected = true;
+                bankSel.appendChild(opt);
+            });
+
+            // Populate Stock dropdown
+            const stockSel = document.getElementById('fwCodeRef');
+            stockSel.innerHTML = '<option value="">— select —</option>';
+            data.stocks.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.ref_num; opt.textContent = `${s.stock_name} (${s.code})`;
+                if (s.ref_num === data.code_ref) opt.selected = true;
+                stockSel.appendChild(opt);
+            });
+
+            // Populate Type dropdown (ACCU/DECU only)
+            const typeSel = document.getElementById('fwTransactionType');
+            typeSel.innerHTML = '<option value="">— select —</option>';
+            FW_TYPES.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t; opt.textContent = t;
+                if (t === data.transaction_type) opt.selected = true;
+                typeSel.appendChild(opt);
+            });
+
+            const dateFrom = '{{ date_from or "" }}';
+            const dateTo   = '{{ date_to or "" }}';
+            const params   = new URLSearchParams();
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo)   params.append('date_to',   dateTo);
+            document.getElementById('fwForm').action = `/workflow/edit/${source}/${refNum}?${params.toString()}`;
+
+            updateFwAmount();
+            document.getElementById('editFixingWfModal').classList.add('active');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error loading fixing data. Please try again.');
+        });
+}
+
+function closeFixingWfModal() {
+    document.getElementById('editFixingWfModal').classList.remove('active');
+}
+
+function updateFwAmount() {
+    const qty   = parseFloat(document.getElementById('fwQuantity').value)      || 0;
+    const price = parseFloat(document.getElementById('fwPrice').value)          || 0;
+    const brok  = parseFloat(document.getElementById('fwBrokerage').value)      || 0;
+    const comm  = parseFloat(document.getElementById('fwCommission').value)     || 0;
+    const fc    = parseFloat(document.getElementById('fwForeignCharge').value)  || 0;
+    const sd    = parseFloat(document.getElementById('fwStampDuty').value)      || 0;
+    const misc  = parseFloat(document.getElementById('fwMisc').value)           || 0;
+    const charges = brok + comm + fc + sd + misc;
+    const net     = qty * price + charges;
+    function fmt(v) {
+        const abs = Math.abs(v).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+        return v < 0 ? '(' + abs + ')' : abs;
+    }
+    document.getElementById('fwTotalCharges').textContent = fmt(charges);
+    const netEl = document.getElementById('fwNetAmount');
+    netEl.textContent = fmt(net);
+    netEl.style.color = net < 0 ? 'var(--danger)' : 'var(--text)';
+}
 </script>
 
 <!-- Charges Edit Modal -->
@@ -691,97 +1116,353 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- Edit Transaction Modal -->
-<div id="editModal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
-    <div style="background:#ffffff; border-radius:8px; max-width:900px; width:90%; max-height:90vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.5); opacity:1;">
-        <div style="padding:1.5rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-            <h2 id="editModalTitle" style="margin:0; font-size:1.3rem;">Edit Transaction</h2>
-            <button onclick="closeEditModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title" id="editModalTitle">Edit Transaction</span>
+            <button type="button" class="modal-close" onclick="closeEditModal()">&times;</button>
         </div>
+        <form method="post" id="editForm" action="">
 
-        <div style="padding:1.5rem;">
-            <form id="editForm" method="post" action="">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" id="editTradeDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Value Date</label>
+                    <input type="date" name="value_date" id="editValueDate" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select name="bank_ref" id="editBankRef" required>
+                        <option value="">— select —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Stock</label>
+                    <select name="code_ref" id="editCodeRef" required>
+                        <option value="">— select —</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Transaction Type</label>
+                    <select name="transaction_type" id="editTransactionType" required>
+                        <option value="">— select —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" step="1" name="quantity" id="editQuantity" required oninput="updateEditAmount()">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" step="0.0001" name="price" id="editPrice" required oninput="updateEditAmount()">
+                </div>
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="text" id="editAmount" readonly style="background:var(--bg-secondary);">
+                </div>
+            </div>
+
+            <div id="editChargesSection" class="form-section">
+                <div class="form-section-label">Charges</div>
+                <div class="form-row-3">
                     <div class="form-group">
-                        <label>Trade Date</label>
-                        <input type="date" name="trade_date" id="editTradeDate" class="form-control" required>
+                        <label>Brokerage</label>
+                        <input type="number" step="0.01" name="brokerage" id="editBrokerage" value="0" oninput="updateEditAmount()">
                     </div>
                     <div class="form-group">
-                        <label>Value Date</label>
-                        <input type="date" name="value_date" id="editValueDate" class="form-control" required>
+                        <label>Commission</label>
+                        <input type="number" step="0.01" name="commission" id="editCommission" value="0" oninput="updateEditAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Foreign Charge</label>
+                        <input type="number" step="0.01" name="foreign_charge" id="editForeignCharge" value="0" oninput="updateEditAmount()">
                     </div>
                 </div>
-
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                <div class="form-row">
                     <div class="form-group">
-                        <label>Account</label>
-                        <select name="bank_ref" id="editBankRef" class="form-control" required>
-                            <option value="">-- Select Account --</option>
-                        </select>
+                        <label>Stamp Duty</label>
+                        <input type="number" step="0.01" name="stamp_duty" id="editStampDuty" value="0" oninput="updateEditAmount()">
                     </div>
                     <div class="form-group">
-                        <label>Stock</label>
-                        <select name="code_ref" id="editCodeRef" class="form-control" required>
-                            <option value="">-- Select Stock --</option>
-                        </select>
+                        <label>Misc</label>
+                        <input type="number" step="0.01" name="misc" id="editMisc" value="0" oninput="updateEditAmount()">
                     </div>
                 </div>
+            </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
-                    <div class="form-group">
-                        <label>Transaction Type</label>
-                        <select name="transaction_type" id="editTransactionType" class="form-control" required>
-                            <option value="">-- Select Type --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Quantity</label>
-                        <input type="number" step="1" name="quantity" id="editQuantity" class="form-control" required>
-                    </div>
+            <div class="modal-computed">
+                <div class="modal-computed-item">
+                    <label>Net Amount</label>
+                    <span class="computed-value" id="editNetAmount">0.00</span>
                 </div>
+            </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
-                    <div class="form-group">
-                        <label>Price</label>
-                        <input type="number" step="0.0001" name="price" id="editPrice" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Amount (Calculated)</label>
-                        <input type="text" id="editAmount" class="form-control" readonly style="background:#f5f5f5;">
-                    </div>
-                </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-success">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-                <div id="editChargesSection" style="border-top:1px solid var(--border); padding-top:1.5rem; margin-top:1.5rem;">
-                    <h3 style="font-size:1.1rem; margin-bottom:1rem;">Charges</h3>
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
-                        <div class="form-group">
-                            <label>Brokerage</label>
-                            <input type="number" step="0.01" name="brokerage" id="editBrokerage" class="form-control" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>Commission</label>
-                            <input type="number" step="0.01" name="commission" id="editCommission" class="form-control" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>Foreign Charge</label>
-                            <input type="number" step="0.01" name="foreign_charge" id="editForeignCharge" class="form-control" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>Stamp Duty</label>
-                            <input type="number" step="0.01" name="stamp_duty" id="editStampDuty" class="form-control" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>Misc</label>
-                            <input type="number" step="0.01" name="misc" id="editMisc" class="form-control" value="0">
-                        </div>
-                    </div>
-                </div>
-
-                <div style="display:flex;gap:0.5rem;margin-top:1.5rem;">
-                    <button type="submit" class="btn btn-primary">Save Transaction</button>
-                    <button type="button" onclick="closeEditModal()" class="btn btn-outline">Cancel</button>
-                </div>
-            </form>
+{# ── Fixing Edit Modal (ACCU / DECU) ─────────────────────────────────── #}
+<div class="modal-overlay" id="editFixingWfModal" onclick="if(event.target===this)closeFixingWfModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title" id="fwModalTitle">Edit Fixing</span>
+            <button type="button" class="modal-close" onclick="closeFixingWfModal()">&times;</button>
         </div>
+        <form method="post" id="fwForm" action="">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" id="fwTradeDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Value Date</label>
+                    <input type="date" name="value_date" id="fwValueDate" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select name="bank_ref" id="fwBankRef" required>
+                        <option value="">— select —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Stock</label>
+                    <select name="code_ref" id="fwCodeRef" required>
+                        <option value="">— select —</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Transaction Type</label>
+                <select name="transaction_type" id="fwTransactionType" required>
+                    <option value="">— select —</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" step="1" name="quantity" id="fwQuantity" required oninput="updateFwAmount()">
+                </div>
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" step="0.0001" name="price" id="fwPrice" required oninput="updateFwAmount()">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-section-label">Charges</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Brokerage</label>
+                        <input type="number" step="0.01" name="brokerage" id="fwBrokerage" value="0" oninput="updateFwAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Commission</label>
+                        <input type="number" step="0.01" name="commission" id="fwCommission" value="0" oninput="updateFwAmount()">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Foreign Charge</label>
+                        <input type="number" step="0.01" name="foreign_charge" id="fwForeignCharge" value="0" oninput="updateFwAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Stamp Duty</label>
+                        <input type="number" step="0.01" name="stamp_duty" id="fwStampDuty" value="0" oninput="updateFwAmount()">
+                    </div>
+                </div>
+                <div class="form-group" style="max-width:270px">
+                    <label>Miscellaneous</label>
+                    <input type="number" step="0.01" name="misc" id="fwMisc" value="0" oninput="updateFwAmount()">
+                </div>
+            </div>
+
+            <div class="modal-computed">
+                <div class="modal-computed-item">
+                    <label>Total Charges</label>
+                    <span class="computed-value" id="fwTotalCharges">0.00</span>
+                </div>
+                <div class="modal-computed-item">
+                    <label>Net Amount</label>
+                    <span class="computed-value" id="fwNetAmount">0.00</span>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-success">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="closeFixingWfModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Contract Edit Modal (ACCU / DECU term sheet) ────────────────────── #}
+<div class="modal-overlay" id="editContractWfModal" onclick="if(event.target===this)closeContractWfModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title" id="cwModalTitle">Edit Contract</span>
+            <button type="button" class="modal-close" onclick="closeContractWfModal()">&times;</button>
+        </div>
+        <form method="post" id="cwForm" action="">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select name="bank_ref" id="cwBankRef" required>
+                        <option value="">— select —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Reference</label>
+                    <input type="text" name="reference" id="cwReference">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="transaction_type" id="cwTransactionType" required>
+                        <option value="ACCU">Accumulator</option>
+                        <option value="DECU">Decumulator</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="cwStatus">
+                        <option value="active">Active</option>
+                        <option value="KO">KO</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Underlying Stock</label>
+                <select name="code_ref" id="cwCodeRef" required>
+                    <option value="">— select —</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" id="cwTradeDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="value_date" id="cwStartDate" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Tenor</label>
+                    <select name="tenor" id="cwTenor">
+                        <option value="">— select —</option>
+                        {% for n in range(1, 16) %}
+                        <option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Frequency</label>
+                    <select name="frequency" id="cwFrequency">
+                        <option value="">— select —</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="bi-monthly">Bi-Weekly</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Spot</label>
+                    <input type="number" step="0.0001" name="price" id="cwSpot" required oninput="updateCwPrices()">
+                </div>
+                <div class="form-group">
+                    <label>Daily Shares</label>
+                    <input type="number" step="1" name="quantity" id="cwDailyShares" required>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-section-label">Rates</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Strike Rate (%)</label>
+                        <input type="number" step="0.01" name="strike_rate" id="cwStrikeRate" oninput="updateCwPrices()">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:0.74rem;opacity:0.7;">Strike Price</label>
+                        <input type="text" id="cwStrikePrice" readonly tabindex="-1"
+                               style="background:var(--bg-secondary);font-weight:600;">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>KO Rate (%)</label>
+                        <input type="number" step="0.01" name="ko_rate" id="cwKoRate" oninput="updateCwPrices()">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:0.74rem;opacity:0.7;">KO Price</label>
+                        <input type="text" id="cwKoPrice" readonly tabindex="-1"
+                               style="background:var(--bg-secondary);font-weight:600;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Leveraged</label>
+                    <select name="leveraged" id="cwLeveraged">
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>GTD</label>
+                    <select name="gtd" id="cwGtd">
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                        {% for n in range(1, 5) %}
+                        <option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Bank Reference No.</label>
+                <input type="text" name="bank_doc" id="cwBankDoc">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-success">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="closeContractWfModal()">Cancel</button>
+            </div>
+        </form>
     </div>
 </div>
 

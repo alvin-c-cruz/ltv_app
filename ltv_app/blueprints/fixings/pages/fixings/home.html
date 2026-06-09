@@ -15,6 +15,7 @@
         </div>
     </form>
     <div class="toolbar-actions" style="margin-left:auto;">
+        <button type="button" class="btn btn-primary" onclick="openAddModal('{{ trade_date }}')">Add Fixing</button>
         <a href="{{ url_for('fixings.generate', trade_date=trade_date) }}" class="btn btn-success">Generate</a>
         {% if not has_fixings %}
         <a href="{{ url_for('fixings.record', trade_date=trade_date) }}" class="btn btn-outline"
@@ -120,7 +121,7 @@
 <div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal()">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">Edit Fixing <span id="modal-ref"></span></span>
+            <span class="modal-title" id="modal-title">Edit Fixing</span>
             <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
         </div>
         <form method="post" id="editFixingForm" action="">
@@ -229,7 +230,6 @@
 <script>
 function openFixingModal(d) {
     const isLocked = d.locked || false;
-    document.getElementById('modal-ref').textContent = '#' + d.id;
     document.getElementById('editFixingForm').action = '/fixings/' + d.id + '/edit';
     document.getElementById('m_trade_date').value = d.trade_date;
     document.getElementById('m_value_date').value = d.value_date;
@@ -252,23 +252,16 @@ function openFixingModal(d) {
         input.disabled = isLocked;
     });
 
-    // Update modal title
-    const modalTitleEl = document.querySelector('#editModal .modal-title');
-    if (modalTitleEl) {
-        modalTitleEl.textContent = isLocked ? 'View Fixing #' + d.id : 'Edit Fixing #' + d.id;
-    }
+    document.getElementById('modal-title').textContent = isLocked ? 'View Fixing #' + d.id : 'Edit Fixing #' + d.id;
 
     document.getElementById('editModal').classList.add('active');
 }
 
 function closeModal() {
     document.getElementById('editModal').classList.remove('active');
-    // Re-enable all form inputs when closing modal
     const form = document.getElementById('editFixingForm');
-    const inputs = form.querySelectorAll('input, select, button[type="submit"]');
-    inputs.forEach(input => {
-        input.disabled = false;
-    });
+    form.querySelectorAll('input, select, button[type="submit"]').forEach(el => el.disabled = false);
+    form.action = '';  // reset; openFixingModal sets it per-row
 }
 
 function computeTotals() {
@@ -292,6 +285,29 @@ function computeTotals() {
     var netEl = document.getElementById('m_net_amount');
     netEl.textContent  = fmt(netAmount);
     netEl.style.color  = netAmount < 0 ? 'var(--danger)' : 'var(--text)';
+}
+
+function openAddModal(tradeDate) {
+    document.getElementById('modal-title').textContent = 'Add Fixing';
+    document.getElementById('editFixingForm').action = '{{ url_for("fixings.add") }}';
+    document.getElementById('m_trade_date').value = tradeDate || '';
+    document.getElementById('m_value_date').value = '';
+    document.getElementById('m_bank_ref').value = '';
+    document.getElementById('m_code_ref').value = '';
+    document.getElementById('m_transaction_type').value = '';
+    document.getElementById('m_quantity').value = '';
+    document.getElementById('m_price').value = '';
+    document.getElementById('m_brokerage').value = '0';
+    document.getElementById('m_commission').value = '0';
+    document.getElementById('m_foreign_charge').value = '0';
+    document.getElementById('m_stamp_duty').value = '0';
+    document.getElementById('m_misc').value = '0';
+    computeTotals();
+
+    const form = document.getElementById('editFixingForm');
+    form.querySelectorAll('input, select, button[type="submit"]').forEach(el => el.disabled = false);
+
+    document.getElementById('editModal').classList.add('active');
 }
 
 document.addEventListener('keydown', function(e) {

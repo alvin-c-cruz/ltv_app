@@ -16,7 +16,10 @@ def home():
     date_form = DateForm()
     db = get_db()
 
-    trade_date = str(date_form.trade_date.data)[:10]
+    if request.method == 'GET' and request.args.get('trade_date'):
+        trade_date = request.args.get('trade_date')
+    else:
+        trade_date = str(date_form.trade_date.data)[:10]
 
     sql = "SELECT " \
           "     T.ref_num as id, " \
@@ -167,6 +170,29 @@ def unlock(ref_num):
     db.commit()
 
     flash(f"Transaction #{ref_num} has been unlocked.")
+    return redirect(url_for('fixings.home'))
+
+
+@bp.route('/add', methods=['POST'])
+@login_required
+def add():
+    db = get_db()
+    transaction = Transaction(db=db)
+    transaction.trade_date    = request.form["trade_date"]
+    transaction.value_date    = request.form["value_date"]
+    transaction.bank_ref      = int(request.form["bank_ref"])
+    transaction.code_ref      = int(request.form["code_ref"])
+    transaction.transaction_type = request.form["transaction_type"]
+    transaction.quantity      = int(request.form["quantity"])
+    transaction.price         = float(request.form["price"])
+    transaction.brokerage     = float(request.form.get("brokerage")     or 0)
+    transaction.commission    = float(request.form.get("commission")    or 0)
+    transaction.foreign_charge= float(request.form.get("foreign_charge")or 0)
+    transaction.stamp_duty    = float(request.form.get("stamp_duty")    or 0)
+    transaction.misc          = float(request.form.get("misc")          or 0)
+    transaction.locked        = 0
+    transaction.save()
+    flash(f"Fixing transaction added for {transaction.trade_date}.")
     return redirect(url_for('fixings.home'))
 
 

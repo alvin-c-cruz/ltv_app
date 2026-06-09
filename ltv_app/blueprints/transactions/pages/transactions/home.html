@@ -65,7 +65,7 @@
                     {% endif %}
                 {% else %}
                     {# Unlocked: Edit and Delete #}
-                    <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="openEditContractModal({{ ts.id }})">Edit</button>
                     <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
                        onclick="return confirm('Delete this contract?')">Delete</a>
                 {% endif %}
@@ -120,7 +120,7 @@
                     {% endif %}
                 {% else %}
                     {# Unlocked: Edit and Delete #}
-                    <a href="{{ url_for('term_sheet.edit', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="openEditContractModal({{ ts.id }})">Edit</button>
                     <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
                        onclick="return confirm('Delete this contract?')">Delete</a>
                 {% endif %}
@@ -406,100 +406,115 @@
 
 {# ── + CONTRACT MODAL ─────────────────────────────────────────── #}
 <div class="modal-overlay" id="contractModal">
-<div class="modal" style="max-width:680px;padding:0;max-height:90vh;overflow-y:auto;">
-    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);position:sticky;top:0;background:var(--surface);z-index:1;">
+<div class="modal" style="max-width:720px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
         <span class="modal-title">Add Contract (Accumulator / Decumulator)</span>
         <button class="modal-close" onclick="closeTxnModal('contractModal')">&times;</button>
     </div>
     <form method="post" action="{{ url_for('term_sheet.add') }}">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
-            <div class="form-group">
-                <label>Account</label>
-                <select name="bank_ref" required>{{ bank_options() }}</select>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+            {# Row 1: Account + Derivative Type #}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select name="bank_ref" required>{{ bank_options() }}</select>
+                </div>
+                <div class="form-group">
+                    <label>Derivative Type</label>
+                    <select name="transaction_type" required>
+                        <option value=""></option>
+                        <option value="ACCU">Accumulator</option>
+                        <option value="DECU">Decumulator</option>
+                    </select>
+                </div>
             </div>
+            {# Row 2: Underlying Stock (full width) #}
             <div class="form-group">
-                <label>Derivative Type</label>
-                <select name="transaction_type" required>
-                    <option value=""></option>
-                    <option value="ACCU">Accumulator</option>
-                    <option value="DECU">Decumulator</option>
-                </select>
-            </div>
-            <div class="form-group" style="grid-column:1/-1">
                 <label>Underlying Stock</label>
                 <select name="code_ref" required>{{ stock_options() }}</select>
             </div>
-            <div class="form-group">
-                <label>Trade Date</label>
-                <input type="date" name="trade_date" class="modal-date" required>
+            {# Row 3: Dates + Contract Structure #}
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" class="modal-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" class="modal-start-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Tenor</label>
+                    <select name="tenor" required>
+                        <option value=""></option>
+                        {% for n in range(1,16) %}<option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Frequency</label>
+                    <select name="frequency" required>
+                        <option value=""></option>
+                        <option value="monthly">Monthly</option>
+                        <option value="bi-monthly">Bi-Weekly</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Start Date</label>
-                <input type="date" name="start_date" class="modal-start-date" required>
+            {# Row 4: Pricing #}
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Spot</label>
+                    <input type="text" name="spot" id="contract-spot" autocomplete="off" required>
+                </div>
+                <div class="form-group">
+                    <label>Strike Rate (%)</label>
+                    <input type="text" name="strike_rate" id="contract-strike-rate" autocomplete="off" required>
+                    <small id="contract-strike-price" style="color:var(--accent);font-weight:600;min-height:1.2em;display:block;margin-top:3px;"></small>
+                </div>
+                <div class="form-group">
+                    <label>KO Rate (%)</label>
+                    <input type="text" name="ko_rate" id="contract-ko-rate" autocomplete="off" required>
+                    <small id="contract-ko-price" style="color:var(--accent);font-weight:600;min-height:1.2em;display:block;margin-top:3px;"></small>
+                </div>
+                <div class="form-group">
+                    <label>Daily Shares</label>
+                    <input type="text" name="daily_shares" autocomplete="off" required>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Spot</label>
-                <input type="text" name="spot" autocomplete="off" required>
-            </div>
-            <div class="form-group">
-                <label>Strike Rate (%)</label>
-                <input type="text" name="strike_rate" autocomplete="off" required>
-            </div>
-            <div class="form-group">
-                <label>KO Rate (%)</label>
-                <input type="text" name="ko_rate" autocomplete="off" required>
-            </div>
-            <div class="form-group">
-                <label>Daily Shares</label>
-                <input type="text" name="daily_shares" autocomplete="off" required>
-            </div>
-            <div class="form-group">
-                <label>Tenor</label>
-                <select name="tenor" required>
-                    <option value=""></option>
-                    {% for n in range(1,16) %}<option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Frequency</label>
-                <select name="frequency" required>
-                    <option value=""></option>
-                    <option value="monthly">Monthly</option>
-                    <option value="bi-monthly">Bi-Weekly</option>
-                    <option value="weekly">Weekly</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Leveraged</label>
-                <select name="leveraged" required>
-                    <option value=""></option>
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Guaranteed (GTD)</label>
-                <select name="gtd" required>
-                    <option value=""></option>
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                    <option value="1m">1 month</option>
-                    <option value="2m">2 months</option>
-                    <option value="3m">3 months</option>
-                    <option value="4m">4 months</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Status</label>
-                <select name="status" required>
-                    <option value="active" selected>Active</option>
-                    <option value="KO">KO</option>
-                    <option value="inactive">Inactive</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Bank Reference No.</label>
-                <input type="text" name="bank_doc" autocomplete="off">
+            {# Row 5: Admin #}
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Leveraged</label>
+                    <select name="leveraged" required>
+                        <option value=""></option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Guaranteed (GTD)</label>
+                    <select name="gtd" required>
+                        <option value=""></option>
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                        <option value="1m">1 month</option>
+                        <option value="2m">2 months</option>
+                        <option value="3m">3 months</option>
+                        <option value="4m">4 months</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" required>
+                        <option value="active" selected>Active</option>
+                        <option value="KO">KO</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Bank Reference No.</label>
+                    <input type="text" name="bank_doc" autocomplete="off">
+                </div>
             </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
@@ -510,9 +525,135 @@
 </div>
 </div>
 
+{# ── EDIT CONTRACT MODAL ──────────────────────────────────────── #}
+<div class="modal-overlay" id="editContractModal">
+<div class="modal" style="max-width:720px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Edit Contract (Accumulator / Decumulator)</span>
+        <button class="modal-close" onclick="closeTxnModal('editContractModal')">&times;</button>
+    </div>
+    <form method="post" id="editContractForm" action="">
+        <input type="hidden" name="reference" id="edit-reference">
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select name="bank_ref" id="edit-bank-ref" required>{{ bank_options() }}</select>
+                </div>
+                <div class="form-group">
+                    <label>Derivative Type</label>
+                    <select name="transaction_type" id="edit-transaction-type" required>
+                        <option value="ACCU">Accumulator</option>
+                        <option value="DECU">Decumulator</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Underlying Stock</label>
+                <select name="code_ref" id="edit-code-ref" required>{{ stock_options() }}</select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Trade Date</label>
+                    <input type="date" name="trade_date" id="edit-trade-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" id="edit-start-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Tenor</label>
+                    <select name="tenor" id="edit-tenor" required>
+                        <option value=""></option>
+                        {% for n in range(1,16) %}<option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Frequency</label>
+                    <select name="frequency" id="edit-frequency" required>
+                        <option value="monthly">Monthly</option>
+                        <option value="bi-monthly">Bi-Weekly</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Spot</label>
+                    <input type="text" name="spot" id="edit-spot" autocomplete="off" required>
+                </div>
+                <div class="form-group">
+                    <label>Strike Rate (%)</label>
+                    <input type="text" name="strike_rate" id="edit-strike-rate" autocomplete="off" required>
+                    <small id="edit-strike-price" style="color:var(--accent);font-weight:600;min-height:1.2em;display:block;margin-top:3px;"></small>
+                </div>
+                <div class="form-group">
+                    <label>KO Rate (%)</label>
+                    <input type="text" name="ko_rate" id="edit-ko-rate" autocomplete="off" required>
+                    <small id="edit-ko-price" style="color:var(--accent);font-weight:600;min-height:1.2em;display:block;margin-top:3px;"></small>
+                </div>
+                <div class="form-group">
+                    <label>Daily Shares</label>
+                    <input type="text" name="daily_shares" id="edit-daily-shares" autocomplete="off" required>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Leveraged</label>
+                    <select name="leveraged" id="edit-leveraged" required>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Guaranteed (GTD)</label>
+                    <select name="gtd" id="edit-gtd" required>
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                        <option value="1m">1 month</option>
+                        <option value="2m">2 months</option>
+                        <option value="3m">3 months</option>
+                        <option value="4m">4 months</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" id="edit-status" required>
+                        <option value="active">Active</option>
+                        <option value="KO">KO</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Bank Reference No.</label>
+                    <input type="text" name="bank_doc" id="edit-bank-doc" autocomplete="off">
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('editContractModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
 <script>
 var _today = '{{ trade_date }}';
 var _sdStr = (function(){ var d=new Date(_today); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
+
+function addBusinessDays(dateStr, days) {
+    var d = new Date(dateStr + 'T00:00:00');
+    var added = 0;
+    while (added < days) {
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() !== 0 && d.getDay() !== 6) added++;
+    }
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
 
 function updateValueDate(modal) {
     var stockSelect = modal.querySelector('select[name="code_ref"]');
@@ -525,7 +666,7 @@ function updateValueDate(modal) {
     var tradeDate = tradeDateInput.value;
 
     if (codeRef && tradeDate) {
-        fetch('/trades/api/next-banking-day?code_ref=' + codeRef + '&trade_date=' + tradeDate)
+        fetch('/trades/api/next-banking-day?code_ref=' + codeRef + '&trade_date=' + tradeDate + '&days=2')
             .then(function(r){ return r.json(); })
             .then(function(data){
                 if (data.value_date) {
@@ -533,6 +674,8 @@ function updateValueDate(modal) {
                 }
             })
             .catch(function(err){ console.error('Error calculating value date:', err); });
+    } else if (tradeDate) {
+        valueDateInput.value = addBusinessDays(tradeDate, 2);
     }
 }
 
@@ -552,12 +695,12 @@ function openTxnModal(id) {
         tradeDateInput.addEventListener('change', function(){ updateValueDate(m); });
     }
 
-    // Initial value date calculation if stock is already selected
+    // Default value date: T+2 business days from trade date
+    m.querySelectorAll('.modal-value-date').forEach(function(el){ el.value = addBusinessDays(_today, 2); });
+
+    // Refine with holiday data if stock is already selected
     if (stockSelect && stockSelect.value) {
         updateValueDate(m);
-    } else {
-        // Default: set to trade date initially
-        m.querySelectorAll('.modal-value-date').forEach(function(el){ el.value = _today; });
     }
 
     m.classList.add('active');
@@ -571,6 +714,59 @@ document.addEventListener('keydown', function(e){
 document.querySelectorAll('.modal-overlay').forEach(function(m){
     m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('active'); });
 });
+
+function wireComputedPrices(spotId, strikeRateId, koRateId, strikePxId, koPxId) {
+    var spotEl       = document.getElementById(spotId);
+    var strikeRateEl = document.getElementById(strikeRateId);
+    var koRateEl     = document.getElementById(koRateId);
+    var strikePxEl   = document.getElementById(strikePxId);
+    var koPxEl       = document.getElementById(koPxId);
+
+    function updatePrices() {
+        var spot       = parseFloat(spotEl.value);
+        var strikeRate = parseFloat(strikeRateEl.value);
+        var koRate     = parseFloat(koRateEl.value);
+        strikePxEl.textContent = (!isNaN(spot) && !isNaN(strikeRate))
+            ? '= ' + (spot * strikeRate / 100).toFixed(4) : '';
+        koPxEl.textContent = (!isNaN(spot) && !isNaN(koRate))
+            ? '= ' + (spot * koRate / 100).toFixed(4) : '';
+    }
+
+    [spotEl, strikeRateEl, koRateEl].forEach(function(el) {
+        el.addEventListener('input', updatePrices);
+    });
+    updatePrices();
+}
+
+wireComputedPrices('contract-spot', 'contract-strike-rate', 'contract-ko-rate', 'contract-strike-price', 'contract-ko-price');
+wireComputedPrices('edit-spot', 'edit-strike-rate', 'edit-ko-rate', 'edit-strike-price', 'edit-ko-price');
+
+function openEditContractModal(contractRef) {
+    fetch('/term-sheet/' + contractRef + '/data')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            document.getElementById('editContractForm').action = '/term-sheet/edit/' + contractRef;
+            document.getElementById('edit-reference').value       = d.reference;
+            document.getElementById('edit-bank-ref').value        = d.bank_ref;
+            document.getElementById('edit-code-ref').value        = d.code_ref;
+            document.getElementById('edit-transaction-type').value = d.transaction_type;
+            document.getElementById('edit-trade-date').value      = d.trade_date;
+            document.getElementById('edit-start-date').value      = d.start_date;
+            document.getElementById('edit-spot').value            = d.spot;
+            document.getElementById('edit-strike-rate').value     = d.strike_rate;
+            document.getElementById('edit-ko-rate').value         = d.ko_rate;
+            document.getElementById('edit-daily-shares').value    = d.daily_shares;
+            document.getElementById('edit-tenor').value           = d.tenor;
+            document.getElementById('edit-frequency').value       = d.frequency;
+            document.getElementById('edit-leveraged').value       = d.leveraged;
+            document.getElementById('edit-gtd').value             = d.gtd;
+            document.getElementById('edit-status').value          = d.status;
+            document.getElementById('edit-bank-doc').value        = d.bank_doc || '';
+            wireComputedPrices('edit-spot', 'edit-strike-rate', 'edit-ko-rate', 'edit-strike-price', 'edit-ko-price');
+            document.getElementById('editContractModal').classList.add('active');
+        })
+        .catch(function(err) { console.error('Failed to load contract:', err); });
+}
 </script>
 
 {% endblock %}

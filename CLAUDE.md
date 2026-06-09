@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Flask-based stock portfolio management application for tracking Long-Term Value (LTV) investments. It manages stock transactions (spot and derivative contracts), calculates P&L, tracks positions across multiple bank accounts, and generates financial reports.
 
-**Tech Stack:** Python 3, Flask 4.0.6, SQLite, Jinja2, Pandas, OpenPyXL
+**Tech Stack:** Python 3, Flask, SQLite, Jinja2, Pandas, OpenPyXL
 
 ## Project Scope
 
@@ -47,11 +47,13 @@ The app uses a **modular blueprint architecture** with 32+ blueprints, each hand
 
 ```
 flask_app.py → create_app() (ltv_app/__init__.py)
-    ├─ Registers all blueprints
+    ├─ Registers all blueprints (auto-discovered via bp attribute)
     ├─ Configures SQLite database connection
     ├─ Sets up Flask-Login authentication
-    └─ Loads VERSION file (4.0.6)
+    └─ Loads VERSION file → app_version Jinja2 global
 ```
+
+**Blueprint auto-discovery:** `create_app()` iterates `dir(blueprints)`, finds submodules that expose a `bp` attribute, and registers them automatically. When adding a new blueprint, ensure `views.py` defines `bp = Blueprint(...)` at module level and the package `__init__.py` imports it.
 
 **Key blueprints:**
 - `auth/` - User authentication (login/logout)
@@ -92,7 +94,9 @@ blueprints/{name}/
 - `tbl_bank_account` - Bank accounts with transaction basis
 - `tbl_code` - Stock codes (company_name, stock_name, currency)
 - `tbl_transaction` - Spot transactions (trade_date, bank_ref, code_ref, quantity, price, charges)
+- `tbl_transaction_short` - Short sell transactions (separate table from spot)
 - `tbl_stock_contract` - Derivative contracts (daily_shares, leveraged, spot, strike_rate, ko_rate)
+- `tbl_stock_contract_period` - Contract period records
 - `tbl_stock_price` - Historical stock prices
 - `tbl_transaction_type` - Reference table (Buy/Sell/Transfer/Dividend)
 - `tbl_holiday` - Market holidays
@@ -194,16 +198,22 @@ Example: HKD Margin report (`hkd_margin/views.py`) generates Excel with position
 
 ### Testing with Database
 
-Tests use isolated database created in `tests/functional/conftest.py`:
-- `@pytest.fixture` `db_conn` provides pre-populated test database
-- Schema includes all 13 tables with reference data
-- Transaction data, stock codes, and bank accounts pre-seeded
+There are two conftest files with different fixture names:
+
+**`tests/functional/conftest.py`** (use for new tests):
+- `client` - Unauthenticated client against isolated temp SQLite database
+- `auth_client` - Logged in as `staff_user`/`staffpass` (level 1, staff role)
+- `superuser_client` - Logged in as `super_user`/`superpass` (level 1, superuser role)
+- `db_conn` - Direct database connection for assertions
+- Seed data: 1 currency (HKD), 2 banks, 1 stock code (700), 7 transaction types
+
+**`conftest.py`** (root, legacy fixtures):
+- `test_client` - Unauthenticated
+- `test_client_logged_in` - Logged in as `alvin`/`saguiguilid` against live database
 
 When writing tests:
 ```python
 def test_something(auth_client, db_conn):
-    # auth_client = authenticated test client
-    # db_conn = test database connection
     response = auth_client.get('/some-route')
     assert response.status_code == 200
 ```
@@ -223,16 +233,6 @@ SECRET_KEY = 'do-i-really-need-this'
 - `ph_now()` - Current Philippine datetime
 - `ph_today()` - Current Philippine date
 - `app_version` - From VERSION file
-
-## Recent Development Focus
-
-Recent commits show active development on:
-- **Database consolidation** (2026-06-05) - Unified ltv_app and localhost/ to single database
-- **LTV Stocks Excel improvements** - Ported legacy features (active contract count, bank reference, stock colors, date range)
-- Stock price viewing (last 10 trading days grid format)
-- CSV upload date format handling
-- Stock price data quality (string-to-float conversions)
-- HKD margin calculation edge cases (stocks with fewer than 3 price records)
 
 ## Excel Template System
 
@@ -304,32 +304,27 @@ See `ltv_app/blueprints/fixings/extensions/download_fixings.py` for a complete e
 
 ### Version Management Workflow
 
-**CRITICAL:** Always update VERSION file before pushing to GitHub:
+**CRITICAL:** Always update VERSION file before pushing to GitHub. Use `push.sh` to auto-increment the patch version:
 
 ```bash
-# 1. Check current version
-cat VERSION
+# Auto-increment patch version (e.g. 4.0.8 → 4.0.9) and print the new version
+bash push.sh
 
-# 2. Update to new version
-echo "4.0.7" > VERSION
-
-# 3. Commit version bump
+# Then commit the bump
 git add VERSION
-git commit -m "Bump version to 4.0.7"
-
-# 4. Push to GitHub
+git commit -m "Bump version to $(cat VERSION)"
 git push origin main
 ```
 
-**Why:** The VERSION file content is displayed in the application navbar (top-left). Users see "LTV v4.0.7" after the app restarts. This helps track deployed versions and identify which code version is running.
+Or manually edit VERSION if bumping major/minor. The VERSION content is displayed in the application navbar (top-left) as "LTV vX.Y.Z".
 
 See [docs/git_repository_structure.md](docs/git_repository_structure.md) for detailed repository structure and commit workflow.
 
 ## Business Logic Extensions
 
 Complex calculations are isolated in extensions:
-- `transactions/extensions/TransactionSummary` - Transaction aggregations
-- `extensions/Forecast/` - Portfolio forecasting and margin calculations
+- `ltv_app/blueprints/transactions/extensions/TransactionSummary` - Transaction aggregations
+- `ltv_app/extensions/Forecast/` - Portfolio forecasting and margin calculations (top-level extensions, not inside a blueprint)
 - `localhost/modules/fixings.py` - FX rate fixing calculations
 - `localhost/modules/term_sheet.py` - Derivative contract pricing
 

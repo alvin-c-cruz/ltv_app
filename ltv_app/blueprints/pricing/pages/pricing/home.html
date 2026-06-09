@@ -1,50 +1,117 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 style="color: red">Under development</h1>
-<div class="container">
-    <form id="frm_pricing" action="{{ url_for('pricing.home') }}" method="post" class="form">
-        <h1>Pricing</h1>
+<div class="container" style="max-width: 860px;">
+    <h2 style="margin-bottom: 1.2rem; color: var(--text-primary);">Pricing</h2>
 
-        <!-- BANKS -->
-        <div class="row p-2">
-            <div class="col-6">
-                <label for="bank_code">Bank</label>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div style="margin-bottom: 0.75rem; padding: 0.6rem 0.9rem; border-radius: 6px;
+        background: {% if category == 'danger' %}#f8d7da{% elif category == 'warning' %}#fff3cd{% else %}#d1ecf1{% endif %};
+        border: 1px solid {% if category == 'danger' %}#f5c6cb{% elif category == 'warning' %}#ffc107{% else %}#bee5eb{% endif %};
+        color: {% if category == 'danger' %}#721c24{% elif category == 'warning' %}#856404{% else %}#0c5460{% endif %};">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endwith %}
+
+    <form id="frm_pricing" action="{{ url_for('pricing.home') }}" method="post">
+
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+            <div class="form-group" style="flex: 2; min-width: 180px;">
+                <label for="stock_name">Stock Name</label>
+                <input type="text" name="stock_name" id="stock_name"
+                       value="{{ form.stock_name or '' }}"
+                       placeholder="e.g. 700 HK Tencent" autocomplete="off">
             </div>
-            <div class="col-6">
-                <select name="bank_code" id="bank" class="form-select"
-                        onchange="document.getElementById('frm_pricing').submit()"
-                        required autofocus>
-                    <option value=""></option>
-                    {% for bank_code, bank_name in banks %}
-                        {% if form.bank_code == bank_code %}
-                    <option value="{{ bank_code }}" selected>{{ bank_name }}</option>
-                        {% else %}
-                    <option value="{{ bank_code }}">{{ bank_name }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
+            <div class="form-group" style="flex: 1; min-width: 120px;">
+                <label for="spot_price">Spot Price</label>
+                <input type="number" name="spot_price" id="spot_price" step="0.001"
+                       value="{{ form.spot_price or '' }}"
+                       placeholder="e.g. 450.40" autocomplete="off">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 140px;">
+                <label for="date_str">Date</label>
+                <input type="date" name="date_str" id="date_str"
+                       value="{{ form.date_str or today }}">
             </div>
         </div>
 
-        <textarea name="textarea_data" class="form-control p-2 mt-2"
-                  style="resize: none; height: 200px;">{{ form.textarea_data }}</textarea>
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label for="bank_code">Bank / Issuer</label>
+            <select name="bank_code" id="bank_code" style="max-width: 300px;">
+                <option value="">— select —</option>
+                {% for bk, bname in banks %}
+                <option value="{{ bk }}"{% if form.bank_code == bk %} selected{% endif %}>
+                    {{ bk }} – {{ bname }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0.25rem;">
+            <label for="textarea_data">
+                Paste pricing data
+                <small style="font-weight: 400; opacity: 0.65;">(tab-separated, first row = column headers)</small>
+            </label>
+            <textarea name="textarea_data" id="textarea_data"
+                      style="width: 100%; height: 220px; font-family: monospace; font-size: 0.78rem;
+                             resize: vertical; padding: 0.5rem; border: 1px solid var(--border-color);
+                             border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);"
+                      placeholder="Paste the pricing table copied from the bank email here…">{{ form.textarea_data or '' }}</textarea>
+            <small style="opacity: 0.55; font-size: 0.75rem;">
+                Expected columns (GS / SHK): PRODUCT · NORMAL/LEVERAGED · GUARANTEED PERIODS ·
+                UNDERLYING (BLOOMBERG) · KO (%) · TENOR (M) · Strike (%) · Tradable Size · Remark
+            </small>
+        </div>
 
         {% if form.not_in_record %}
-            <p style="color: red;">Header not in record</p>
-            <p style="color: red;">{{ form.not_in_record }}</p>
-            <p>Do you want to register this header?</p>
-            <input type="submit" value="Yes" name="cmd_button" class="btn btn-success p-2 mt-2">
-            <input type="submit" value="No" name="cmd_button" class="btn btn-danger p-2 mt-2">
+        <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 0.7rem 0.9rem;
+                    border-radius: 6px; margin-top: 0.75rem;">
+            <strong>Unknown header format.</strong> Columns received:<br>
+            <code style="font-size: 0.8rem;">{{ form.not_in_record }}</code><br>
+            <small>Do you want to register this header mapping?</small>
+            <div style="margin-top: 0.5rem; display: flex; gap: 0.4rem;">
+                <input type="submit" value="Yes" name="cmd_button" class="btn btn-success" style="padding: 0.25rem 0.9rem;">
+                <input type="submit" value="No"  name="cmd_button" class="btn btn-danger"  style="padding: 0.25rem 0.9rem;">
+            </div>
+        </div>
         {% else %}
-            <input type="submit" value="Submit" name="cmd_button" class="btn btn-success p-2 mt-2">
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.9rem; flex-wrap: wrap;">
+            <input type="submit" value="Generate Excel" name="cmd_button"
+                   class="btn btn-success" style="font-weight: 600;">
+            <input type="submit" value="Preview" name="cmd_button"
+                   class="btn btn-secondary" style="opacity: 0.75;">
+        </div>
         {% endif %}
 
     </form>
 
-    {% for row in form.list_data %}
-        <p>{{ row  }}</p>
-    {% endfor %}
+    {% if form.list_data %}
+    <hr style="margin: 1.5rem 0; border-color: var(--border-color);">
+    <h4 style="margin-bottom: 0.75rem;">Preview ({{ form.list_data | length }} rows)</h4>
+    <div style="overflow-x: auto;">
+        <table style="border-collapse: collapse; font-size: 0.82rem; width: 100%;">
+            <thead>
+                <tr style="background: var(--bg-secondary);">
+                    {% for key in form.list_data[0].keys() %}
+                    <th style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color);
+                               white-space: nowrap; text-align: left;">{{ key }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in form.list_data %}
+                <tr>
+                    {% for val in row.values() %}
+                    <td style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color);
+                               white-space: nowrap;">{{ val }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 </div>
-
 {% endblock %}

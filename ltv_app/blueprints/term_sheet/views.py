@@ -280,6 +280,34 @@ def edit(contract_ref, view_only=False):
                            gtds=gtds, bank_id=bank_id)
 
 
+@bp.route("/<contract_ref>/data", methods=["GET"])
+@login_required
+def contract_data(contract_ref):
+    """Return contract fields as JSON for the edit modal."""
+    db = get_db()
+    ts = StockContract(db=db)
+    ts.get(ref_num=contract_ref)
+    return jsonify({
+        "ref_num":          ts.ref_num,
+        "reference":        ts.reference,
+        "bank_ref":         ts.bank_ref,
+        "code_ref":         ts.code_ref,
+        "transaction_type": ts.transaction_type,
+        "trade_date":       ts.trade_date,
+        "start_date":       ts.start_date,
+        "spot":             ts.spot,
+        "strike_rate":      ts.strike_rate,
+        "ko_rate":          ts.ko_rate,
+        "daily_shares":     ts.daily_shares,
+        "tenor":            ts.tenor,
+        "frequency":        ts.frequency,
+        "leveraged":        ts.leveraged,
+        "gtd":              ts.gtd,
+        "status":           ts.status,
+        "bank_doc":         ts.bank_doc,
+    })
+
+
 @bp.route("/<contract_ref>/view", methods=["GET"])
 @login_required
 def view(contract_ref):

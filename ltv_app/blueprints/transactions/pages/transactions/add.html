@@ -64,4 +64,23 @@
         <a href="{{ url_for('transactions.home') }}" class="btn btn-secondary">Cancel</a>
     </div>
 </form>
+{% block scripts %}
+<script>
+function addBusinessDays(dateStr, days) {
+    const d = new Date(dateStr + 'T00:00:00');
+    let added = 0;
+    while (added < days) {
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() !== 0 && d.getDay() !== 6) added++;
+    }
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${day}`;
+}
+
+document.getElementById('trade_date').addEventListener('change', function () {
+    document.getElementById('value_date').value = addBusinessDays(this.value, 2);
+});
+</script>
 {% endblock %}

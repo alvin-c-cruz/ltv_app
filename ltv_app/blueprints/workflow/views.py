@@ -96,6 +96,7 @@ def _fetch_review(db, date_from=None, date_to=None):
                 'quantity': '{:,.0f}'.format(abs(r['quantity'])),
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
+                'is_fixing': source == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
 
@@ -161,6 +162,7 @@ def _fetch_charges(db, date_from=None, date_to=None):
                 'quantity': '{:,.0f}'.format(abs(r['quantity'])),
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
+                'is_fixing': source == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
 
@@ -258,6 +260,7 @@ def _fetch_lock(db, date_from=None, date_to=None):
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
                 'charges': '{:,.2f}'.format(r['charges']),
+                'is_fixing': r['source'] == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
 
@@ -348,6 +351,7 @@ def _fetch_locked(db, date_from=None, date_to=None):
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
                 'charges': '{:,.2f}'.format(r['charges']),
+                'is_fixing': r['source'] == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
 
@@ -547,7 +551,7 @@ def get_edit_data(source, ref_num):
     ).fetchall()
 
     transaction_types = db.execute(
-        "SELECT DISTINCT type_name FROM tbl_transaction_type ORDER BY type_name"
+        "SELECT DISTINCT transaction_type FROM tbl_transaction_type ORDER BY transaction_type"
     ).fetchall()
 
     if source == 'contract':
@@ -571,9 +575,17 @@ def get_edit_data(source, ref_num):
             'transaction_type': row['transaction_type'],
             'quantity_raw': row['daily_shares'],
             'price_raw': row['spot'],
+            'strike_rate': row['strike_rate'] or 0,
+            'ko_rate': row['ko_rate'] or 0,
+            'reference': row['reference'] or '',
+            'status': row['status'] or 'active',
+            'tenor': row['tenor'] or '',
+            'frequency': row['frequency'] or '',
+            'leveraged': row['leveraged'] or 'No',
+            'gtd': row['gtd'] or 'No',
+            'bank_doc': row['bank_doc'] or '',
             'banks': [{'ref_num': b['ref_num'], 'bank_name': b['bank_name']} for b in banks],
             'stocks': [{'ref_num': s['ref_num'], 'code': s['code'], 'stock_name': s['stock_name']} for s in stocks],
-            'transaction_types': [t['type_name'] for t in transaction_types],
         }
     else:
         table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
@@ -604,7 +616,7 @@ def get_edit_data(source, ref_num):
             'misc': row['misc'] or 0,
             'banks': [{'ref_num': b['ref_num'], 'bank_name': b['bank_name']} for b in banks],
             'stocks': [{'ref_num': s['ref_num'], 'code': s['code'], 'stock_name': s['stock_name']} for s in stocks],
-            'transaction_types': [t['type_name'] for t in transaction_types],
+            'transaction_types': [t['transaction_type'] for t in transaction_types],
         }
 
     return data
@@ -625,10 +637,25 @@ def save_edit(source, ref_num):
     price = float(request.form.get('price', 0))
 
     if source == 'contract':
+        strike_rate = float(request.form.get('strike_rate', 0) or 0)
+        ko_rate     = float(request.form.get('ko_rate', 0) or 0)
+        reference   = request.form.get('reference', '')
+        status      = request.form.get('status', 'active')
+        tenor       = request.form.get('tenor', '')
+        frequency   = request.form.get('frequency', '')
+        leveraged   = request.form.get('leveraged', 'No')
+        gtd         = request.form.get('gtd', 'No')
+        bank_doc    = request.form.get('bank_doc', '')
         db.execute(
-            "UPDATE tbl_stock_contract SET trade_date=?, start_date=?, bank_ref=?, code_ref=?, "
-            "transaction_type=?, daily_shares=?, spot=? WHERE ref_num=?",
-            (trade_date, value_date, bank_ref, code_ref, transaction_type, quantity, price, ref_num)
+            "UPDATE tbl_stock_contract SET "
+            "trade_date=?, start_date=?, bank_ref=?, code_ref=?, transaction_type=?, "
+            "daily_shares=?, spot=?, strike_rate=?, ko_rate=?, "
+            "reference=?, status=?, tenor=?, frequency=?, leveraged=?, gtd=?, bank_doc=? "
+            "WHERE ref_num=?",
+            (trade_date, value_date, bank_ref, code_ref, transaction_type,
+             quantity, price, strike_rate, ko_rate,
+             reference, status, tenor, frequency, leveraged, gtd, bank_doc,
+             ref_num)
         )
         db.commit()
         flash("Term sheet updated successfully.")
@@ -661,6 +688,19 @@ def save_edit(source, ref_num):
 
 
 # Lock actions
+@bp.route('/lock/<source>/<int:ref_num>', methods=['POST'])
+@superuser_required
+def lock_txn(source, ref_num):
+    db = get_db()
+    table = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}[source]
+    db.execute(f"UPDATE {table} SET locked=1 WHERE ref_num=?", (ref_num,))
+    db.commit()
+    flash("Transaction locked.")
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
+
+
 @bp.route('/lock-multiple', methods=['POST'])
 @superuser_required
 def lock_multiple():
