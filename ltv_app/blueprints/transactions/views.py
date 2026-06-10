@@ -568,6 +568,27 @@ def download_with_gain_loss(trade_date):
         return send_file('{}'.format(filename))
 
 
+@bp.route('/average_price/<int:bank_ref>/<int:code_ref>', methods=['GET'])
+@login_required
+def average_price(bank_ref, code_ref):
+    """Unrounded average cost and share balance of a stock in an account as
+    of a trade date — feeds the Add Transfer modal price auto-fill."""
+    from ..database import get_db
+    from .extensions import TradesDoneAverage
+    db = get_db()
+    trade_date = request.args.get('trade_date') or str(ph_today())
+    code_row = db.execute("SELECT code FROM tbl_code WHERE ref_num=?", (code_ref,)).fetchone()
+    bank_row = db.execute("SELECT bank_id FROM tbl_bank_account WHERE ref_num=?", (bank_ref,)).fetchone()
+    if not code_row or not bank_row:
+        return jsonify({'error': 'Unknown bank or stock'}), 404
+    result = TradesDoneAverage(db=db, trade_date=trade_date,
+                               code=code_row['code'], bank_id=bank_row['bank_id'])
+    return jsonify({
+        'average': result.average if result.average else None,
+        'balance': result.balance,
+    })
+
+
 @bp.route('/print_with_gain_loss/<trade_date>', methods=['GET'])
 @login_required
 def print_with_gain_loss(trade_date):

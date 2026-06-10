@@ -353,6 +353,7 @@
                 <label>Price</label>
                 <input type="text" name="price" autocomplete="off" required>
             </div>
+            <div id="transferBalanceWarning" style="grid-column:1/-1;display:none;color:#b00020;font-size:0.85rem;font-weight:600;"></div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
             <button type="button" class="btn btn-outline" onclick="closeTxnModal('transferModal')">Cancel</button>
@@ -741,6 +742,54 @@ function wireComputedPrices(spotId, strikeRateId, koRateId, strikePxId, koPxId) 
 
 wireComputedPrices('contract-spot', 'contract-strike-rate', 'contract-ko-rate', 'contract-strike-price', 'contract-ko-price');
 wireComputedPrices('edit-spot', 'edit-strike-rate', 'edit-ko-rate', 'edit-strike-price', 'edit-ko-price');
+
+// ── Transfer modal: auto-fill price with the From account's unrounded
+// average as of the trade date, and warn on insufficient shares ──
+var _transferBalance = null;
+
+function updateTransferAverage() {
+    var m = document.getElementById('transferModal');
+    var tradeDate = m.querySelector('input[name="trade_date"]').value;
+    var bankRef   = m.querySelector('select[name="bank_ref"]').value;
+    var codeRef   = m.querySelector('select[name="code_ref"]').value;
+    var priceEl   = m.querySelector('input[name="price"]');
+
+    if (!tradeDate || !bankRef || !codeRef) return;
+
+    fetch('/trades/average_price/' + bankRef + '/' + codeRef + '?trade_date=' + tradeDate)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            _transferBalance = d.balance;
+            priceEl.value = (d.average !== null && d.average !== undefined) ? d.average : '';
+            checkTransferQuantity();
+        })
+        .catch(function(err) { console.error('Failed to load average price:', err); });
+}
+
+function checkTransferQuantity() {
+    var m = document.getElementById('transferModal');
+    var qtyRaw  = (m.querySelector('input[name="quantity"]').value || '').replace(/,/g, '');
+    var qty     = parseFloat(qtyRaw);
+    var warning = document.getElementById('transferBalanceWarning');
+    var tradeDate = m.querySelector('input[name="trade_date"]').value;
+
+    if (_transferBalance !== null && !isNaN(qty) && Math.abs(qty) > _transferBalance) {
+        warning.textContent = 'Insufficient shares: the From account holds '
+            + _transferBalance.toLocaleString() + ' shares as of ' + tradeDate + '.';
+        warning.style.display = 'block';
+    } else {
+        warning.style.display = 'none';
+    }
+}
+
+(function wireTransferAverage() {
+    var m = document.getElementById('transferModal');
+    if (!m) return;
+    ['input[name="trade_date"]', 'select[name="bank_ref"]', 'select[name="code_ref"]'].forEach(function(sel) {
+        m.querySelector(sel).addEventListener('change', updateTransferAverage);
+    });
+    m.querySelector('input[name="quantity"]').addEventListener('input', checkTransferQuantity);
+})();
 
 function openEditContractModal(contractRef) {
     fetch('/term-sheet/' + contractRef + '/data')

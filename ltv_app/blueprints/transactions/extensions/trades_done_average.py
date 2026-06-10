@@ -11,6 +11,7 @@ class TradesDoneAverage:
         balance, cost_to_date, last_average = accumulate_position(rows)
         average = cost_to_date / balance if balance > 0 else 0
         self.average = average if average else last_average
+        self.balance = balance
 
 
 def get_transactions(db, trade_date, code, bank_id):
