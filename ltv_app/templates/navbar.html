@@ -38,6 +38,7 @@
                     {% if current_user.is_authenticated and current_user.role == 'superuser' %}
                     <li><a href="{{ url_for('lock.home') }}">Lock</a></li>
                     <li><a href="{{ url_for('users.home') }}">Users</a></li>
+                    <li><a href="{{ url_for('upload.inspect') }}">Inspect Uploads</a></li>
                     {% endif %}
                     <li><a href="{{ url_for('stock_price.home') }}">Upload from Yahoo</a></li>
                     <li><a href="{{ url_for('stocks.home') }}">Stock Codes</a></li>

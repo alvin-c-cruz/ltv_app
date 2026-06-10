@@ -5,7 +5,7 @@ from datetime import datetime
 from openpyxl import load_workbook
 from dataclasses import dataclass
 
-from ..auth import login_required
+from ..auth import login_required, superuser_required
 from ..transactions import Transaction
 from ..database import get_db
 
@@ -44,7 +44,7 @@ def _inspect_dir():
 
 
 @bp.route('/inspect', methods=["GET", "POST"])
-@login_required
+@superuser_required
 def inspect():
     inspect_dir = _inspect_dir()
 
@@ -70,7 +70,7 @@ def inspect():
 
 
 @bp.route('/inspect/clear', methods=["POST"])
-@login_required
+@superuser_required
 def inspect_clear():
     inspect_dir = _inspect_dir()
     for name in os.listdir(inspect_dir):
