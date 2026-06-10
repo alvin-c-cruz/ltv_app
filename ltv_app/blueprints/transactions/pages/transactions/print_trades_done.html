@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trades Done — {{ report.date_label }}</title>
+    <style>
+        body { font-family: Calibri, Arial, sans-serif; color: #000; background: #fff; margin: 2rem; }
+        h1 { font-size: 1.3rem; margin: 0 0 0.2rem; }
+        .date { margin: 0 0 1.5rem; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+        th, td { border: 1px solid #555; padding: 4px 8px; font-size: 0.85rem; text-align: center; }
+        td.num { text-align: right; }
+        td.bank { font-weight: 700; }
+        .section-label { font-size: 1.05rem; font-weight: 700; }
+        .accu { background: #99CC00; }
+        .decu { background: #FF8080; }
+        .subtotal td, .total td { font-weight: 700; }
+        .no-print { margin-bottom: 1.5rem; }
+        .no-print button { padding: 0.4rem 1.2rem; font-size: 1rem; cursor: pointer; }
+        @media print {
+            .no-print { display: none; }
+            body { margin: 0; }
+        }
+    </style>
+</head>
+<body>
+
+{% macro money(v, ccy) -%}
+    {%- if v is none -%}
+    {%- elif v < 0 -%}({{ ccy }} {{ '{:,.2f}'.format(-v) }})
+    {%- else -%}{{ ccy }} {{ '{:,.2f}'.format(v) }}
+    {%- endif -%}
+{%- endmacro %}
+{% macro pct(v) -%}
+    {%- if v is none -%}
+    {%- elif v < 0 -%}( {{ '{:.2f}'.format(-v * 100) }}% )
+    {%- else -%}{{ '{:.2f}'.format(v * 100) }}%
+    {%- endif -%}
+{%- endmacro %}
+
+<div class="no-print">
+    <button type="button" onclick="window.print()">Print</button>
+</div>
+
+<h1>Trades Done - Summary</h1>
+<p class="date">Date: {{ report.date_label }}</p>
+
+{% for title, rows, css in [('Accu', report.accus, 'accu'), ('Decu', report.decus, 'decu')] %}
+{% if rows %}
+<table>
+    <thead>
+        <tr>
+            <th class="section-label {{ css }}">{{ title }}</th>
+            <th>Stock</th>
+            <th>Shares</th>
+            <th>Spot</th>
+            <th>Strike</th>
+            <th>KO</th>
+            <th>Tenor</th>
+            <th>GTD</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for ts in rows %}
+        <tr>
+            <td class="bank">{{ ts.bank_name }}</td>
+            <td>{{ ts.stock_name }}</td>
+            <td>{{ ts.shares }}</td>
+            <td>{{ ts.spot }}</td>
+            <td>{{ ts.strike }}</td>
+            <td>{{ ts.ko }}</td>
+            <td>{{ ts.tenor }}</td>
+            <td>{{ ts.gtd }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endfor %}
+
+{% for block in report.blocks %}
+<table>
+    <thead>
+        <tr>
+            <th class="section-label">{{ block.label }}</th>
+            <th class="section-label">{{ block.ccy }}</th>
+            <th>Type</th>
+            <th>Price</th>
+            <th>Shares</th>
+            <th>Total</th>
+            {% if block.is_buy %}<th>Average</th>{% endif %}
+            {% if block.is_sell_spot %}
+            <th>Cost {{ block.ccy }}</th>
+            <th>{{ block.gain_header }}</th>
+            <th>{{ block.pct_header }}</th>
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for bank in block.banks %}
+        {% for row in bank.rows %}
+        <tr>
+            <td class="bank">{{ row.bank_name }}</td>
+            <td>{{ row.stock_name }}</td>
+            <td>{{ row.transaction_type }}</td>
+            <td>{{ '{:,.4f}'.format(row.price) }}</td>
+            <td>{{ '{:,.0f}'.format(row.quantity) }}</td>
+            <td class="num">{{ money(row.amount, block.ccy) }}</td>
+            {% if block.is_buy %}
+            <td>{% if row.average %}{{ '{:,.4f}'.format(row.average) }}{% endif %}</td>
+            {% endif %}
+            {% if block.is_sell_spot %}
+            <td class="num">{{ money(row.cost, block.ccy) }}</td>
+            <td class="num">{{ money(row.gain_loss, block.ccy) }}</td>
+            <td>{{ pct(row.pct) }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        {% if bank.subtotal %}
+        <tr class="subtotal">
+            <td colspan="5" style="text-align:right">Subtotal — {{ bank.bank_name }}</td>
+            <td class="num">{{ money(bank.subtotal.proceeds, block.ccy) }}</td>
+            <td class="num">{{ money(bank.subtotal.cost, block.ccy) }}</td>
+            <td class="num">{{ money(bank.subtotal.gain_loss, block.ccy) }}</td>
+            <td>{{ pct(bank.subtotal.pct) }}</td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+    {% if block.show_total %}
+        <tr class="total">
+            <td colspan="4" style="text-align:right">TOTAL</td>
+            <td>{{ '{:,.0f}'.format(block.total_shares) }}</td>
+            <td class="num">{{ money(block.total_amount, block.ccy) }}</td>
+            {% if block.is_buy %}<td></td>{% endif %}
+            {% if block.is_sell_spot %}<td></td><td></td><td></td>{% endif %}
+        </tr>
+    {% endif %}
+    </tbody>
+</table>
+{% endfor %}
+
+</body>
+</html>

@@ -2,3 +2,4 @@ from .transaction_summary import TransactionSummary
 from .download_trades_done import DownloadTradesDone
 from .trades_done_average import TradesDoneAverage
 from .download_trades_done_with_gain_loss import DownloadTradesDoneWithGainLoss
+from .trades_done_report import TradesDoneReport

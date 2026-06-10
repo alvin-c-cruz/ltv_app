@@ -15,6 +15,7 @@
     <div class="toolbar-actions">
         <a href="{{ url_for('transactions.download', trade_date=trade_date) }}" class="btn btn-outline">Old Trades Done</a>
         <a href="{{ url_for('transactions.download_with_gain_loss', trade_date=trade_date) }}" class="btn btn-outline">New Trades Done</a>
+        <a href="{{ url_for('transactions.print_with_gain_loss', trade_date=trade_date) }}" target="_blank" class="btn btn-outline">Print Trades Done</a>
         <button type="button" class="btn btn-success" onclick="openTxnModal('spotModal')">+ Spot</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('transferModal')">+ Transfer</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('contractModal')">+ Contract</button>

@@ -5,7 +5,7 @@ from ...tz import ph_today, add_business_days
 
 from .models import Transaction, TransactionShort
 from .. auth import login_required
-from .extensions import TransactionSummary, DownloadTradesDone, DownloadTradesDoneWithGainLoss
+from .extensions import TransactionSummary, DownloadTradesDone, DownloadTradesDoneWithGainLoss, TradesDoneReport
 
 bp = Blueprint('transactions', __name__, template_folder='pages', url_prefix='/trades')
 
@@ -566,6 +566,19 @@ def download_with_gain_loss(trade_date):
             trade_summary=summary
         ).filename
         return send_file('{}'.format(filename))
+
+
+@bp.route('/print_with_gain_loss/<trade_date>', methods=['GET'])
+@login_required
+def print_with_gain_loss(trade_date):
+    from ..database import get_db
+    db = get_db()
+    summary = TransactionSummary(db, trade_date)
+    if summary.is_empty():
+        flash("No data to print.", category="error")
+        return redirect(url_for("transactions.home"))
+    report = TradesDoneReport(db=db, trade_date=trade_date, trade_summary=summary)
+    return render_template('transactions/print_trades_done.html', report=report)
 
 
 @bp.route('/add_stock_dividends', methods=['GET', 'POST'])
