@@ -11,7 +11,10 @@ Both routes:
 
 New Trades Done adds gain/loss columns for sell transactions.
 """
+import io
+
 import pytest
+from openpyxl import load_workbook
 
 TEST_DATE  = '2026-05-18'
 PRIOR_DATE = '2026-05-01'   # used to establish a cost basis before the sell
@@ -218,3 +221,47 @@ class NewTradesDoneTests:
         old_disp = old_resp.headers.get('Content-Disposition', '')
         new_disp = new_resp.headers.get('Content-Disposition', '')
         assert old_disp != new_disp
+
+
+# ===========================================================================
+# 3. New Trades Done — gain/loss columns belong to Sell (Spot) blocks only
+# ===========================================================================
+def _first_sheet(response):
+    wb = load_workbook(io.BytesIO(response.data))
+    return wb[wb.sheetnames[0]]
+
+
+def _column_values(ws, letters):
+    values = {}
+    for letter in letters:
+        values[letter] = [
+            cell.value for cell in ws[letter] if cell.value is not None
+        ]
+    return values
+
+
+class GainLossColumnTests:
+
+    def test_buy_only_has_no_gain_loss_columns(self, auth_client, db_conn):
+        _insert_transaction(db_conn)  # Buy (Spot)
+        response = auth_client.get(NEW_URL)
+        ws = _first_sheet(response)
+        values = _column_values(ws, 'LMN')
+        assert values == {'L': [], 'M': [], 'N': []}
+
+    def test_sell_short_has_no_gain_loss_columns(self, auth_client, db_conn):
+        _insert_transaction(db_conn, transaction_type='Sell (Short)',
+                            quantity=-500, price=310.00)
+        response = auth_client.get(NEW_URL)
+        ws = _first_sheet(response)
+        values = _column_values(ws, 'LMN')
+        assert values == {'L': [], 'M': [], 'N': []}
+
+    def test_sell_spot_has_gain_loss_columns(self, auth_client, db_conn):
+        _insert_buy_and_sell(db_conn)  # prior buy + Sell (Spot) on TEST_DATE
+        response = auth_client.get(NEW_URL)
+        ws = _first_sheet(response)
+        values = _column_values(ws, 'LMN')
+        assert values['L'], "expected cost formulas in column L"
+        assert values['M'], "expected gain/loss formulas in column M"
+        assert values['N'], "expected % formulas in column N"

@@ -160,7 +160,7 @@ class DownloadTradesDoneWithGainLoss:
 
                 if "Buy" in transaction_type:
                     cols["J"] = "Average"
-                else:
+                elif transaction_type == "Sell (Spot)":
                     cols["L"] = f"Cost {ccy}"
                     cols["M"] = f"Lost {ccy}"
                     cols["N"] = "% Lost"
@@ -208,10 +208,7 @@ class DownloadTradesDoneWithGainLoss:
                                 "D": transaction_type,
                                 "E": price,
                                 "G": quantity,
-                                "H": f'=E{row_num}*G{row_num}',
-                                "L": f'=G{row_num}*O{row_num}',
-                                "M": f'=H{row_num}-L{row_num}',
-                                "N": f'=M{row_num}/L{row_num}'
+                                "H": f'=E{row_num}*G{row_num}'
                             }
 
                             if "Buy" in transaction_type:
@@ -222,9 +219,12 @@ class DownloadTradesDoneWithGainLoss:
                                     average = None
 
                                 cols["J"] = average
-                            else:
+                            elif transaction_type == "Sell (Spot)":
                                 average = TradesDoneAverage(db=self.db, trade_date=self.trade_date,
                                                             code=code, bank_id=bank_id).average
+                                cols["L"] = f'=G{row_num}*O{row_num}'
+                                cols["M"] = f'=H{row_num}-L{row_num}'
+                                cols["N"] = f'=M{row_num}/L{row_num}'
                                 cols["O"] = average
 
                             for col, value in cols.items():
@@ -279,7 +279,7 @@ class DownloadTradesDoneWithGainLoss:
                             cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor=DIVIDER_COLOR)
 
                         # Cost totals
-                        if "Sell" in transaction_type:
+                        if transaction_type == "Sell (Spot)":
                             cols = {
                                 "J": f'=SUM(H{account_start_row}:H{row_num - 1})',
                                 "L": f"=SUBTOTAL(9,L{account_start_row}:L{row_num - 1})",
@@ -310,15 +310,16 @@ class DownloadTradesDoneWithGainLoss:
                         row_num += 1
 
                 # Fix the Gain/Loss Ccy Header
-                cell = ws[f"M{start_row}"]
-                cell.value = f'=IF(COUNTIF(M{start_row+1}:M{row_num-1},">=0")<>0,' \
-                             f'IF(COUNTIF(M{start_row+1}:M{row_num-1},"<0")<>0,"Gain / Loss", "Gain"),' \
-                             f'"Loss")&" {ccy}"'
+                if transaction_type == "Sell (Spot)":
+                    cell = ws[f"M{start_row}"]
+                    cell.value = f'=IF(COUNTIF(M{start_row+1}:M{row_num-1},">=0")<>0,' \
+                                 f'IF(COUNTIF(M{start_row+1}:M{row_num-1},"<0")<>0,"Gain / Loss", "Gain"),' \
+                                 f'"Loss")&" {ccy}"'
 
-                cell = ws[f"N{start_row}"]
-                cell.value = f'="% "&IF(COUNTIF(N{start_row+1}:N{row_num-1},">=0")<>0,' \
-                             f'IF(COUNTIF(N{start_row+1}:N{row_num-1},"<0")<>0,"Gain / Loss", "Gain"),' \
-                             f'"Loss")'
+                    cell = ws[f"N{start_row}"]
+                    cell.value = f'="% "&IF(COUNTIF(N{start_row+1}:N{row_num-1},">=0")<>0,' \
+                                 f'IF(COUNTIF(N{start_row+1}:N{row_num-1},"<0")<>0,"Gain / Loss", "Gain"),' \
+                                 f'"Loss")'
 
                 # Footes
                 if bank_name_count > 1 or trade_total:
