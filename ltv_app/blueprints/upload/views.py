@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, current_app, redirect, jsonify, send_from_directory, abort
+from flask import Blueprint, render_template, request, current_app, redirect, jsonify, send_from_directory, abort, url_for
 from werkzeug.utils import secure_filename
 import os
+from datetime import datetime
 from openpyxl import load_workbook
 from dataclasses import dataclass
 
@@ -30,6 +31,53 @@ def download_file(filename):
     if not safe.startswith(os.path.normpath(uploads_dir)):
         abort(404)
     return send_from_directory(uploads_dir, filename, as_attachment=True)
+
+
+def _inspect_dir():
+    """Folder where files uploaded for Claude inspection are stored."""
+    path = current_app.config.get(
+        'INSPECT_UPLOAD_DIR',
+        os.path.join(current_app.instance_path, 'uploads', 'inspect'),
+    )
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+@bp.route('/inspect', methods=["GET", "POST"])
+@login_required
+def inspect():
+    inspect_dir = _inspect_dir()
+
+    if request.method == "POST":
+        for file in request.files.getlist("file[]"):
+            filename = secure_filename(file.filename)
+            if filename:
+                file.save(os.path.join(inspect_dir, filename))
+        return redirect(url_for('upload.inspect'))
+
+    files = []
+    for name in sorted(os.listdir(inspect_dir)):
+        full_path = os.path.join(inspect_dir, name)
+        if not os.path.isfile(full_path):
+            continue
+        stat = os.stat(full_path)
+        files.append({
+            'name': name,
+            'size_kb': f"{stat.st_size / 1024:,.1f}",
+            'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+        })
+    return render_template('upload/inspect.html', files=files)
+
+
+@bp.route('/inspect/clear', methods=["POST"])
+@login_required
+def inspect_clear():
+    inspect_dir = _inspect_dir()
+    for name in os.listdir(inspect_dir):
+        full_path = os.path.join(inspect_dir, name)
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+    return redirect(url_for('upload.inspect'))
 
 
 @bp.route('/heroku', methods=["GET", "POST"])
