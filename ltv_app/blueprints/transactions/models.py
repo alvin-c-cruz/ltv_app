@@ -29,6 +29,54 @@ class Transaction(Model):
         self.table_name = "tbl_transaction"
 
 
+def accumulate_position(transactions):
+    """Weighted-average cost engine shared by position/average calculations.
+
+    `transactions` is an ordered iterable of rows exposing quantity, price,
+    brokerage, commission, foreign_charge, stamp_duty, misc.
+    Returns (balance, cost_to_date, last_average) where last_average is the
+    most recent non-zero average — the cost basis when a position closes.
+    """
+    balance = 0
+    cost_to_date = 0.0
+    last_average = 0.0
+
+    for row in transactions:
+        quantity = row['quantity']
+        price = row['price']
+        charges = row['brokerage'] + row['commission'] + row['foreign_charge'] + row['stamp_duty'] + row['misc']
+        amount = quantity * price + charges
+
+        if quantity > 0:
+            if balance > 0:
+                cost_to_date += amount
+            elif balance == 0:
+                cost_to_date += amount
+            elif balance < 0:
+                if balance + quantity == 0:
+                    cost_to_date = 0
+                elif balance + quantity < 0:
+                    cost_to_date = 0
+                else:
+                    cost_to_date = (balance + quantity) / quantity * amount
+        else:
+            if balance > 0:
+                if balance - abs(quantity) > 0:
+                    cost_to_date -= cost_to_date * abs(quantity) / balance
+                else:
+                    cost_to_date = 0
+            else:
+                cost_to_date = 0
+
+        balance += quantity
+        if balance > 0:
+            average = cost_to_date / balance
+            if average != 0:
+                last_average = average
+
+    return balance, cost_to_date, last_average
+
+
 def get_balance(db, bank_ref, code_ref, trade_date):
     transaction_basis = db.execute("SELECT transaction_basis FROM tbl_bank_account WHERE ref_num=?",
                                    (bank_ref,)).fetchone()[0]
