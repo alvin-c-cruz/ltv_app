@@ -200,6 +200,7 @@ def app(tmp_path):
         'DATABASE': str(db_path),
         'TESTING': True,
         'SECRET_KEY': 'test-secret',
+        'INSPECT_UPLOAD_DIR': str(tmp_path / 'inspect_uploads'),
     })
     return flask_app
 
