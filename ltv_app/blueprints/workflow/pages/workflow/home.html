@@ -405,12 +405,11 @@ function shiftDate(fieldId, days) {
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
-                        <form method="post"
+                        <form id="lock-{{ row.ref_num }}" method="post"
                               action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:inline">
-                            <button type="submit" class="btn btn-danger btn-sm"
-                                    onclick="return confirm('Lock this transaction?')">Lock</button>
-                        </form>
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirm('Lock this transaction?', () => document.getElementById('lock-{{ row.ref_num }}').submit())">Lock</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -441,12 +440,11 @@ function shiftDate(fieldId, days) {
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openFixingWfModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
-                        <form method="post"
+                        <form id="lock-{{ row.ref_num }}" method="post"
                               action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:inline">
-                            <button type="submit" class="btn btn-danger btn-sm"
-                                    onclick="return confirm('Lock this fixing?')">Lock</button>
-                        </form>
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirm('Lock this fixing?', () => document.getElementById('lock-{{ row.ref_num }}').submit())">Lock</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -478,12 +476,11 @@ function shiftDate(fieldId, days) {
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
-                        <form method="post"
+                        <form id="lock-{{ row.ref_num }}" method="post"
                               action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:inline">
-                            <button type="submit" class="btn btn-danger btn-sm"
-                                    onclick="return confirm('Lock this contract?')">Lock</button>
-                        </form>
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirm('Lock this contract?', () => document.getElementById('lock-{{ row.ref_num }}').submit())">Lock</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -728,36 +725,24 @@ function toggleAllLock(selectAllCheckbox, bankName) {
 
 function lockSelected() {
     const checkboxes = document.querySelectorAll('.lock-checkbox:checked');
-    if (checkboxes.length === 0) {
-        alert('Please select at least one transaction to lock.');
-        return;
-    }
-
+    if (checkboxes.length === 0) return;
     const count = checkboxes.length;
-    if (!confirm('Lock ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?')) {
-        return;
-    }
-
     const transactions = [];
     checkboxes.forEach(function(cb) {
-        transactions.push({
-            source: cb.dataset.source,
-            ref_num: cb.dataset.ref
-        });
+        transactions.push({ source: cb.dataset.source, ref_num: cb.dataset.ref });
     });
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ url_for("workflow.lock_multiple", date_from=date_from, date_to=date_to) }}';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'transactions';
-    input.value = JSON.stringify(transactions);
-    form.appendChild(input);
-
-    document.body.appendChild(form);
-    form.submit();
+    showConfirm('Lock ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?', function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("workflow.lock_multiple", date_from=date_from, date_to=date_to) }}';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'transactions';
+        input.value = JSON.stringify(transactions);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    });
 }
 
 // Charges modal functions
