@@ -9,14 +9,22 @@
 
         <div class="form-group" style="margin-bottom:0;">
             <label class="form-label" style="font-size:0.85rem; margin-bottom:4px;">Trade Date From</label>
-            <input type="date" name="date_from" class="form-control"
-                   value="{{ date_from or '' }}" style="min-width:150px;">
+            <div style="display:flex;align-items:center;gap:4px">
+                <button type="button" class="btn btn-outline btn-sm" style="padding:0.2rem 0.5rem;font-size:1.1rem" onclick="shiftDate('date_from',-1)">&#8249;</button>
+                <input type="date" id="date_from" name="date_from" class="form-control"
+                       value="{{ date_from or '' }}" style="min-width:150px;">
+                <button type="button" class="btn btn-outline btn-sm" style="padding:0.2rem 0.5rem;font-size:1.1rem" onclick="shiftDate('date_from',1)">&#8250;</button>
+            </div>
         </div>
 
         <div class="form-group" style="margin-bottom:0;">
             <label class="form-label" style="font-size:0.85rem; margin-bottom:4px;">Trade Date To</label>
-            <input type="date" name="date_to" class="form-control"
-                   value="{{ date_to or '' }}" style="min-width:150px;">
+            <div style="display:flex;align-items:center;gap:4px">
+                <button type="button" class="btn btn-outline btn-sm" style="padding:0.2rem 0.5rem;font-size:1.1rem" onclick="shiftDate('date_to',-1)">&#8249;</button>
+                <input type="date" id="date_to" name="date_to" class="form-control"
+                       value="{{ date_to or '' }}" style="min-width:150px;">
+                <button type="button" class="btn btn-outline btn-sm" style="padding:0.2rem 0.5rem;font-size:1.1rem" onclick="shiftDate('date_to',1)">&#8250;</button>
+            </div>
         </div>
 
         <div style="display:flex; gap:6px;">
@@ -27,6 +35,18 @@
         </div>
     </form>
 </div>
+<script>
+function shiftDate(fieldId, days) {
+    var el = document.getElementById(fieldId);
+    if (!el.value) return;
+    var p = el.value.split('-');
+    var d = new Date(+p[0], +p[1] - 1, +p[2] + days);
+    el.value = d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+    el.form.submit();
+}
+</script>
 
 <!-- SECTION 1: REVIEW -->
 <div class="mt-4">
@@ -237,7 +257,7 @@
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
-                                onclick="openChargesModal('{{ row.source }}', {{ row.ref_num }})">
+                                onclick='openChargesModal({{ row.source|tojson }}, {{ row.ref_num|tojson }})'>
                             Edit Charges
                         </button>
                         <form method="post"
@@ -269,8 +289,10 @@
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-center" style="white-space:nowrap">
-                        <a href="{{ url_for('fixings.home', trade_date=row.trade_date) }}"
-                           class="btn btn-outline btn-sm">Fixings Page</a>
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick='openChargesModal({{ row.source|tojson }}, {{ row.ref_num|tojson }})'>
+                            Edit Charges
+                        </button>
                         <form method="post"
                               action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
                               style="display:inline">
@@ -1463,6 +1485,23 @@ function updateFwAmount() {
                 <button type="button" class="btn btn-secondary" onclick="closeContractWfModal()">Cancel</button>
             </div>
         </form>
+    </div>
+</div>
+
+{# ── Shared Confirmation Modal ───────────────────────────────────────── #}
+<div class="modal-overlay" id="confirmModal" onclick="if(event.target===this)confirmCancel()">
+    <div class="modal" style="max-width:400px;">
+        <div class="modal-header">
+            <span class="modal-title">Confirm</span>
+            <button type="button" class="modal-close" onclick="confirmCancel()">&times;</button>
+        </div>
+        <div style="padding:1.5rem;">
+            <p id="confirmMessage" style="margin:0 0 1.5rem; font-size:1rem;"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-danger" onclick="confirmOk()">Confirm</button>
+                <button type="button" class="btn btn-outline" onclick="confirmCancel()">Cancel</button>
+            </div>
+        </div>
     </div>
 </div>
 
