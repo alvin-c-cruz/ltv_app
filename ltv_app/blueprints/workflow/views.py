@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime
 import json
 
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, abort
 
 from .. auth import login_required, superuser_required
 from .. database import get_db
@@ -740,8 +740,10 @@ def delete_txn(source, ref_num):
         db.execute("DELETE FROM tbl_stock_contract WHERE ref_num=?", (ref_num,))
     elif source == 'short':
         db.execute("DELETE FROM tbl_transaction_short WHERE ref_num=?", (ref_num,))
-    else:
+    elif source == 'spot':
         db.execute("DELETE FROM tbl_transaction WHERE ref_num=?", (ref_num,))
+    else:
+        abort(400)
     db.commit()
     flash("Transaction deleted.")
     date_from = request.args.get('date_from', '')
