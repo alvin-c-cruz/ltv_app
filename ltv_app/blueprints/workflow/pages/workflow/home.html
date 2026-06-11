@@ -605,6 +605,25 @@ function shiftDate(fieldId, days) {
 </div>
 
 <script>
+// ── Shared confirmation modal ─────────────────────────────────────────
+let _confirmCallback = null;
+
+function showConfirm(message, onConfirm) {
+    document.getElementById('confirmMessage').textContent = message;
+    _confirmCallback = onConfirm;
+    document.getElementById('confirmModal').classList.add('active');
+}
+
+function confirmOk() {
+    document.getElementById('confirmModal').classList.remove('active');
+    if (_confirmCallback) { _confirmCallback(); _confirmCallback = null; }
+}
+
+function confirmCancel() {
+    document.getElementById('confirmModal').classList.remove('active');
+    _confirmCallback = null;
+}
+
 // Review section
 function updateReviewCount() {
     const checkboxes = document.querySelectorAll('.review-checkbox:checked');
@@ -894,7 +913,7 @@ function updateEditAmount() {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { closeEditModal(); closeFixingWfModal(); closeContractWfModal(); }
+    if (e.key === 'Escape') { closeEditModal(); closeFixingWfModal(); closeContractWfModal(); confirmCancel(); }
 });
 
 // ── Contract (ACCU / DECU term sheet) edit modal ──────────────────────────────
