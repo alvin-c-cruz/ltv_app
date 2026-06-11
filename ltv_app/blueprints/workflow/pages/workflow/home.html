@@ -123,12 +123,16 @@ function shiftDate(fieldId, days) {
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
-                        <form method="post"
+                        <form id="rev-{{ row.ref_num }}" method="post"
                               action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:inline">
-                            <button type="submit" class="btn btn-primary btn-sm"
-                                    onclick="return confirm('Mark this transaction as reviewed?')">Review</button>
-                        </form>
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                onclick="showConfirm('Mark as reviewed?', () => document.getElementById('rev-{{ row.ref_num }}').submit())">Review</button>
+                        <form id="del-{{ row.ref_num }}" method="post"
+                              action="{{ url_for('workflow.delete_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirm('Delete this transaction?', () => document.getElementById('del-{{ row.ref_num }}').submit())">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -153,12 +157,16 @@ function shiftDate(fieldId, days) {
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openFixingWfModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
-                        <form method="post"
+                        <form id="rev-{{ row.ref_num }}" method="post"
                               action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:inline">
-                            <button type="submit" class="btn btn-primary btn-sm"
-                                    onclick="return confirm('Mark this fixing as reviewed?')">Review</button>
-                        </form>
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                onclick="showConfirm('Mark as reviewed?', () => document.getElementById('rev-{{ row.ref_num }}').submit())">Review</button>
+                        <form id="del-{{ row.ref_num }}" method="post"
+                              action="{{ url_for('workflow.delete_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirm('Delete this transaction?', () => document.getElementById('del-{{ row.ref_num }}').submit())">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -184,12 +192,16 @@ function shiftDate(fieldId, days) {
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
-                        <form method="post"
+                        <form id="rev-{{ row.ref_num }}" method="post"
                               action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:inline">
-                            <button type="submit" class="btn btn-primary btn-sm"
-                                    onclick="return confirm('Mark this term sheet as reviewed?')">Review</button>
-                        </form>
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                onclick="showConfirm('Mark as reviewed?', () => document.getElementById('rev-{{ row.ref_num }}').submit())">Review</button>
+                        <form id="del-{{ row.ref_num }}" method="post"
+                              action="{{ url_for('workflow.delete_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
+                              style="display:none"></form>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirm('Delete this term sheet?', () => document.getElementById('del-{{ row.ref_num }}').submit())">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -660,36 +672,24 @@ function toggleAllReview(selectAllCheckbox, bankName) {
 
 function reviewSelected() {
     const checkboxes = document.querySelectorAll('.review-checkbox:checked');
-    if (checkboxes.length === 0) {
-        alert('Please select at least one transaction to review.');
-        return;
-    }
-
+    if (checkboxes.length === 0) return;
     const count = checkboxes.length;
-    if (!confirm('Review ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?')) {
-        return;
-    }
-
     const transactions = [];
     checkboxes.forEach(function(cb) {
-        transactions.push({
-            source: cb.dataset.source,
-            ref_num: cb.dataset.ref
-        });
+        transactions.push({ source: cb.dataset.source, ref_num: cb.dataset.ref });
     });
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ url_for("workflow.review_multiple", date_from=date_from, date_to=date_to) }}';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'transactions';
-    input.value = JSON.stringify(transactions);
-    form.appendChild(input);
-
-    document.body.appendChild(form);
-    form.submit();
+    showConfirm('Review ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?', function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("workflow.review_multiple", date_from=date_from, date_to=date_to) }}';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'transactions';
+        input.value = JSON.stringify(transactions);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    });
 }
 
 // Lock section
