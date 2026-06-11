@@ -729,3 +729,21 @@ def lock_multiple():
     db.commit()
     flash(f"{locked_count} transaction{'s' if locked_count != 1 else ''} locked.")
     return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
+
+
+@bp.route('/delete/<source>/<int:ref_num>', methods=['POST'])
+@superuser_required
+def delete_txn(source, ref_num):
+    db = get_db()
+    if source == 'contract':
+        db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?", (ref_num,))
+        db.execute("DELETE FROM tbl_stock_contract WHERE ref_num=?", (ref_num,))
+    elif source == 'short':
+        db.execute("DELETE FROM tbl_transaction_short WHERE ref_num=?", (ref_num,))
+    else:
+        db.execute("DELETE FROM tbl_transaction WHERE ref_num=?", (ref_num,))
+    db.commit()
+    flash("Transaction deleted.")
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
