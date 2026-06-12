@@ -120,3 +120,48 @@ def trash_thread(thread_id):
     """Move a thread to Gmail Trash."""
     service = _get_service()
     service.users().threads().trash(userId='me', id=thread_id).execute()
+
+
+def list_labels():
+    """Return Alvin- parent labels with their nested children."""
+    service = _get_service()
+    result = service.users().labels().list(userId='me').execute()
+    all_labels = result.get('labels', [])
+
+    prefix = 'Alvin - '
+    alvin = [l for l in all_labels if l['name'].startswith(prefix)]
+
+    parents = {}
+    for label in alvin:
+        remainder = label['name'][len(prefix):]
+        if '/' not in remainder:
+            parents[label['name']] = {
+                'id': label['id'],
+                'name': label['name'],
+                'short': remainder,
+                'children': [],
+            }
+
+    for label in alvin:
+        remainder = label['name'][len(prefix):]
+        if '/' in remainder:
+            parent_short, child_short = remainder.split('/', 1)
+            parent_name = prefix + parent_short
+            if parent_name in parents:
+                parents[parent_name]['children'].append({
+                    'id': label['id'],
+                    'name': label['name'],
+                    'short': child_short,
+                })
+
+    return list(parents.values())
+
+
+def apply_label_and_archive(thread_id, label_id):
+    """Apply a label to a thread and remove it from INBOX."""
+    service = _get_service()
+    service.users().threads().modify(
+        userId='me',
+        id=thread_id,
+        body={'addLabelIds': [label_id], 'removeLabelIds': ['INBOX']}
+    ).execute()

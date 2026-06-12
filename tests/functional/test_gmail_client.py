@@ -90,3 +90,67 @@ def test_guess_bank_unknown():
 def test_guess_bank_bare_email_format():
     from ltv_app.blueprints.gmail.extensions.gmail_client import guess_bank
     assert guess_bank('user@ebshk.com') == 'SHK'
+
+
+# ── list_labels ───────────────────────────────────────────────────────────────
+
+def test_list_labels_filters_alvin_prefix():
+    from unittest.mock import MagicMock, patch
+    from ltv_app.blueprints.gmail.extensions.gmail_client import list_labels
+
+    mock_svc = MagicMock()
+    mock_svc.users.return_value.labels.return_value.list.return_value.execute.return_value = {
+        'labels': [
+            {'id': 'L1', 'name': 'Alvin - SHK'},
+            {'id': 'L2', 'name': 'Alvin - SHK/Statements'},
+            {'id': 'L3', 'name': 'INBOX'},
+            {'id': 'L4', 'name': 'Other Label'},
+        ]
+    }
+    with patch('ltv_app.blueprints.gmail.extensions.gmail_client._get_service', return_value=mock_svc):
+        result = list_labels()
+    names = [p['name'] for p in result]
+    assert 'Alvin - SHK' in names
+    assert 'INBOX' not in names
+    assert 'Other Label' not in names
+
+
+def test_list_labels_builds_hierarchy():
+    from unittest.mock import MagicMock, patch
+    from ltv_app.blueprints.gmail.extensions.gmail_client import list_labels
+
+    mock_svc = MagicMock()
+    mock_svc.users.return_value.labels.return_value.list.return_value.execute.return_value = {
+        'labels': [
+            {'id': 'L1', 'name': 'Alvin - SHK'},
+            {'id': 'L2', 'name': 'Alvin - SHK/Statements'},
+            {'id': 'L3', 'name': 'Alvin - SHK/Trades'},
+            {'id': 'L4', 'name': 'Alvin - DB'},
+        ]
+    }
+    with patch('ltv_app.blueprints.gmail.extensions.gmail_client._get_service', return_value=mock_svc):
+        result = list_labels()
+    shk = next(p for p in result if p['name'] == 'Alvin - SHK')
+    child_ids = [c['id'] for c in shk['children']]
+    assert 'L2' in child_ids
+    assert 'L3' in child_ids
+    db = next(p for p in result if p['name'] == 'Alvin - DB')
+    assert db['children'] == []
+
+
+def test_list_labels_short_names():
+    from unittest.mock import MagicMock, patch
+    from ltv_app.blueprints.gmail.extensions.gmail_client import list_labels
+
+    mock_svc = MagicMock()
+    mock_svc.users.return_value.labels.return_value.list.return_value.execute.return_value = {
+        'labels': [
+            {'id': 'L1', 'name': 'Alvin - SHK'},
+            {'id': 'L2', 'name': 'Alvin - SHK/Statements'},
+        ]
+    }
+    with patch('ltv_app.blueprints.gmail.extensions.gmail_client._get_service', return_value=mock_svc):
+        result = list_labels()
+    parent = result[0]
+    assert parent['short'] == 'SHK'
+    assert parent['children'][0]['short'] == 'Statements'
