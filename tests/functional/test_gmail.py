@@ -141,3 +141,18 @@ def test_trash_thread_requires_superuser(auth_client):
 def test_trash_thread_get_not_allowed(superuser_client):
     response = superuser_client.get('/gmail/thread/abc123/trash')
     assert response.status_code == 405
+
+
+def test_trash_thread_api_error_returns_500(superuser_client):
+    from googleapiclient.errors import HttpError
+    err = HttpError(resp=MagicMock(status=500), content=b'server error')
+    with patch('ltv_app.blueprints.gmail.views.trash_thread', side_effect=err):
+        response = superuser_client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 500
+    assert 'error' in response.get_json()
+
+
+def test_trash_thread_unauthenticated_redirects(client):
+    response = client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']

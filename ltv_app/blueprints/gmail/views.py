@@ -51,4 +51,6 @@ def trash_thread_view(thread_id):
         if e.resp.status == 404:
             return jsonify({'error': 'Thread not found'}), 404
         return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     return jsonify({}), 200
