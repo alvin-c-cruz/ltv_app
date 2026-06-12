@@ -9,6 +9,24 @@ from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
+BANK_DOMAINS = {
+    'ebshk.com': 'SHK',
+    'db.com': 'DB',
+    'tridenttrust.com': 'Trident',
+}
+
+
+def guess_bank(sender):
+    """Return a short bank label guessed from the sender's email domain."""
+    match = re.search(r'<[^>]*@([^>]+)>', sender)
+    if match:
+        domain = match.group(1).lower()
+    elif '@' in sender:
+        domain = sender.split('@')[-1].strip().lower()
+    else:
+        return '—'
+    return BANK_DOMAINS.get(domain, '—')
+
 
 def _token_path():
     return os.path.join(current_app.instance_path, 'gmail_token.json')

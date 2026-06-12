@@ -63,3 +63,30 @@ def test_header_case_insensitive():
 def test_header_missing_returns_empty():
     from ltv_app.blueprints.gmail.extensions.gmail_client import _header
     assert _header([], 'Subject') == ''
+
+
+# ── guess_bank ───────────────────────────────────────────────────────────────
+
+def test_guess_bank_ebshk():
+    from ltv_app.blueprints.gmail.extensions.gmail_client import guess_bank
+    assert guess_bank('Cindy Lam <Cindy.Lam@ebshk.com>') == 'SHK'
+
+
+def test_guess_bank_db():
+    from ltv_app.blueprints.gmail.extensions.gmail_client import guess_bank
+    assert guess_bank('Roger Suen <roger.suen@db.com>') == 'DB'
+
+
+def test_guess_bank_trident():
+    from ltv_app.blueprints.gmail.extensions.gmail_client import guess_bank
+    assert guess_bank('Wesley Wong <wwong@tridenttrust.com>') == 'Trident'
+
+
+def test_guess_bank_unknown():
+    from ltv_app.blueprints.gmail.extensions.gmail_client import guess_bank
+    assert guess_bank('Larry Villareal <larrylilia@gmail.com>') == '—'
+
+
+def test_guess_bank_bare_email_format():
+    from ltv_app.blueprints.gmail.extensions.gmail_client import guess_bank
+    assert guess_bank('user@ebshk.com') == 'SHK'
