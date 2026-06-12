@@ -90,37 +90,3 @@ Pass 4 — Conventions:   N violations corrected
 
 Review the spec, then proceed to writing-plans.
 ```
-
-**Step 2: Verify the file was created**
-
-Run: `cat .claude/skills/spec-enhancer/SKILL.md`
-Expected: file content prints with YAML frontmatter and all four passes.
-
-**Step 3: Commit**
-
-```bash
-git add .claude/skills/spec-enhancer/SKILL.md
-git commit -m "Add spec-enhancer project skill"
-```
-
-## Context
-
-Working directory: C:\envs\LTV\server
-
-This is a Flask-based stock portfolio app. We are creating a project-local Claude Code skill (a SKILL.md file) that will automatically improve brainstorming spec documents. This is NOT Python code — it's a markdown instruction file that Claude reads when the skill is invoked. No tests needed for this task.
-
-The `.claude/skills/` directory does not exist yet — you will need to create both the directory and the file.
-
-## Your Job
-
-1. Create `.claude/skills/spec-enhancer/SKILL.md` with the exact content above
-2. Verify the file was written correctly
-3. Commit it
-
-## Report Format
-
-When done:
-- **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
-- What you created
-- Files changed
-- Any concerns
