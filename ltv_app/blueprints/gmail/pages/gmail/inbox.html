@@ -1,15 +1,118 @@
 {% extends 'base.html' %}
+
 {% block content %}
-{% if not_configured %}
-<p>Gmail not configured</p>
-{% elif threads is not none %}
-{% for thread in threads %}
-<p>{{ thread.sender }} {{ thread.subject }}</p>
-{% endfor %}
-{% endif %}
+<h1>Gmail Inbox</h1>
+<p style="color:var(--text-muted)">larrylilia@gmail.com — 20 most recent threads</p>
+
 {% with messages = get_flashed_messages(with_categories=true) %}
-{% for category, message in messages %}
-<p>{{ message }}</p>
-{% endfor %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }}" style="margin-top:1rem">{{ message }}</div>
+  {% endfor %}
 {% endwith %}
+
+{% if not_configured %}
+<div class="alert alert-warning" style="margin-top:1.25rem">
+  <strong>Gmail not configured.</strong>
+  Run <code>python instance/gmail_setup.py</code> to set up OAuth access, then reload this page.
+</div>
+
+{% elif threads is not none %}
+<div class="table-wrap" style="margin-top:1.25rem">
+  <table class="table" id="inbox-table">
+    <thead>
+      <tr>
+        <th style="width:26%">From</th>
+        <th style="width:30%">Subject</th>
+        <th style="width:14%">Date</th>
+        <th style="width:30%">Snippet</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for thread in threads %}
+      <tr class="inbox-row" data-thread-id="{{ thread.id }}" style="cursor:pointer">
+        <td>{{ thread.sender }}</td>
+        <td>{{ thread.subject }}</td>
+        <td>{{ thread.date }}</td>
+        <td style="color:var(--text-muted);font-size:0.875rem">{{ thread.snippet }}</td>
+      </tr>
+      <tr class="thread-expand" id="expand-{{ thread.id }}" style="display:none">
+        <td colspan="4">
+          <div class="thread-messages"
+               style="padding:0.75rem 1rem;background:var(--bg-secondary,#f8f9fa);border-radius:4px">
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">
+          No threads found.
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var activeId = null;
+
+  document.querySelectorAll('.inbox-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var id = this.dataset.threadId;
+      var expandRow = document.getElementById('expand-' + id);
+      var msgDiv = expandRow.querySelector('.thread-messages');
+
+      // Collapse previously open row
+      if (activeId && activeId !== id) {
+        document.getElementById('expand-' + activeId).style.display = 'none';
+      }
+
+      // Toggle: if already open, close it
+      if (activeId === id) {
+        expandRow.style.display = 'none';
+        activeId = null;
+        return;
+      }
+
+      activeId = id;
+      expandRow.style.display = '';
+      msgDiv.innerHTML = '<em style="color:var(--text-muted)">Loading…</em>';
+
+      fetch('/gmail/thread/' + id)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) {
+            msgDiv.innerHTML = '<span style="color:var(--danger,red)">Error: ' + esc(data.error) + '</span>';
+            return;
+          }
+          var html = '';
+          data.messages.forEach(function (msg) {
+            html += '<div style="border-bottom:1px solid var(--border-color,#dee2e6);'
+                  + 'padding:0.6rem 0;margin-bottom:0.4rem">';
+            html += '<strong>' + esc(msg.sender) + '</strong>';
+            html += ' &nbsp;&middot;&nbsp; '
+                  + '<span style="color:var(--text-muted);font-size:0.8rem">' + esc(msg.date) + '</span>';
+            html += '<div style="margin-top:0.4rem;white-space:pre-wrap;font-size:0.875rem">'
+                  + esc(msg.body || '(no body)') + '</div>';
+            html += '</div>';
+          });
+          msgDiv.innerHTML = html;
+        })
+        .catch(function () {
+          msgDiv.innerHTML = '<span style="color:var(--danger,red)">Failed to load thread.</span>';
+        });
+    });
+  });
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+}());
+</script>
 {% endblock %}
