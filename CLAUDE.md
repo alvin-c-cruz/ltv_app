@@ -25,6 +25,12 @@ When adding features or fixing bugs, always work within `ltv_app/` structure. On
 python flask_app.py  # Starts development server on auto-detected host:5000
 ```
 
+**Important:** Always launch via `! python flask_app.py` in the Claude Code prompt (not as a hidden background process) so output is visible in the conversation.
+
+### Spec Enhancer (auto-invoked after brainstorming)
+
+After brainstorming writes and self-reviews a spec, always invoke `spec-enhancer` on the spec file before asking the user to review it. This runs four automated improvement passes (vagueness resolution, edge cases + permission checks, codebase grounding, convention compliance).
+
 ### Testing
 ```bash
 pytest                                    # Run all tests
