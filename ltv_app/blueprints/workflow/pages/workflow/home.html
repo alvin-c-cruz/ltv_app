@@ -48,16 +48,86 @@ function shiftDate(fieldId, days) {
 }
 </script>
 
-<!-- SECTION 1: REVIEW -->
-<div class="mt-4">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-        <h2 style="font-size:1.3rem; margin:0; color:var(--text-primary); border-bottom:2px solid var(--primary); padding-bottom:0.5rem; flex:1;">
-            1. Review Transactions
-            <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
-                ({{ review_total }} pending)
-            </span>
-        </h2>
-        <button type="button" id="reviewSelectedBtn" class="btn btn-primary btn-sm" style="display:none; margin-left:1rem;"
+<style>
+/* ── Workflow card tabs ─────────────────────────────────── */
+.workflow-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+}
+.workflow-tab {
+    padding: 8px 18px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    color: var(--text-muted);
+    background: #ede9df;
+    user-select: none;
+    transition: background 0.12s;
+}
+.workflow-tab.active {
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    border-color: #ccc;
+}
+.workflow-tab:hover:not(.active) {
+    background: #e0ddd3;
+}
+.workflow-tab-body {
+    background: var(--surface);
+    border: 1px solid #ccc;
+    border-radius: 0 6px 6px 6px;
+    padding: 1.2rem 1.5rem 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.workflow-tab-panel { display: none; }
+.workflow-tab-panel.active { display: block; }
+
+/* ── Tab badge counts ───────────────────────────────────── */
+.wf-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.wf-badge-warn  { background: var(--accent);  color: white; }
+.wf-badge-muted { background: #ccc;           color: #555;  }
+.wf-badge-ok    { background: var(--success); color: white; }
+</style>
+
+<!-- ── Tab nav ─────────────────────────────────────────── -->
+<div class="workflow-tabs mt-4">
+    <div class="workflow-tab active" data-tab="review" onclick="switchWorkflowTab('review')">
+        For Review
+        <span class="wf-badge {% if review_total > 0 %}wf-badge-warn{% else %}wf-badge-muted{% endif %}">{{ review_total }}</span>
+    </div>
+    <div class="workflow-tab" data-tab="charges" onclick="switchWorkflowTab('charges')">
+        Charges
+        <span class="wf-badge {% if charges_total > 0 %}wf-badge-warn{% else %}wf-badge-muted{% endif %}">{{ charges_total }}</span>
+    </div>
+    <div class="workflow-tab" data-tab="locking" onclick="switchWorkflowTab('locking')">
+        For Locking
+        <span class="wf-badge {% if lock_total > 0 %}wf-badge-warn{% else %}wf-badge-muted{% endif %}">{{ lock_total }}</span>
+    </div>
+    <div class="workflow-tab" data-tab="locked" onclick="switchWorkflowTab('locked')">
+        Locked
+        <span class="wf-badge wf-badge-ok">{{ locked_total }}</span>
+    </div>
+</div>
+<div class="workflow-tab-body">
+
+<!-- TAB: For Review -->
+<div id="tab-review" class="workflow-tab-panel active">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:0.8rem; min-height:2rem;">
+        <button type="button" id="reviewSelectedBtn" class="btn btn-primary btn-sm" style="display:none;"
                 onclick="reviewSelected()">
             Review Selected (<span id="reviewSelectedCount">0</span>)
         </button>
@@ -217,15 +287,10 @@ function shiftDate(fieldId, days) {
     </div>
     {% endif %}
 </div>
+<!-- /TAB: For Review -->
 
-<!-- SECTION 2: CHARGES -->
-<div class="mt-4">
-    <h2 style="font-size:1.3rem; margin-bottom:1rem; color:var(--text-primary); border-bottom:2px solid var(--accent); padding-bottom:0.5rem;">
-        2. Encode Charges
-        <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
-            ({{ charges_total }} pending)
-        </span>
-    </h2>
+<!-- TAB: Charges -->
+<div id="tab-charges" class="workflow-tab-panel">
 
     {% if charges_grouped %}
     {% for bank_name, data in charges_grouped.items() %}
@@ -329,17 +394,12 @@ function shiftDate(fieldId, days) {
     </div>
     {% endif %}
 </div>
+<!-- /TAB: Charges -->
 
-<!-- SECTION 3: LOCK -->
-<div class="mt-4">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-        <h2 style="font-size:1.3rem; margin:0; color:var(--text-primary); border-bottom:2px solid var(--danger); padding-bottom:0.5rem; flex:1;">
-            3. Lock Transactions
-            <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
-                ({{ lock_total }} pending)
-            </span>
-        </h2>
-        <button type="button" id="lockSelectedBtn" class="btn btn-danger btn-sm" style="display:none; margin-left:1rem;"
+<!-- TAB: For Locking -->
+<div id="tab-locking" class="workflow-tab-panel">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:0.8rem; min-height:2rem;">
+        <button type="button" id="lockSelectedBtn" class="btn btn-danger btn-sm" style="display:none;"
                 onclick="lockSelected()">
             Lock Selected (<span id="lockSelectedCount">0</span>)
         </button>
@@ -496,15 +556,10 @@ function shiftDate(fieldId, days) {
     </div>
     {% endif %}
 </div>
+<!-- /TAB: For Locking -->
 
-<!-- SECTION 4: LOCKED -->
-<div class="mt-4 mb-4">
-    <h2 style="font-size:1.3rem; margin-bottom:1rem; color:var(--text-primary); border-bottom:2px solid var(--success); padding-bottom:0.5rem;">
-        4. Locked Transactions
-        <span style="font-size:0.9rem; color:var(--text-muted); font-weight:normal;">
-            ({{ locked_total }} locked)
-        </span>
-    </h2>
+<!-- TAB: Locked -->
+<div id="tab-locked" class="workflow-tab-panel">
 
     {% if locked_grouped %}
     {% for bank_name, data in locked_grouped.items() %}
@@ -612,8 +667,27 @@ function shiftDate(fieldId, days) {
     </div>
     {% endif %}
 </div>
+<!-- /TAB: Locked -->
+
+</div>
+<!-- /workflow-tab-body -->
 
 <script>
+// ── Workflow tab switching ────────────────────────────────────────────
+function switchWorkflowTab(tabName) {
+    document.querySelectorAll('.workflow-tab').forEach(function(t) {
+        t.classList.toggle('active', t.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.workflow-tab-panel').forEach(function(p) {
+        p.classList.toggle('active', p.id === 'tab-' + tabName);
+    });
+    sessionStorage.setItem('workflowTab', tabName);
+}
+(function() {
+    var saved = sessionStorage.getItem('workflowTab');
+    if (saved) switchWorkflowTab(saved);
+}());
+
 // ── Shared confirmation modal ─────────────────────────────────────────
 let _confirmCallback = null;
 
