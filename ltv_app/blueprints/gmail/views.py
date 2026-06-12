@@ -143,3 +143,62 @@ def update_bank(thread_id):
         db.execute('DELETE FROM tbl_gmail_thread_labels WHERE thread_id = ?', (thread_id,))
     db.commit()
     return jsonify({}), 200
+
+
+@bp.route('/thread/<thread_id>/sublabel', methods=['PATCH'])
+@login_required
+@superuser_required
+def update_sublabel(thread_id):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.get_json(silent=True)
+    if data is None or 'sublabel_id' not in data:
+        return jsonify({'error': 'Missing sublabel_id'}), 400
+    sublabel_id = data['sublabel_id'].strip()
+    db = get_db()
+    _ensure_labels_table(db)
+    if sublabel_id:
+        db.execute(
+            'INSERT OR IGNORE INTO tbl_gmail_thread_labels '
+            '(thread_id, bank_id, sublabel_id) VALUES (?, NULL, NULL)',
+            (thread_id,)
+        )
+        db.execute(
+            'UPDATE tbl_gmail_thread_labels SET sublabel_id = ? WHERE thread_id = ?',
+            (sublabel_id, thread_id)
+        )
+    else:
+        db.execute(
+            'UPDATE tbl_gmail_thread_labels SET sublabel_id = NULL WHERE thread_id = ?',
+            (thread_id,)
+        )
+    db.commit()
+    return jsonify({}), 200
+
+
+@bp.route('/thread/<thread_id>/file', methods=['POST'])
+@login_required
+@superuser_required
+def file_thread(thread_id):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return jsonify({'error': 'Forbidden'}), 403
+    db = get_db()
+    _ensure_labels_table(db)
+    row = db.execute(
+        'SELECT sublabel_id FROM tbl_gmail_thread_labels WHERE thread_id = ?',
+        (thread_id,)
+    ).fetchone()
+    if not row or not row[0]:
+        return jsonify({'error': 'No sub-label set'}), 400
+    sublabel_id = row[0]
+    try:
+        apply_label_and_archive(thread_id, sublabel_id)
+    except (FileNotFoundError, ValueError):
+        return jsonify({'error': 'Gmail not configured'}), 503
+    except HttpError as e:
+        if e.resp.status == 404:
+            return jsonify({'error': 'Thread not found'}), 404
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    return jsonify({}), 200
