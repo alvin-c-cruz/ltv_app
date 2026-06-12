@@ -1,6 +1,17 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+@media (max-width: 1024px) {
+  #inbox-table { table-layout: fixed; width: 100%; }
+  #inbox-table th:last-child,
+  #inbox-table td:last-child { display: none; }
+  #inbox-table th:nth-child(1) { width: 36% !important; }
+  #inbox-table th:nth-child(2) { width: 44% !important; }
+  #inbox-table th:nth-child(3) { width: 20% !important; }
+  #inbox-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+</style>
 <h1>Gmail Inbox</h1>
 <p style="color:var(--text-muted)">larrylilia@gmail.com — 20 most recent threads</p>
 
