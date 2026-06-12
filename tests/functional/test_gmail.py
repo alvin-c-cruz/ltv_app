@@ -97,3 +97,11 @@ def test_thread_api_error_returns_500(superuser_client):
         response = superuser_client.get('/gmail/thread/abc123')
     assert response.status_code == 500
     assert 'error' in response.get_json()
+
+
+def test_thread_not_configured_returns_503(superuser_client):
+    with patch('ltv_app.blueprints.gmail.views.get_thread',
+               side_effect=FileNotFoundError):
+        response = superuser_client.get('/gmail/thread/abc123')
+    assert response.status_code == 503
+    assert response.get_json()['error'] == 'Gmail not configured'

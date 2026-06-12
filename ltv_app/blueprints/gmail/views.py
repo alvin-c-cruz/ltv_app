@@ -28,6 +28,8 @@ def inbox():
 def thread(thread_id):
     try:
         messages = get_thread(thread_id)
+    except (FileNotFoundError, ValueError):
+        return jsonify({'error': 'Gmail not configured'}), 503
     except HttpError as e:
         if e.resp.status == 404:
             return jsonify({'error': 'Thread not found'}), 404
