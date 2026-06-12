@@ -3,7 +3,6 @@
 
 # Keep essential files for the application
 !.gitignore
-!.claude/
 !flask_app.py
 !VERSION
 !push.sh
