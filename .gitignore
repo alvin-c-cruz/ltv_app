@@ -23,6 +23,7 @@
 /instance/*
 !/instance/excel_templates/
 !/instance/excel_templates/*.xlsx
+!/instance/gmail_setup.py
 
 # Compiled Python — never commit these
 __pycache__/
