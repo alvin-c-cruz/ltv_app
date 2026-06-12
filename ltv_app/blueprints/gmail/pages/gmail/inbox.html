@@ -270,12 +270,12 @@
       function save() {
         if (!cell.querySelector('input')) return;
         var label = input.value.trim();
+        cell.removeChild(input);
         if (label === (prev === '—' ? '' : prev)) {
           cell.textContent = prev;
           return;
         }
-        input.disabled = true;
-        input.style.opacity = '0.5';
+        cell.textContent = '…';
         fetch('/gmail/thread/' + cell.dataset.threadId + '/bank', {
           method: 'PATCH',
           headers: {
