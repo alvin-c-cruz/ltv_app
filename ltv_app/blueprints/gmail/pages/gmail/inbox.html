@@ -17,6 +17,19 @@
 </div>
 
 {% elif threads is not none %}
+{# ── Right-click context menu ──────────────────────────────────── #}
+<div id="ctx-menu" style="display:none;position:fixed;z-index:1000;background:#fff;
+     border:1px solid var(--border-color,#dee2e6);border-radius:4px;
+     box-shadow:0 2px 8px rgba(0,0,0,.15);min-width:160px">
+  <div id="ctx-open"
+       style="padding:.5rem 1rem;cursor:pointer"
+       onmouseover="this.style.background='var(--bg-secondary,#f8f9fa)'"
+       onmouseout="this.style.background=''">Open in Gmail ↗</div>
+  <div id="ctx-trash"
+       style="padding:.5rem 1rem;cursor:pointer;color:var(--danger,#dc3545)"
+       onmouseover="this.style.background='var(--bg-secondary,#f8f9fa)'"
+       onmouseout="this.style.background=''">Move to Trash</div>
+</div>
 <div class="table-wrap" style="margin-top:1.25rem">
   <table class="table" id="inbox-table">
     <thead>
@@ -51,6 +64,29 @@
     {% endfor %}
     </tbody>
   </table>
+</div>
+{# ── Trash confirmation modal ──────────────────────────────────── #}
+<div class="modal-overlay" id="trashModal"
+     onclick="if(event.target===this)closeTrashModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Move to Trash</span>
+      <button type="button" class="modal-close"
+              onclick="closeTrashModal()">&times;</button>
+    </div>
+    <div style="padding:1.25rem">
+      <p style="margin:0 0 .75rem">Move this thread to Trash?</p>
+      <div id="trash-error"
+           style="display:none;color:var(--danger,#dc3545);margin-bottom:.75rem"></div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button type="button" class="btn btn-secondary"
+                onclick="closeTrashModal()">Cancel</button>
+        <button type="button" class="btn btn-danger"
+                id="trash-confirm-btn"
+                onclick="confirmTrash()">Move to Trash</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endif %}
 
@@ -113,6 +149,77 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
+}());
+
+// ── Context menu ──────────────────────────────────────────────────
+(function () {
+  var ctxMenu = document.getElementById('ctx-menu');
+  var ctxThreadId = null;
+
+  document.addEventListener('contextmenu', function (e) {
+    var row = e.target.closest('.inbox-row');
+    if (!row) { ctxMenu.style.display = 'none'; return; }
+    e.preventDefault();
+    ctxThreadId = row.dataset.threadId;
+    ctxMenu.style.display = 'block';
+    ctxMenu.style.left = e.clientX + 'px';
+    ctxMenu.style.top = e.clientY + 'px';
+  });
+
+  document.addEventListener('click', function () { ctxMenu.style.display = 'none'; });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') ctxMenu.style.display = 'none';
+  });
+
+  document.getElementById('ctx-open').addEventListener('click', function () {
+    if (!ctxThreadId) return;
+    window.open('https://mail.google.com/mail/u/0/#inbox/' + ctxThreadId, '_blank');
+    ctxMenu.style.display = 'none';
+  });
+
+  document.getElementById('ctx-trash').addEventListener('click', function () {
+    ctxMenu.style.display = 'none';
+    document.getElementById('trash-error').style.display = 'none';
+    document.getElementById('trash-error').textContent = '';
+    document.getElementById('trashModal').classList.add('active');
+  });
+
+  // ── Trash modal ──────────────────────────────────────────────────
+  window.closeTrashModal = function () {
+    document.getElementById('trashModal').classList.remove('active');
+  };
+
+  window.confirmTrash = function () {
+    var btn = document.getElementById('trash-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Moving…';
+
+    fetch('/gmail/thread/' + ctxThreadId + '/trash', { method: 'POST' })
+      .then(function (r) {
+        if (r.ok) {
+          closeTrashModal();
+          var inboxRow = document.querySelector('[data-thread-id="' + ctxThreadId + '"]');
+          var expandRow = document.getElementById('expand-' + ctxThreadId);
+          if (inboxRow) inboxRow.remove();
+          if (expandRow) expandRow.remove();
+        } else {
+          return r.json().then(function (data) {
+            var errDiv = document.getElementById('trash-error');
+            errDiv.textContent = data.error || 'Failed to move to Trash.';
+            errDiv.style.display = 'block';
+          });
+        }
+      })
+      .catch(function () {
+        var errDiv = document.getElementById('trash-error');
+        errDiv.textContent = 'Request failed.';
+        errDiv.style.display = 'block';
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Move to Trash';
+      });
+  };
 }());
 </script>
 {% endblock %}
