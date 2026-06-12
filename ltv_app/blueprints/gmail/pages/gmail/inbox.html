@@ -6,9 +6,10 @@
   #inbox-table { table-layout: fixed; width: 100%; }
   #inbox-table th:last-child,
   #inbox-table td:last-child { display: none; }
-  #inbox-table th:nth-child(1) { width: 36% !important; }
-  #inbox-table th:nth-child(2) { width: 44% !important; }
-  #inbox-table th:nth-child(3) { width: 20% !important; }
+  #inbox-table th:nth-child(1) { width: 8% !important; }
+  #inbox-table th:nth-child(2) { width: 30% !important; }
+  #inbox-table th:nth-child(3) { width: 42% !important; }
+  #inbox-table th:nth-child(4) { width: 20% !important; }
   #inbox-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 </style>
@@ -45,22 +46,25 @@
   <table class="table" id="inbox-table">
     <thead>
       <tr>
-        <th style="width:26%">From</th>
-        <th style="width:30%">Subject</th>
-        <th style="width:14%">Date</th>
-        <th style="width:30%">Snippet</th>
+        <th style="width:8%">Bank</th>
+        <th style="width:24%">From</th>
+        <th style="width:28%">Subject</th>
+        <th style="width:12%">Date</th>
+        <th style="width:28%">Snippet</th>
       </tr>
     </thead>
     <tbody>
     {% for thread in threads %}
       <tr class="inbox-row" data-thread-id="{{ thread.id }}" style="cursor:pointer">
+        <td class="bank-cell" data-thread-id="{{ thread.id }}"
+            style="font-weight:500;font-size:0.8rem;cursor:text">{{ thread.bank }}</td>
         <td>{{ thread.sender }}</td>
         <td>{{ thread.subject }}</td>
         <td>{{ thread.date }}</td>
         <td style="color:var(--text-muted);font-size:0.875rem">{{ thread.snippet }}</td>
       </tr>
       <tr class="thread-expand" id="expand-{{ thread.id }}" style="display:none">
-        <td colspan="4">
+        <td colspan="5">
           <div class="thread-messages"
                style="padding:0.75rem 1rem;background:var(--bg-secondary,#f8f9fa);border-radius:4px">
           </div>
@@ -68,7 +72,7 @@
       </tr>
     {% else %}
       <tr>
-        <td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">
+        <td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">
           No threads found.
         </td>
       </tr>
@@ -239,6 +243,68 @@
         btn.textContent = 'Move to Trash';
       });
   };
+}());
+
+// ── Bank cell inline edit ─────────────────────────────────────────
+(function () {
+  function flashRed(el) {
+    el.style.color = 'var(--danger,#dc3545)';
+    setTimeout(function () { el.style.color = ''; }, 1500);
+  }
+
+  document.querySelectorAll('.bank-cell').forEach(function (cell) {
+    cell.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (cell.querySelector('input')) return;
+
+      var prev = cell.textContent.trim();
+      var input = document.createElement('input');
+      input.value = prev === '—' ? '' : prev;
+      input.style.cssText = 'width:100%;border:none;outline:none;background:transparent;'
+        + 'font:inherit;font-weight:500;font-size:0.8rem;padding:0';
+      cell.textContent = '';
+      cell.appendChild(input);
+      input.focus();
+      input.select();
+
+      function save() {
+        if (!cell.querySelector('input')) return;
+        var label = input.value.trim();
+        if (label === (prev === '—' ? '' : prev)) {
+          cell.textContent = prev;
+          return;
+        }
+        input.disabled = true;
+        input.style.opacity = '0.5';
+        fetch('/gmail/thread/' + cell.dataset.threadId + '/bank', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ bank_label: label })
+        })
+          .then(function (r) {
+            if (r.ok) {
+              cell.textContent = label || '—';
+            } else {
+              cell.textContent = prev;
+              flashRed(cell);
+            }
+          })
+          .catch(function () {
+            cell.textContent = prev;
+            flashRed(cell);
+          });
+      }
+
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); save(); }
+        if (e.key === 'Escape') { cell.textContent = prev; }
+      });
+      input.addEventListener('blur', save);
+    });
+  });
 }());
 </script>
 {% endblock %}
