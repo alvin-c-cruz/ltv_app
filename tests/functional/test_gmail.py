@@ -111,7 +111,8 @@ def test_thread_not_configured_returns_503(superuser_client):
 
 def test_trash_thread_success(superuser_client):
     with patch('ltv_app.blueprints.gmail.views.trash_thread') as mock_trash:
-        response = superuser_client.post('/gmail/thread/abc123/trash')
+        response = superuser_client.post('/gmail/thread/abc123/trash',
+                                         headers={'X-Requested-With': 'XMLHttpRequest'})
     assert response.status_code == 200
     mock_trash.assert_called_once_with('abc123')
 
@@ -120,7 +121,8 @@ def test_trash_thread_not_found(superuser_client):
     from googleapiclient.errors import HttpError
     err = HttpError(resp=MagicMock(status=404), content=b'not found')
     with patch('ltv_app.blueprints.gmail.views.trash_thread', side_effect=err):
-        response = superuser_client.post('/gmail/thread/abc123/trash')
+        response = superuser_client.post('/gmail/thread/abc123/trash',
+                                          headers={'X-Requested-With': 'XMLHttpRequest'})
     assert response.status_code == 404
     assert response.get_json()['error'] == 'Thread not found'
 
@@ -128,7 +130,8 @@ def test_trash_thread_not_found(superuser_client):
 def test_trash_thread_not_configured(superuser_client):
     with patch('ltv_app.blueprints.gmail.views.trash_thread',
                side_effect=FileNotFoundError):
-        response = superuser_client.post('/gmail/thread/abc123/trash')
+        response = superuser_client.post('/gmail/thread/abc123/trash',
+                                          headers={'X-Requested-With': 'XMLHttpRequest'})
     assert response.status_code == 503
     assert response.get_json()['error'] == 'Gmail not configured'
 
@@ -147,7 +150,8 @@ def test_trash_thread_api_error_returns_500(superuser_client):
     from googleapiclient.errors import HttpError
     err = HttpError(resp=MagicMock(status=500), content=b'server error')
     with patch('ltv_app.blueprints.gmail.views.trash_thread', side_effect=err):
-        response = superuser_client.post('/gmail/thread/abc123/trash')
+        response = superuser_client.post('/gmail/thread/abc123/trash',
+                                          headers={'X-Requested-With': 'XMLHttpRequest'})
     assert response.status_code == 500
     assert 'error' in response.get_json()
 

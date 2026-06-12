@@ -18,7 +18,7 @@
 
 {% elif threads is not none %}
 {# ── Right-click context menu ──────────────────────────────────── #}
-<div id="ctx-menu" style="display:none;position:fixed;z-index:1000;background:#fff;
+<div id="ctx-menu" style="display:none;position:fixed;z-index:500;background:#fff;
      border:1px solid var(--border-color,#dee2e6);border-radius:4px;
      box-shadow:0 2px 8px rgba(0,0,0,.15);min-width:160px">
   <div id="ctx-open"
@@ -74,7 +74,7 @@
       <button type="button" class="modal-close"
               onclick="closeTrashModal()">&times;</button>
     </div>
-    <div style="padding:1.25rem">
+    <div style="padding:16px 20px">
       <p style="margin:0 0 .75rem">Move this thread to Trash?</p>
       <div id="trash-error"
            style="display:none;color:var(--danger,#dc3545);margin-bottom:.75rem"></div>
@@ -157,13 +157,18 @@
   var ctxThreadId = null;
 
   document.addEventListener('contextmenu', function (e) {
+    if (document.getElementById('trashModal').classList.contains('active')) return;
     var row = e.target.closest('.inbox-row');
     if (!row) { ctxMenu.style.display = 'none'; return; }
     e.preventDefault();
     ctxThreadId = row.dataset.threadId;
     ctxMenu.style.display = 'block';
-    ctxMenu.style.left = e.clientX + 'px';
-    ctxMenu.style.top = e.clientY + 'px';
+    var menuW = ctxMenu.offsetWidth || 160;
+    var menuH = ctxMenu.offsetHeight || 70;
+    var left = Math.min(e.clientX, window.innerWidth - menuW - 4);
+    var top = Math.min(e.clientY, window.innerHeight - menuH - 4);
+    ctxMenu.style.left = left + 'px';
+    ctxMenu.style.top = top + 'px';
   });
 
   document.addEventListener('click', function () { ctxMenu.style.display = 'none'; });
@@ -194,7 +199,10 @@
     btn.disabled = true;
     btn.textContent = 'Moving…';
 
-    fetch('/gmail/thread/' + ctxThreadId + '/trash', { method: 'POST' })
+    fetch('/gmail/thread/' + ctxThreadId + '/trash', {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
       .then(function (r) {
         if (r.ok) {
           closeTrashModal();

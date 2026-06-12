@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, flash
+from flask import Blueprint, render_template, jsonify, flash, request
 from flask_login import login_required
 from googleapiclient.errors import HttpError
 
@@ -43,6 +43,8 @@ def thread(thread_id):
 @login_required
 @superuser_required
 def trash_thread_view(thread_id):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return jsonify({'error': 'Forbidden'}), 403
     try:
         trash_thread(thread_id)
     except (FileNotFoundError, ValueError):
