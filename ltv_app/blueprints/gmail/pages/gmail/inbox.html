@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if not_configured %}
+<p>Gmail not configured</p>
+{% elif threads is not none %}
+{% for thread in threads %}
+<p>{{ thread.sender }} {{ thread.subject }}</p>
+{% endfor %}
+{% endif %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<p>{{ message }}</p>
+{% endfor %}
+{% endwith %}
+{% endblock %}
