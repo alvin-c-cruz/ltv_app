@@ -29,3 +29,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Gmail OAuth credentials — never commit these
+instance/gmail_token.json
+instance/gmail_client_secret.json
