@@ -22,7 +22,7 @@ When adding features or fixing bugs, always work within `ltv_app/` structure. On
 
 ### Running the Application
 ```bash
-python flask_app.py  # Starts development server on auto-detected host:5000
+python flask_app.py  # Starts development server on auto-detected host:5001
 ```
 
 **Important:** Always launch via `! python flask_app.py` in the Claude Code prompt (not as a hidden background process) so output is visible in the conversation.
