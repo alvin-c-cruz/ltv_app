@@ -105,3 +105,39 @@ def test_thread_not_configured_returns_503(superuser_client):
         response = superuser_client.get('/gmail/thread/abc123')
     assert response.status_code == 503
     assert response.get_json()['error'] == 'Gmail not configured'
+
+
+# ── POST /gmail/thread/<id>/trash ────────────────────────────────────────────
+
+def test_trash_thread_success(superuser_client):
+    with patch('ltv_app.blueprints.gmail.views.trash_thread') as mock_trash:
+        response = superuser_client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 200
+    mock_trash.assert_called_once_with('abc123')
+
+
+def test_trash_thread_not_found(superuser_client):
+    from googleapiclient.errors import HttpError
+    err = HttpError(resp=MagicMock(status=404), content=b'not found')
+    with patch('ltv_app.blueprints.gmail.views.trash_thread', side_effect=err):
+        response = superuser_client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 404
+    assert response.get_json()['error'] == 'Thread not found'
+
+
+def test_trash_thread_not_configured(superuser_client):
+    with patch('ltv_app.blueprints.gmail.views.trash_thread',
+               side_effect=FileNotFoundError):
+        response = superuser_client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 503
+    assert response.get_json()['error'] == 'Gmail not configured'
+
+
+def test_trash_thread_requires_superuser(auth_client):
+    response = auth_client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 403
+
+
+def test_trash_thread_get_not_allowed(superuser_client):
+    response = superuser_client.get('/gmail/thread/abc123/trash')
+    assert response.status_code == 405

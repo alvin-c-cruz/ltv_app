@@ -3,7 +3,7 @@ from flask_login import login_required
 from googleapiclient.errors import HttpError
 
 from ..auth import superuser_required
-from .extensions.gmail_client import list_threads, get_thread
+from .extensions.gmail_client import list_threads, get_thread, trash_thread
 
 bp = Blueprint('gmail', __name__, template_folder='pages', url_prefix='/gmail')
 
@@ -37,3 +37,18 @@ def thread(thread_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     return jsonify({'messages': messages})
+
+
+@bp.route('/thread/<thread_id>/trash', methods=['POST'])
+@login_required
+@superuser_required
+def trash_thread_view(thread_id):
+    try:
+        trash_thread(thread_id)
+    except (FileNotFoundError, ValueError):
+        return jsonify({'error': 'Gmail not configured'}), 503
+    except HttpError as e:
+        if e.resp.status == 404:
+            return jsonify({'error': 'Thread not found'}), 404
+        return jsonify({'error': str(e)}), 500
+    return jsonify({}), 200

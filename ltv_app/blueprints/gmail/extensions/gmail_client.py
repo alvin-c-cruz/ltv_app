@@ -7,7 +7,7 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
 
 def _token_path():
@@ -96,3 +96,9 @@ def get_thread(thread_id):
             'body': _extract_body(payload),
         })
     return messages
+
+
+def trash_thread(thread_id):
+    """Move a thread to Gmail Trash."""
+    service = _get_service()
+    service.users().threads().trash(userId='me', id=thread_id).execute()
