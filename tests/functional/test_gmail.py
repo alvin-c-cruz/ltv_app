@@ -160,3 +160,10 @@ def test_trash_thread_unauthenticated_redirects(client):
     response = client.post('/gmail/thread/abc123/trash')
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
+
+
+def test_trash_thread_requires_xhr_header(superuser_client):
+    with patch('ltv_app.blueprints.gmail.views.trash_thread'):
+        response = superuser_client.post('/gmail/thread/abc123/trash')
+    assert response.status_code == 403
+    assert response.get_json()['error'] == 'Forbidden'
