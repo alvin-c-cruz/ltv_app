@@ -167,3 +167,62 @@ def test_trash_thread_requires_xhr_header(superuser_client):
         response = superuser_client.post('/gmail/thread/abc123/trash')
     assert response.status_code == 403
     assert response.get_json()['error'] == 'Forbidden'
+
+
+# ── PATCH /gmail/thread/<id>/bank ───────────────────────────────────────────
+
+def test_bank_patch_success(superuser_client):
+    response = superuser_client.patch(
+        '/gmail/thread/abc123/bank',
+        json={'bank_label': 'SHK'},
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    assert response.status_code == 200
+    assert response.get_json() == {}
+
+
+def test_bank_patch_clear(superuser_client):
+    response = superuser_client.patch(
+        '/gmail/thread/abc123/bank',
+        json={'bank_label': ''},
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    assert response.status_code == 200
+
+
+def test_bank_patch_missing_key(superuser_client):
+    response = superuser_client.patch(
+        '/gmail/thread/abc123/bank',
+        json={},
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    assert response.status_code == 400
+    assert 'error' in response.get_json()
+
+
+def test_bank_patch_requires_superuser(auth_client):
+    response = auth_client.patch(
+        '/gmail/thread/abc123/bank',
+        json={'bank_label': 'SHK'},
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    assert response.status_code == 403
+
+
+def test_bank_patch_requires_xhr(superuser_client):
+    response = superuser_client.patch(
+        '/gmail/thread/abc123/bank',
+        json={'bank_label': 'SHK'}
+    )
+    assert response.status_code == 403
+    assert response.get_json()['error'] == 'Forbidden'
+
+
+def test_bank_patch_unauthenticated(client):
+    response = client.patch(
+        '/gmail/thread/abc123/bank',
+        json={'bank_label': 'SHK'},
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
