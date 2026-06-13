@@ -287,9 +287,13 @@ var LABELS = {{ labels|tojson }};
       cell.appendChild(select);
       select.focus();
 
+      var bankDone = false;
+
       select.addEventListener('change', function () {
+        if (bankDone) return;
+        bankDone = true;
         var bankId = select.value;
-        cell.removeChild(select);
+        if (cell.contains(select)) cell.removeChild(select);
         cell.textContent = '…';
         fetch('/gmail/thread/' + cell.dataset.threadId + '/bank', {
           method: 'PATCH',
@@ -313,14 +317,18 @@ var LABELS = {{ labels|tojson }};
       });
 
       select.addEventListener('blur', function () {
-        if (cell.querySelector('select')) {
-          cell.removeChild(select);
-          cell.textContent = prevId ? shortForBankId(prevId) : '—';
-        }
+        setTimeout(function () {
+          if (!bankDone && cell.contains(select)) {
+            bankDone = true;
+            cell.removeChild(select);
+            cell.textContent = prevId ? shortForBankId(prevId) : '—';
+          }
+        }, 0);
       });
 
       select.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
+        if (e.key === 'Escape' && !bankDone) {
+          bankDone = true;
           cell.removeChild(select);
           cell.textContent = prevId ? shortForBankId(prevId) : '—';
         }
@@ -381,9 +389,13 @@ var LABELS = {{ labels|tojson }};
       cell.appendChild(select);
       select.focus();
 
+      var subDone = false;
+
       select.addEventListener('change', function () {
+        if (subDone) return;
+        subDone = true;
         var sublabelId = select.value;
-        cell.removeChild(select);
+        if (cell.contains(select)) cell.removeChild(select);
         cell.textContent = '…';
         fetch('/gmail/thread/' + cell.dataset.threadId + '/sublabel', {
           method: 'PATCH',
@@ -404,14 +416,18 @@ var LABELS = {{ labels|tojson }};
       });
 
       select.addEventListener('blur', function () {
-        if (cell.querySelector('select')) {
-          cell.removeChild(select);
-          cell.textContent = prevId ? shortForSublabelId(bankId, prevId) : '—';
-        }
+        setTimeout(function () {
+          if (!subDone && cell.contains(select)) {
+            subDone = true;
+            cell.removeChild(select);
+            cell.textContent = prevId ? shortForSublabelId(bankId, prevId) : '—';
+          }
+        }, 0);
       });
 
       select.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
+        if (e.key === 'Escape' && !subDone) {
+          subDone = true;
           cell.removeChild(select);
           cell.textContent = prevId ? shortForSublabelId(bankId, prevId) : '—';
         }
