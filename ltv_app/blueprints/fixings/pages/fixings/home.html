@@ -4,16 +4,31 @@
 <h1>Fixings</h1>
 
 <div class="toolbar mt-3">
-    <form method="post" action="{{ url_for('fixings.home') }}" class="toolbar-form">
+    <form method="post" action="{{ url_for('fixings.home') }}" class="toolbar-form" id="fixings-date-form">
         {{ date_form.csrf_token }}
         <div class="form-group">
             <label for="trade_date">Trade Date</label>
-            <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}">
+            <div style="display:flex;align-items:center;gap:4px">
+                <button type="button" class="btn btn-outline" style="padding:0.25rem 0.6rem;font-size:1.1rem" onclick="shiftDate(-1)">&#8249;</button>
+                <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}">
+                <button type="button" class="btn btn-outline" style="padding:0.25rem 0.6rem;font-size:1.1rem" onclick="shiftDate(1)">&#8250;</button>
+            </div>
         </div>
         <div class="toolbar-actions">
             <button type="submit" class="btn btn-primary">Refresh</button>
         </div>
     </form>
+    <script>
+    function shiftDate(days) {
+        var p = document.getElementById('trade_date').value.split('-');
+        var d = new Date(+p[0], +p[1] - 1, +p[2] + days);
+        document.getElementById('trade_date').value =
+            d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2, '0') + '-' +
+            String(d.getDate()).padStart(2, '0');
+        document.getElementById('fixings-date-form').submit();
+    }
+    </script>
     <div class="toolbar-actions" style="margin-left:auto;">
         <button type="button" class="btn btn-primary" onclick="openAddModal('{{ trade_date }}')">Add Fixing</button>
         <a href="{{ url_for('fixings.generate', trade_date=trade_date) }}" class="btn btn-success">Generate</a>
