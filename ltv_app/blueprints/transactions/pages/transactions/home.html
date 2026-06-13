@@ -2,20 +2,43 @@
 
 {% block content %}
 
+<style>
+@media (max-width: 1024px) {
+    .table-wrap th:last-child,
+    .table-wrap td:last-child { display: none; }
+}
+</style>
+
 <h1>Trades Done</h1>
 
 <div class="toolbar">
-    <form class="toolbar-form" method="post" action="{{ url_for('transactions.home') }}">
+    <form class="toolbar-form" method="post" action="{{ url_for('transactions.home') }}" id="date-form">
         <div class="form-group">
             <label for="trade_date">Trade Date</label>
-            <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}">
+            <div style="display:flex;align-items:center;gap:4px">
+                <button type="button" class="btn btn-outline" style="padding:0.25rem 0.6rem;font-size:1.1rem" onclick="shiftDate(-1)">&#8249;</button>
+                <input type="date" name="trade_date" id="trade_date" value="{{ trade_date }}">
+                <button type="button" class="btn btn-outline" style="padding:0.25rem 0.6rem;font-size:1.1rem" onclick="shiftDate(1)">&#8250;</button>
+            </div>
         </div>
         <button type="submit" class="btn btn-primary">Refresh</button>
     </form>
+    <script>
+    function shiftDate(days) {
+        var p = document.getElementById('trade_date').value.split('-');
+        var d = new Date(+p[0], +p[1] - 1, +p[2] + days);
+        document.getElementById('trade_date').value =
+            d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2, '0') + '-' +
+            String(d.getDate()).padStart(2, '0');
+        document.getElementById('date-form').submit();
+    }
+    </script>
     <div class="toolbar-actions">
-        <a href="{{ url_for('transactions.download', trade_date=trade_date) }}" class="btn btn-outline">Old Trades Done</a>
-        <a href="{{ url_for('transactions.download_with_gain_loss', trade_date=trade_date) }}" class="btn btn-outline">New Trades Done</a>
-        <a href="{{ url_for('transactions.print_with_gain_loss', trade_date=trade_date) }}" target="_blank" class="btn btn-outline">Print Trades Done</a>
+        <a href="{{ url_for('transactions.download_with_gain_loss', trade_date=trade_date) }}" class="btn btn-outline">Trades Done</a>
+        <a href="{{ url_for('transactions.print_with_gain_loss', trade_date=trade_date) }}"
+           onclick="window.open(this.href,'printTrades','width=1200,height=900,scrollbars=yes,resizable=yes'); return false;"
+           class="btn btn-outline">Print Trades Done</a>
         <button type="button" class="btn btn-success" onclick="openTxnModal('spotModal')">+ Spot</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('transferModal')">+ Transfer</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('contractModal')">+ Contract</button>
