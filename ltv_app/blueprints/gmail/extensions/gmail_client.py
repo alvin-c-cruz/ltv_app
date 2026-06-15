@@ -3,9 +3,14 @@ import base64
 import re
 
 from flask import current_app
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
+
+try:
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+    _GOOGLE_LIBS = True
+except ImportError:
+    _GOOGLE_LIBS = False
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
@@ -33,6 +38,8 @@ def _token_path():
 
 
 def _get_service():
+    if not _GOOGLE_LIBS:
+        raise RuntimeError('Gmail dependencies not installed (pip install google-api-python-client google-auth-oauthlib)')
     path = _token_path()
     if not os.path.exists(path):
         raise FileNotFoundError(path)

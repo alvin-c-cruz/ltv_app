@@ -1,15 +1,27 @@
-from flask import Blueprint, render_template, jsonify, flash, request
+from flask import Blueprint, render_template, jsonify, flash, request, abort
 from flask_login import login_required
-from googleapiclient.errors import HttpError
 
 from ..auth import superuser_required
 from ..database import get_db
-from .extensions.gmail_client import (
-    list_threads, get_thread, trash_thread,
-    list_labels, apply_label_and_archive,
-)
+
+try:
+    from googleapiclient.errors import HttpError
+    from .extensions.gmail_client import (
+        list_threads, get_thread, trash_thread,
+        list_labels, apply_label_and_archive,
+    )
+    _GMAIL_AVAILABLE = True
+except ImportError:
+    _GMAIL_AVAILABLE = False
+    HttpError = Exception
 
 bp = Blueprint('gmail', __name__, template_folder='pages', url_prefix='/gmail')
+
+
+@bp.before_request
+def _require_gmail_libs():
+    if not _GMAIL_AVAILABLE:
+        abort(503, 'Gmail dependencies not installed on this server.')
 
 
 def _ensure_labels_table(db):
