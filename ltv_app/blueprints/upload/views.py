@@ -80,6 +80,16 @@ def inspect_clear():
     return redirect(url_for('upload.inspect'))
 
 
+@bp.route('/inspect/delete/<path:filename>', methods=["POST"])
+@superuser_required
+def inspect_delete(filename):
+    inspect_dir = _inspect_dir()
+    safe = os.path.normpath(os.path.join(inspect_dir, secure_filename(filename)))
+    if safe.startswith(os.path.normpath(inspect_dir)) and os.path.isfile(safe):
+        os.remove(safe)
+    return redirect(url_for('upload.inspect'))
+
+
 @bp.route('/heroku', methods=["GET", "POST"])
 @login_required
 def heroku():
