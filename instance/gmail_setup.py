@@ -15,7 +15,7 @@ The resulting token is saved to instance/gmail_token.json.
 import os
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
 INSTANCE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_SECRET = os.path.join(INSTANCE_DIR, 'gmail_client_secret.json')

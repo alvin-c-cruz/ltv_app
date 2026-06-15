@@ -88,6 +88,8 @@ blueprints/{name}/
 
 **Location:** `instance/LTV Stocks.db` (SQLite) - **UNIFIED DATABASE** (consolidated 2026-06-05)
 
+**⚠️ THIS IS A LIVE DATABASE WITH REAL PRODUCTION DATA. Destructive changes (DROP, ALTER, DELETE without WHERE, data migrations) can cause permanent data loss. Always get explicit user approval before any schema or data changes.**
+
 **CRITICAL:** Both ltv_app and localhost/ now use the same database (`instance/LTV Stocks.db`). Before making ANY database structure changes:
 1. ✅ **Analyze localhost/ first** - Some features exist only in legacy code
 2. ✅ Check if schema changes affect existing localhost/ scripts
