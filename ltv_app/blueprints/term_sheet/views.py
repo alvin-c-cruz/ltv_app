@@ -129,6 +129,7 @@ def add():
         ts.gtd = form.get('gtd')
         ts.bank_doc = form.get('bank_doc')
         ts.status = form.get('status')
+        ts.locked = 1
 
         ts.save()
 
@@ -183,9 +184,10 @@ def edit(contract_ref, view_only=False):
     db = get_db()
     ts = StockContract(db=db)
     ts.get(ref_num=contract_ref)
-    if ts.locked and current_user.role != 'superuser' and not view_only:
-        flash("This contract is locked and cannot be edited.")
-        return redirect(url_for('transactions.home'))
+    if ts.locked:
+        if request.method == "POST":
+            flash("Cannot save a locked contract. Unlock it first.")
+            return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
     ts = StockContract(db=db)
 
     codes = db.execute("SELECT ref_num, code, stock_name FROM tbl_code;").fetchall()
@@ -316,22 +318,32 @@ def view(contract_ref):
     return edit(contract_ref, view_only=True)
 
 
-@bp.route("/<contract_ref>/unlock", methods=["GET"])
+@bp.route("/<contract_ref>/lock", methods=["POST"])
+@login_required
+def lock_contract(contract_ref):
+    """Lock a contract (superuser only)."""
+    from flask import abort
+    if current_user.role != 'superuser':
+        abort(403)
+    db = get_db()
+    db.execute("UPDATE tbl_stock_contract SET locked=1 WHERE ref_num=?", (contract_ref,))
+    db.commit()
+    flash(f"Contract #{contract_ref} has been locked.")
+    return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
+
+
+@bp.route("/<contract_ref>/unlock", methods=["POST"])
 @login_required
 def unlock(contract_ref):
     """Unlock a contract (superuser only)."""
     from flask import abort
-
-    # Only superusers can unlock
     if current_user.role != 'superuser':
         abort(403)
-
     db = get_db()
     db.execute("UPDATE tbl_stock_contract SET locked=0 WHERE ref_num=?", (contract_ref,))
     db.commit()
-
     flash(f"Contract #{contract_ref} has been unlocked.")
-    return redirect(url_for('transactions.home'))
+    return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
 
 
 @bp.route("/<contract_ref>/delete", methods=["GET", "POST"])

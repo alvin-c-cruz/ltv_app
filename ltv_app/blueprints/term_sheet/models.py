@@ -135,6 +135,7 @@ class StockContract(Model):
 
         dict_summary = {
             "ref_num": self.ref_num,
+            "locked": self.locked,
             "stock_name": stock_name,
             "code": self.code,
             "spot": "{0:,.4f}".format(self.spot),

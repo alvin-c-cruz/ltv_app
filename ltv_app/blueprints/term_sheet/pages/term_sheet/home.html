@@ -42,7 +42,8 @@
         </thead>
         <tbody>
         {% for accu in accus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}" data-next-date="{{ accu.next_date }}">
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}" data-next-date="{{ accu.next_date }}"
+            {% if accu.next_date == 'KO' %}style="background:rgba(254,202,202,0.6);"{% elif accu.locked %}style="background:rgba(253,230,138,0.45);"{% endif %}>
             <td>{{ accu.stock_name }}</td>
             <td class="text-center">{{ accu.code }}</td>
             <td class="text-right">{{ accu.shares }}</td>
@@ -81,7 +82,8 @@
         </thead>
         <tbody>
         {% for decu in decus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}" data-contract-ref="{{ decu.ref_num }}" data-status="{{ decu.status }}" data-next-date="{{ decu.next_date }}">
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=decu.ref_num) }}" data-contract-ref="{{ decu.ref_num }}" data-status="{{ decu.status }}" data-next-date="{{ decu.next_date }}"
+            {% if decu.next_date == 'KO' %}style="background:rgba(254,202,202,0.6);"{% elif decu.locked %}style="background:rgba(253,230,138,0.45);"{% endif %}>
             <td>{{ decu.stock_name }}</td>
             <td class="text-center">{{ decu.code }}</td>
             <td class="text-right">{{ decu.shares }}</td>
