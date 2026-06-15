@@ -5,27 +5,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Trades Done — {{ report.date_label }}</title>
     <style>
-        body { font-family: Calibri, Arial, sans-serif; color: #000; background: #fff; margin: 2rem; }
-        h1 { font-size: 1.3rem; margin: 0 0 0.2rem; }
-        .date { margin: 0 0 1.5rem; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
-        th, td { border: 1px solid #555; padding: 4px 8px; font-size: 0.85rem; text-align: center; }
-        td.num { text-align: right; }
-        td.bank { font-weight: 700; }
-        .section-label { font-size: 1.05rem; font-weight: 700; }
-        .accu { background: #99CC00; }
-        .decu { background: #FF8080; }
-        .subtotal td, .total td { font-weight: 700; }
-        .no-print { margin-bottom: 1.5rem; }
-        .no-print button { padding: 0.4rem 1.2rem; font-size: 1rem; cursor: pointer; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Calibri, Arial, sans-serif;
+            font-size: 10pt;
+            color: #000;
+            background: #fff;
+            padding: 1.4cm;
+        }
+
+        /* Document header */
+        .doc-title { font-size: 11pt; margin-bottom: 2px; }
+        .doc-meta  { font-size: 11pt; font-weight: 700; display: flex; gap: 5rem; margin-bottom: 1rem; }
+
+        /* Tables */
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; table-layout: fixed; }
+        table.term-table { width: 72%; table-layout: fixed; }
+
+        /* Section label (BUY / SELL / Transfer header) */
+        th.sec { font-size: 14pt; font-weight: 700; border: none; padding: 2px 3px;
+                 vertical-align: bottom; background: #fff; text-align: center; }
+
+        /* ACCU / DECU coloured label */
+        th.accu-h { background: #99CC00; font-size: 14pt; font-weight: 700; border: none;
+                    text-align: center; padding: 3px 4px; vertical-align: middle;
+                    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        th.decu-h { background: #FF8080; font-size: 14pt; font-weight: 700; border: none;
+                    text-align: center; padding: 3px 4px; vertical-align: middle;
+                    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+        /* Column header cells (Price / Shares / Total …) */
+        th.col { border: 1px solid #000; font-size: 10pt; font-weight: 700;
+                 text-align: center; padding: 2px 4px; vertical-align: middle; }
+
+        /* Data cells */
+        td { border: 1px solid #000; padding: 6px 5px; vertical-align: middle;
+             font-size: 10pt; overflow-wrap: break-word; min-height: 36pt; }
+        td.nb   { border: none; background: #fff; }
+        td.acct { font-weight: 700; color: #000; text-align: center; }
+        td.stk  { color: #000; font-size: 9pt; text-align: center; }
+        td.typ  { font-size: 9pt; text-align: center; }
+        td.ctr  { text-align: center; }
+        td.rt   { text-align: right; }
+
+        /* Solid black divider bar between banks */
+        tr.divrow td { height: 5px; background: #000; border: none; padding: 0; }
+
+        /* Subtotal / Total rows */
+        tr.subtot td, tr.totrow td { font-weight: 700; }
+
+        /* Screen controls */
+        .screen-only { margin-bottom: 1.2rem; display: flex; align-items: center; gap: 0.75rem; }
+        .screen-only button { padding: 0.35rem 1rem; font-size: 1rem; cursor: pointer; }
+        .screen-only button.active { background: #333; color: #fff; }
+
         @media print {
-            .no-print { display: none; }
-            body { margin: 0; }
+            .screen-only { display: none; }
+            body { padding: 0; }
         }
     </style>
+    <style id="page-style">@page { margin: 1.5cm; size: A4 landscape; }</style>
 </head>
 <body>
 
+{% macro fmt_bank(name) -%}
+{%- if ' Account No.' in name -%}
+{{ name.split(' Account No.')[0] }}<br>Account No.{{ name.split(' Account No.')[1] }}
+{%- elif ' Personal' in name -%}
+{{ name.replace(' Personal', '') }}<br>Personal
+{%- else -%}
+{{ name }}
+{%- endif -%}
+{%- endmacro %}
 {% macro money(v, ccy) -%}
     {%- if v is none -%}
     {%- elif v < 0 -%}({{ ccy }} {{ '{:,.2f}'.format(-v) }})
@@ -39,61 +91,127 @@
     {%- endif -%}
 {%- endmacro %}
 
-<div class="no-print">
-    <button type="button" onclick="window.print()">Print</button>
+<div class="screen-only">
+    <button type="button" id="btn-portrait"
+            onclick="setOrientation('portrait')">Portrait</button>
+    <button type="button" id="btn-landscape" class="active"
+            onclick="setOrientation('landscape')">Landscape</button>
+</div>
+<script>
+function setOrientation(o) {
+    document.getElementById('page-style').textContent =
+        '@page { margin: 1.5cm; size: A4 ' + o + '; }';
+    document.getElementById('btn-portrait').className  = o === 'portrait'  ? 'active' : '';
+    document.getElementById('btn-landscape').className = o === 'landscape' ? 'active' : '';
+    window.print();
+}
+</script>
+
+<p class="doc-title">Trades Done - Summary</p>
+<div class="doc-meta">
+    <span>Date: {{ report.date_label }}</span>
+    <span>{{ ph_now().strftime('%I:%M %p').lstrip('0').lower() }}</span>
 </div>
 
-<h1>Trades Done - Summary</h1>
-<p class="date">Date: {{ report.date_label }}</p>
-
-{% for title, rows, css in [('Accu', report.accus, 'accu'), ('Decu', report.decus, 'decu')] %}
-{% if rows %}
-<table>
+{# ── ACCU ───────────────────────────────────────────────────────────────── #}
+{% if report.accus %}
+<table class="term-table">
+    <colgroup>
+        <col style="width:22%"><col style="width:16%"><col style="width:9%">
+        <col style="width:9%"><col style="width:10%"><col style="width:11%">
+        <col style="width:10%"><col style="width:7%"><col style="width:6%">
+    </colgroup>
     <thead>
         <tr>
-            <th class="section-label {{ css }}">{{ title }}</th>
-            <th>Stock</th>
-            <th>Shares</th>
-            <th>Spot</th>
-            <th>Strike</th>
-            <th>KO</th>
-            <th>Tenor</th>
-            <th>GTD</th>
+            <th class="accu-h">Accu</th>
+            <th class="col">Stock</th><th class="col">Shares</th><th class="col">Spot</th>
+            <th class="col">Strike Rate</th><th class="col">Strike</th>
+            <th class="col">KO</th><th class="col">Tenor</th><th class="col">GTD</th>
         </tr>
     </thead>
     <tbody>
-    {% for ts in rows %}
+    {% for ts in report.accus %}
         <tr>
-            <td class="bank">{{ ts.bank_name }}</td>
-            <td>{{ ts.stock_name }}</td>
-            <td>{{ ts.shares }}</td>
-            <td>{{ ts.spot }}</td>
-            <td>{{ ts.strike }}</td>
-            <td>{{ ts.ko }}</td>
-            <td>{{ ts.tenor }}</td>
-            <td>{{ ts.gtd }}</td>
+            <td class="acct">{{ fmt_bank(ts.bank_name) }}</td>
+            <td class="stk">{{ ts.stock_name.split(' (')[0] }}<br>({{ ts.stock_name.split(' (')[1] }}</td>
+            <td class="ctr">{{ ts.shares }}</td><td class="ctr">{{ ts.spot }}</td>
+            <td class="ctr">{{ ts.strike_rate }}</td>
+            <td class="ctr">{{ ts.strike.split(' (')[0] }}<br>({{ ts.strike.split(' (')[1] }}</td>
+            <td class="ctr">{{ ts.ko.split(' (')[0] }}<br>({{ ts.ko.split(' (')[1] }}</td><td class="ctr">{{ ts.tenor }}</td>
+            <td class="ctr">{{ ts.gtd }}</td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
 {% endif %}
-{% endfor %}
 
-{% for block in report.blocks %}
-<table>
+{# ── DECU ───────────────────────────────────────────────────────────────── #}
+{% if report.decus %}
+<table class="term-table">
+    <colgroup>
+        <col style="width:22%"><col style="width:16%"><col style="width:9%">
+        <col style="width:9%"><col style="width:10%"><col style="width:11%">
+        <col style="width:10%"><col style="width:7%"><col style="width:6%">
+    </colgroup>
     <thead>
         <tr>
-            <th class="section-label">{{ block.label }}</th>
-            <th class="section-label">{{ block.ccy }}</th>
-            <th>Type</th>
-            <th>Price</th>
-            <th>Shares</th>
-            <th>Total</th>
-            {% if block.is_buy %}<th>Average</th>{% endif %}
+            <th class="decu-h">Decu</th>
+            <th class="col">Stock</th><th class="col">Shares</th><th class="col">Spot</th>
+            <th class="col">Strike Rate</th><th class="col">Strike</th>
+            <th class="col">KO</th><th class="col">Tenor</th><th class="col">GTD</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for ts in report.decus %}
+        <tr>
+            <td class="acct">{{ fmt_bank(ts.bank_name) }}</td>
+            <td class="stk">{{ ts.stock_name.split(' (')[0] }}<br>({{ ts.stock_name.split(' (')[1] }}</td>
+            <td class="ctr">{{ ts.shares }}</td><td class="ctr">{{ ts.spot }}</td>
+            <td class="ctr">{{ ts.strike_rate }}</td>
+            <td class="ctr">{{ ts.strike.split(' (')[0] }}<br>({{ ts.strike.split(' (')[1] }}</td>
+            <td class="ctr">{{ ts.ko.split(' (')[0] }}<br>({{ ts.ko.split(' (')[1] }}</td><td class="ctr">{{ ts.tenor }}</td>
+            <td class="ctr">{{ ts.gtd }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{# ── BUY / SELL blocks ──────────────────────────────────────────────────── #}
+{% for block in report.blocks %}
+<table>
+    {% if block.is_buy %}
+    <colgroup>
+        <col style="width:20%"><col style="width:14%"><col style="width:10%">
+        <col style="width:10%"><col style="width:10%"><col style="width:16%">
+        <col style="width:10%">
+    </colgroup>
+    {% elif block.is_sell_spot %}
+    <colgroup>
+        <col style="width:14%"><col style="width:10%"><col style="width:9%">
+        <col style="width:8%"><col style="width:8%"><col style="width:13%">
+        <col style="width:9%"><col style="width:11%"><col style="width:11%"><col style="width:7%">
+    </colgroup>
+    {% else %}
+    <colgroup>
+        <col style="width:22%"><col style="width:16%"><col style="width:12%">
+        <col style="width:12%"><col style="width:12%"><col style="width:18%">
+    </colgroup>
+    {% endif %}
+    <thead>
+        <tr>
+            <th class="sec">{{ block.label }}</th>
+            <th class="sec"></th>
+            <th class="sec">{{ block.ccy }}</th>
+            <th class="col">Price</th>
+            <th class="col">Shares</th>
+            <th class="col">Total</th>
+            {% if block.is_buy %}<th class="col">Average</th>{% endif %}
             {% if block.is_sell_spot %}
-            <th>Cost {{ block.ccy }}</th>
-            <th>{{ block.gain_header }}</th>
-            <th>{{ block.pct_header }}</th>
+            <th class="sec"></th>
+            <th class="col">Cost {{ block.ccy }}</th>
+            <th class="col">{{ block.gain_header }}</th>
+            <th class="col">{{ block.pct_header }}</th>
             {% endif %}
         </tr>
     </thead>
@@ -101,44 +219,84 @@
     {% for bank in block.banks %}
         {% for row in bank.rows %}
         <tr>
-            <td class="bank">{{ row.bank_name }}</td>
-            <td>{{ row.stock_name }}</td>
-            <td>{{ row.transaction_type }}</td>
-            <td>{{ '{:,.4f}'.format(row.price) }}</td>
-            <td>{{ '{:,.0f}'.format(row.quantity) }}</td>
-            <td class="num">{{ money(row.amount, block.ccy) }}</td>
+            <td class="acct">{{ fmt_bank(row.bank_name) }}</td>
+            <td class="stk">{{ row.stock_name }}</td>
+            <td class="typ">{{ row.transaction_type }}</td>
+            <td class="ctr">{{ '{:,.4f}'.format(row.price) }}</td>
+            <td class="ctr">{{ '{:,.0f}'.format(row.quantity) }}</td>
+            <td class="rt">{{ money(row.amount, block.ccy) }}</td>
             {% if block.is_buy %}
-            <td>{% if row.average %}{{ '{:,.4f}'.format(row.average) }}{% endif %}</td>
+            <td class="ctr">{% if row.average %}{{ '{:,.4f}'.format(row.average) }}{% endif %}</td>
             {% endif %}
             {% if block.is_sell_spot %}
-            <td class="num">{{ money(row.cost, block.ccy) }}</td>
-            <td class="num">{{ money(row.gain_loss, block.ccy) }}</td>
-            <td>{{ pct(row.pct) }}</td>
+            <td class="nb"></td>
+            <td class="rt">{{ money(row.cost, block.ccy) }}</td>
+            <td class="rt">{{ money(row.gain_loss, block.ccy) }}</td>
+            <td class="ctr">{{ pct(row.pct) }}</td>
             {% endif %}
         </tr>
         {% endfor %}
         {% if bank.subtotal %}
-        <tr class="subtotal">
-            <td colspan="5" style="text-align:right">Subtotal — {{ bank.bank_name }}</td>
-            <td class="num">{{ money(bank.subtotal.proceeds, block.ccy) }}</td>
-            <td class="num">{{ money(bank.subtotal.cost, block.ccy) }}</td>
-            <td class="num">{{ money(bank.subtotal.gain_loss, block.ccy) }}</td>
-            <td>{{ pct(bank.subtotal.pct) }}</td>
+        <tr class="subtot">
+            <td class="nb" colspan="5" style="text-align:right;border:none">Subtotal — {{ bank.bank_name }}</td>
+            <td class="rt">{{ money(bank.subtotal.proceeds, block.ccy) }}</td>
+            <td class="nb"></td>
+            <td class="rt">{{ money(bank.subtotal.cost, block.ccy) }}</td>
+            <td class="rt">{{ money(bank.subtotal.gain_loss, block.ccy) }}</td>
+            <td class="ctr">{{ pct(bank.subtotal.pct) }}</td>
         </tr>
         {% endif %}
+        <tr class="divrow"><td colspan="99"></td></tr>
     {% endfor %}
     {% if block.show_total %}
-        <tr class="total">
-            <td colspan="4" style="text-align:right">TOTAL</td>
-            <td>{{ '{:,.0f}'.format(block.total_shares) }}</td>
-            <td class="num">{{ money(block.total_amount, block.ccy) }}</td>
-            {% if block.is_buy %}<td></td>{% endif %}
-            {% if block.is_sell_spot %}<td></td><td></td><td></td>{% endif %}
-        </tr>
+    <tr class="totrow">
+        <td class="nb"></td>
+        <td class="nb"></td>
+        <td class="nb"></td>
+        <td class="ctr">TOTAL</td>
+        <td class="ctr">{{ '{:,.0f}'.format(block.total_shares) }}</td>
+        <td class="rt">{{ money(block.total_amount, block.ccy) }}</td>
+        {% if block.is_buy %}<td class="nb"></td>{% endif %}
+        {% if block.is_sell_spot %}<td class="nb"></td><td class="nb"></td><td class="nb"></td><td class="nb"></td>{% endif %}
+    </tr>
     {% endif %}
     </tbody>
 </table>
 {% endfor %}
+
+{# ── Transfer of Stocks ─────────────────────────────────────────────────── #}
+{# Uses same 7-column structure as BUY to keep horizontal alignment consistent #}
+{% if report.transfers %}
+<table>
+    <colgroup>
+        <col style="width:20%"><col style="width:14%"><col style="width:10%">
+        <col style="width:10%"><col style="width:10%"><col style="width:16%">
+        <col style="width:10%">
+    </colgroup>
+    <thead>
+        <tr>
+            <td class="nb" colspan="2"></td>
+            <td class="nb" colspan="4"
+                style="text-align:center; font-size:11pt; font-weight:700;">Transfer of Stocks</td>
+            <th class="col">Average</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for t in report.transfers %}
+    <tr>
+        <td class="nb acct" colspan="7">{{ t.seq }}) {{ t.stock_name }} ({{ t.code }})</td>
+    </tr>
+    <tr>
+        <td class="nb" colspan="5"
+            style="padding-left:1rem">from {{ t.from_bank }} to {{ t.to_bank }}</td>
+        <td class="nb ctr">{{ '{:,.0f}'.format(t.quantity) }} shares</td>
+        <td class="nb ctr">{% if t.average %}{{ '{:,.4f}'.format(t.average) }}{% endif %}</td>
+    </tr>
+    {% if not loop.last %}<tr style="height:6px"><td class="nb" colspan="7"></td></tr>{% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 
 </body>
 </html>

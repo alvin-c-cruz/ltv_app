@@ -2,12 +2,15 @@ from ..models import accumulate_position
 
 
 class TradesDoneAverage:
-    def __init__(self, db, trade_date, code, bank_id):
+    def __init__(self, db, trade_date, code, bank_id, include_transfers=False):
         transactions = get_transactions(db, trade_date, code, bank_id)
-        rows = [
-            r for r in transactions
-            if not (r['trade_date'] == trade_date and "Transfer" in r['transaction_type'])
-        ]
+        if include_transfers:
+            rows = list(transactions)
+        else:
+            rows = [
+                r for r in transactions
+                if not (r['trade_date'] == trade_date and "Transfer" in r['transaction_type'])
+            ]
         balance, cost_to_date, last_average = accumulate_position(rows)
         average = cost_to_date / balance if balance > 0 else 0
         self.average = average if average else last_average

@@ -5,7 +5,7 @@ from ...tz import ph_today, add_business_days
 
 from .models import Transaction, TransactionShort
 from .. auth import login_required
-from .extensions import TransactionSummary, DownloadTradesDone, DownloadTradesDoneWithGainLoss, TradesDoneReport
+from .extensions import TransactionSummary, DownloadTradesDoneWithGainLoss, TradesDoneReport
 
 bp = Blueprint('transactions', __name__, template_folder='pages', url_prefix='/trades')
 
@@ -535,19 +535,6 @@ def delete_short(ref_num):
     flash(f"Transaction #{ref_num} has been deleted.")
     return redirect(url_for('transactions.home'))
 
-
-@bp.route('/download/<trade_date>', methods=['GET', 'POST'])
-@login_required
-def download(trade_date):
-    from ..database import get_db
-    db = get_db()
-    summary = TransactionSummary(db, trade_date)
-    if summary.is_empty():
-        flash("No data to download.", category="error")
-        return redirect(url_for("transactions.home"))
-    else:
-        filename = DownloadTradesDone(db=db, trade_date=trade_date, trade_summary=summary).filename
-        return send_file('{}'.format(filename))
 
 
 @bp.route('/download_with_gain_loss/<trade_date>', methods=['GET', 'POST'])

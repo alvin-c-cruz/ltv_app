@@ -63,6 +63,10 @@ class DownloadTradesDoneWithGainLoss:
             row_num = self.write_transactions(ws, row_num, self.trade_summary.transactions)
             row_num += 2
 
+        if self.trade_summary.transfers:
+            row_num = self.write_transfers(ws, row_num, self.trade_summary.transfers)
+            row_num += 2
+
         ws.print_area = f"A1:N{row_num}"
         wb.save(self.filename)
         wb.close()
@@ -343,5 +347,62 @@ class DownloadTradesDoneWithGainLoss:
                             cell.number_format = f"[${ccy}] #,##0.00"
 
                 row_num += 2
+
+        return row_num
+
+    def write_transfers(self, ws, row_num, transfers):
+        # Section header
+        cell = ws[f"A{row_num}"]
+        cell.value = "Transfer of Stocks"
+        cell.font = Font(size=14, bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+        cell = ws[f"J{row_num}"]
+        cell.value = "Average"
+        cell.font = Font(size=11, bold=True)
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin_border
+        ws.merge_cells(f"J{row_num}:K{row_num}")
+
+        ws.row_dimensions[row_num].height = HEADER_HEIGHT
+        row_num += 1
+
+        for i, t in enumerate(transfers):
+            # Stock name line
+            cell = ws[f"A{row_num}"]
+            cell.value = f"{t['seq']}) {t['stock_name']} ({t['code']})"
+            cell.font = Font(size=11, bold=True)
+            ws.row_dimensions[row_num].height = HEADER_HEIGHT
+            row_num += 1
+
+            # From / to detail line — average of the receiving account after the transfer
+            average = TradesDoneAverage(
+                db=self.db, trade_date=self.trade_date,
+                code=t['code'], bank_id=t['counter_bank_id'],
+                include_transfers=True,
+            ).average
+
+            cell = ws[f"A{row_num}"]
+            cell.value = f"from {t['bank_name']} to {t['counter_bank_name']}"
+            cell.font = Font(size=11)
+
+            cell = ws[f"H{row_num}"]
+            cell.value = f"{t['quantity']:,.0f} shares"
+            cell.font = Font(size=11)
+            cell.alignment = Alignment(horizontal="center")
+
+            cell = ws[f"J{row_num}"]
+            cell.value = average if average else None
+            cell.font = Font(size=11)
+            cell.alignment = Alignment(horizontal="center")
+            cell.number_format = "#,##0.0000"
+            ws.merge_cells(f"J{row_num}:K{row_num}")
+
+            ws.row_dimensions[row_num].height = HEADER_HEIGHT
+            row_num += 1
+
+            # Blank separator between items
+            if i < len(transfers) - 1:
+                row_num += 1
 
         return row_num

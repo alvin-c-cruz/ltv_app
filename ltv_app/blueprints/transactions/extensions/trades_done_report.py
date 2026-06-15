@@ -14,6 +14,7 @@ class TradesDoneReport:
         self.accus = self._term_sheet_rows(trade_summary.accus)
         self.decus = self._term_sheet_rows(trade_summary.decus)
         self.blocks = self._transaction_blocks(db, trade_date, trade_summary.transactions)
+        self.transfers = self._transfer_rows(db, trade_date, trade_summary.transfers)
 
     def _term_sheet_rows(self, term_sheets):
         rows = []
@@ -121,3 +122,22 @@ class TradesDoneReport:
             block["pct_header"] = f"% {label}"
 
         return block
+
+    def _transfer_rows(self, db, trade_date, transfers):
+        rows = []
+        for t in transfers:
+            average = TradesDoneAverage(
+                db=db, trade_date=trade_date,
+                code=t['code'], bank_id=t['counter_bank_id'],
+                include_transfers=True,
+            ).average
+            rows.append({
+                'seq': t['seq'],
+                'stock_name': t['stock_name'],
+                'code': t['code'],
+                'from_bank': t['bank_name'],
+                'to_bank': t['counter_bank_name'],
+                'quantity': t['quantity'],
+                'average': average,
+            })
+        return rows

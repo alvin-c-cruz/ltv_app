@@ -12,8 +12,10 @@ class TransactionSummary:
         self.short_transactions = {}
         self.get_short_transactions(db, trade_date)
 
+        self.transfers = self.get_transfers(db, trade_date)
+
     def is_empty(self):
-        return False if self.accus or self.decus or self.transactions else True
+        return False if self.accus or self.decus or self.transactions or self.transfers else True
 
     def get_transactions(self, db, trade_date):
         sql = """
@@ -143,6 +145,43 @@ class TransactionSummary:
                 "net_amount": '{:,.2f}'.format(net),
                 "locked":     row["locked"],
             })
+
+    def get_transfers(self, db, trade_date):
+        sql = """
+          SELECT
+            currency.ccy_id,
+            bank.bank_id,
+            bank.bank_name,
+            counter_bank.bank_id AS counter_bank_id,
+            counter_bank.bank_name AS counter_bank_name,
+            stock.stock_name,
+            stock.code,
+            ABS(t.quantity) AS quantity,
+            t.price
+          FROM tbl_transaction AS t
+          INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref
+          LEFT JOIN tbl_bank_account AS counter_bank ON counter_bank.ref_num = t.counter_bank_ref
+          INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref
+          INNER JOIN tbl_currency AS currency ON currency.ref_num = stock.ccy_ref
+          WHERE t.trade_date = ?
+            AND t.transaction_type = 'Transfer-Out'
+          ORDER BY currency.priority, bank.priority, stock.code
+          ;"""
+        data = db.execute(sql, (trade_date,)).fetchall()
+        transfers = []
+        for i, row in enumerate(data, 1):
+            transfers.append({
+                'seq': i,
+                'ccy_id': row['ccy_id'],
+                'bank_id': row['bank_id'],
+                'bank_name': row['bank_name'],
+                'counter_bank_id': row['counter_bank_id'] or '',
+                'counter_bank_name': row['counter_bank_name'] or '',
+                'stock_name': row['stock_name'],
+                'code': row['code'],
+                'quantity': row['quantity'],
+            })
+        return transfers
 
     def get_term_sheets(self, db, trade_date, _type):
         term_sheets = {}
