@@ -29,10 +29,11 @@ RED_COLOR = "00FF0000"
 
 
 class CreateNotebook:
-    def __init__(self, db, trade_date, transactions):
+    def __init__(self, db, trade_date, transactions, transfers):
         self.db = db
         self.trade_date = trade_date
         self.transactions = transactions
+        self.transfers = transfers
 
         self.template_file = os.path.join(current_app.instance_path, "excel_templates", "notebook.xlsx")
         self.filename = os.path.join(current_app.instance_path, "temp", f"{trade_date} notebook.xlsx")
@@ -46,6 +47,7 @@ class CreateNotebook:
         self.write_date(ws)
         self.write_stock_card(ws)
         row_num = self.write_transactions(ws=ws, row_num=ROW_NUM_START)
+        row_num = self.write_transfers(ws, row_num)
 
         ws.print_area = f"A1:Q{row_num}"
 
@@ -238,6 +240,183 @@ class CreateNotebook:
                 row_num += 1
                 ws.row_dimensions[row_num].height = ROW_HEIGHT
                 border_line(ws, row_num)
+
+        return row_num
+
+    def _opening_balance(self, bank_name, code):
+        row = self.db.execute(
+            "SELECT SUM(tbl_transaction.quantity) AS balance "
+            "FROM tbl_transaction "
+            "INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_transaction.bank_ref "
+            "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_transaction.code_ref "
+            "WHERE tbl_bank_account.bank_name = ? "
+            "  AND tbl_code.code = ? "
+            "  AND tbl_transaction.trade_date < ?",
+            (bank_name, code, self.trade_date)
+        ).fetchone()
+        try:
+            return int(row[0]) if row and row[0] is not None else 0
+        except (TypeError, IndexError):
+            return 0
+
+    def write_transfers(self, ws, row_num):
+        if not self.transfers:
+            return row_num
+
+        # Section header: C:P merged
+        border_line(ws, row_num)
+        cell = ws[f"C{row_num}"]
+        cell.value     = "Transfer of Stocks"
+        cell.font      = Font(size=13, bold=True)
+        cell.alignment = Alignment(horizontal="center")
+        ws.merge_cells(f"C{row_num}:P{row_num}")
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        counter = 1
+        for pair in self.transfers:
+            out_bank   = pair['out_bank']
+            in_bank    = pair['in_bank']
+            in_bank_id = pair['in_bank_id']
+            stock_name = pair['stock_name']
+            code       = pair['code']
+            qty        = int(pair['quantity'])
+
+            opening_out = self._opening_balance(out_bank, code)
+            opening_in  = self._opening_balance(in_bank,  code)
+            closing_out = opening_out - qty
+            closing_in  = opening_in  + qty
+
+            # Row 1: counter + title
+            border_line(ws, row_num)
+            ws[f"B{row_num}"].value         = counter
+            ws[f"B{row_num}"].font          = Font(size=13)
+            ws[f"B{row_num}"].number_format = "0\\)"
+            ws[f"C{row_num}"].value         = f"Transfer {stock_name} ({code})"
+            ws[f"C{row_num}"].font          = Font(size=13)
+            ws[f"C{row_num}"].alignment     = Alignment(horizontal="left")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 2: from
+            border_line(ws, row_num)
+            ws[f"C{row_num}"].value     = f"from {out_bank}"
+            ws[f"C{row_num}"].font      = Font(size=13)
+            ws[f"C{row_num}"].alignment = Alignment(horizontal="left")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 3: to
+            border_line(ws, row_num)
+            ws[f"C{row_num}"].value     = f"to {in_bank}"
+            ws[f"C{row_num}"].font      = Font(size=13)
+            ws[f"C{row_num}"].alignment = Alignment(horizontal="left")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 4: quantity in shares
+            border_line(ws, row_num)
+            ws[f"C{row_num}"].value     = f"{qty:,} shares"
+            ws[f"C{row_num}"].font      = Font(size=13)
+            ws[f"C{row_num}"].alignment = Alignment(horizontal="left")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 5: bank name headers
+            border_line(ws, row_num)
+            ws[f"C{row_num}"].value = out_bank
+            ws[f"C{row_num}"].font  = Font(size=12)
+            ws[f"K{row_num}"].value = in_bank
+            ws[f"K{row_num}"].font  = Font(size=12)
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 6: opening balances
+            border_line(ws, row_num)
+            cell = ws[f"E{row_num}"]
+            cell.value         = opening_out
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+            ws.merge_cells(f"E{row_num}:H{row_num}")
+            cell = ws[f"M{row_num}"]
+            cell.value         = opening_in
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+            ws.merge_cells(f"M{row_num}:P{row_num}")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 7: movement (- out, + in)
+            border_line(ws, row_num)
+            ws[f"D{row_num}"].value     = "-"
+            ws[f"D{row_num}"].font      = Font(size=13)
+            ws[f"D{row_num}"].alignment = Alignment(horizontal="right")
+            cell = ws[f"E{row_num}"]
+            cell.value         = qty
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+            ws.merge_cells(f"E{row_num}:H{row_num}")
+            ws[f"L{row_num}"].value     = "+"
+            ws[f"L{row_num}"].font      = Font(size=13)
+            ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
+            cell = ws[f"M{row_num}"]
+            cell.value         = qty
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+            ws.merge_cells(f"M{row_num}:P{row_num}")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 8: closing balances
+            border_line(ws, row_num)
+            ws[f"D{row_num}"].value     = "shares"
+            ws[f"D{row_num}"].font      = Font(size=13)
+            ws[f"D{row_num}"].alignment = Alignment(horizontal="right")
+            cell = ws[f"E{row_num}"]
+            cell.value         = closing_out
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+            ws.merge_cells(f"E{row_num}:H{row_num}")
+            ws[f"L{row_num}"].value     = "shares"
+            ws[f"L{row_num}"].font      = Font(size=13)
+            ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
+            cell = ws[f"M{row_num}"]
+            cell.value         = closing_in
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+            ws.merge_cells(f"M{row_num}:P{row_num}")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Row 9: average at destination bank
+            border_line(ws, row_num)
+            ws[f"K{row_num}"].value = "Average"
+            ws[f"K{row_num}"].font  = Font(size=13)
+            average = TradesDoneAverage(
+                db=self.db, trade_date=self.trade_date,
+                code=code, bank_id=in_bank_id
+            ).average
+            cell = ws[f"N{row_num}"]
+            cell.value         = average
+            cell.font          = Font(size=13)
+            cell.alignment     = Alignment(horizontal="center")
+            cell.number_format = "#,##0.0000"
+            ws.merge_cells(f"N{row_num}:P{row_num}")
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            # Blank spacing row
+            border_line(ws, row_num)
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            row_num += 1
+
+            counter += 1
 
         return row_num
 
