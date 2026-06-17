@@ -245,6 +245,18 @@ def edit(contract_ref, view_only=False):
 
         ts.save()
 
+        # Refresh Periods: discard the existing schedule and regenerate it from
+        # the (just-saved) frequency / tenor / start date using the same engine
+        # the add flow uses. Lets users correct a wrong frequency in one click.
+        if form.get('refresh_periods') == '1':
+            db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?;", (contract_ref,))
+            db.commit()
+            CreateSchedules(ts, db)
+            ts.get_schedules()
+            freq_label = dict(frequencies).get(ts.frequency, ts.frequency)
+            flash(f"Period schedule regenerated for {ts.transaction_type} {ts.reference} ({freq_label}).")
+            return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
+
         periods_dict = {}
         for key, value in form.items():
             if "start_date_" in key:

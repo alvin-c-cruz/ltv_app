@@ -5,6 +5,7 @@
       style="max-width: 1020px; margin: 0 auto;">
     {{ csrf_token }}
     {% set locked = ts.locked %}
+    <input type="hidden" name="refresh_periods" id="refresh-periods-flag" value="0">
 
     <!-- ── Top action bar ─────────────────────────────────────── -->
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
@@ -179,8 +180,12 @@
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
             <span class="form-section-label">Period Schedule</span>
             {% if not locked %}
-            <a href="{{ url_for('term_sheet.add_line', contract_ref=contract_ref) }}"
-               class="btn btn-success" style="font-size: 0.78rem; padding: 0.25rem 0.75rem;">+ Add Line</a>
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" id="refresh-periods-btn"
+                        class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.25rem 0.75rem;">↻ Refresh Periods</button>
+                <a href="{{ url_for('term_sheet.add_line', contract_ref=contract_ref) }}"
+                   class="btn btn-success" style="font-size: 0.78rem; padding: 0.25rem 0.75rem;">+ Add Line</a>
+            </div>
             {% endif %}
         </div>
 
@@ -358,6 +363,42 @@
 {% endif %}
 {% endif %}
 
+<!-- ── Refresh periods confirmation modal ─────────────────────── -->
+{% if not locked %}
+{% set received_count = ts.schedules | selectattr('received') | list | length %}
+<div id="refresh-modal-overlay"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000;
+            align-items:center; justify-content:center;">
+    <div style="background:var(--bg-primary,#fff); border:1px solid var(--border-color); border-radius:8px;
+                max-width:460px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow:hidden;">
+        <div style="padding:0.9rem 1.1rem; border-bottom:1px solid var(--border-color);
+                    font-weight:600; font-size:1rem; color:var(--text-primary);">
+            Regenerate Period Schedule?
+        </div>
+        <div style="padding:1.1rem; font-size:0.88rem; color:var(--text-primary); line-height:1.5;">
+            This replaces <strong>all {{ ts.schedules|length }} existing period(s)</strong> with a fresh
+            schedule built from the current <strong>Frequency</strong>, <strong>Tenor</strong>, and
+            <strong>Start Date</strong>.
+            <div style="margin-top:0.6rem; padding:0.6rem 0.75rem; border-radius:6px;
+                        background:rgba(217,119,6,0.12); border:1px solid rgba(217,119,6,0.4);
+                        color:#92400e; font-size:0.83rem;">
+                {% if received_count %}
+                ⚠ {{ received_count }} period(s) already have <strong>received</strong> fixings.
+                Regenerating will erase that data. Make sure this is intended.
+                {% else %}
+                Any unsaved manual edits to the period rows will be discarded.
+                {% endif %}
+            </div>
+        </div>
+        <div style="padding:0.8rem 1.1rem; border-top:1px solid var(--border-color);
+                    display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button type="button" id="refresh-cancel" class="btn btn-secondary" style="min-width:80px;">Cancel</button>
+            <button type="button" id="refresh-confirm" class="btn btn-success" style="min-width:120px;">Regenerate</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% block scripts %}
 <script>
 // ── Computed strike / KO prices ───────────────────────────────────────────
@@ -445,6 +486,28 @@ document.querySelectorAll('.period-days, .period-received').forEach(function(el)
 document.getElementById('daily_shares').addEventListener('input',  updateToDecuTotals);
 document.getElementById('leveraged').addEventListener('change', updateToDecuTotals);
 updateToDecuTotals();
+
+// ── Refresh periods confirmation ─────────────────────────────────────────
+(function () {
+    var btn     = document.getElementById('refresh-periods-btn');
+    var overlay = document.getElementById('refresh-modal-overlay');
+    if (!btn || !overlay) return;
+
+    var cancel  = document.getElementById('refresh-cancel');
+    var confirm = document.getElementById('refresh-confirm');
+    var flag    = document.getElementById('refresh-periods-flag');
+    var form    = document.getElementById('contract-form');
+
+    function close() { overlay.style.display = 'none'; }
+
+    btn.addEventListener('click', function () { overlay.style.display = 'flex'; });
+    cancel.addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    confirm.addEventListener('click', function () {
+        flag.value = '1';
+        form.submit();
+    });
+})();
 </script>
 {% endblock %}
 
