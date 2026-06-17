@@ -284,8 +284,6 @@ class CreateNotebook:
 
             opening_out = self._opening_balance(out_bank, code)
             opening_in  = self._opening_balance(in_bank,  code)
-            closing_out = opening_out - qty
-            closing_in  = opening_in  + qty
 
             # Row 1: counter + title
             border_line(ws, row_num)
@@ -371,26 +369,35 @@ class CreateNotebook:
             ws.row_dimensions[row_num].height = ROW_HEIGHT
             row_num += 1
 
-            # Row 8: closing balances
+            # Row 8: closing balances — formula (opening +/- movement) with a
+            # top "total" rule above each balance, like the remaining-shares line.
             border_line(ws, row_num)
+            balance_rule = Border(
+                top=Side(style='thin'),
+                bottom=Side(style='thin', color='00C0C0C0'),
+            )
             ws[f"D{row_num}"].value     = "shares"
             ws[f"D{row_num}"].font      = Font(size=13)
             ws[f"D{row_num}"].alignment = Alignment(horizontal="right")
             cell = ws[f"E{row_num}"]
-            cell.value         = closing_out
+            cell.value         = f"=E{row_num-2}-E{row_num-1}"
             cell.font          = Font(size=13)
             cell.alignment     = Alignment(horizontal="right")
             cell.number_format = "#,##0"
             ws.merge_cells(f"E{row_num}:H{row_num}")
+            for col in ("E", "F", "G", "H"):
+                ws[f"{col}{row_num}"].border = balance_rule
             ws[f"L{row_num}"].value     = "shares"
             ws[f"L{row_num}"].font      = Font(size=13)
             ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
             cell = ws[f"M{row_num}"]
-            cell.value         = closing_in
+            cell.value         = f"=M{row_num-2}+M{row_num-1}"
             cell.font          = Font(size=13)
             cell.alignment     = Alignment(horizontal="right")
             cell.number_format = "#,##0"
             ws.merge_cells(f"M{row_num}:P{row_num}")
+            for col in ("M", "N", "O", "P"):
+                ws[f"{col}{row_num}"].border = balance_rule
             ws.row_dimensions[row_num].height = ROW_HEIGHT
             row_num += 1
 
