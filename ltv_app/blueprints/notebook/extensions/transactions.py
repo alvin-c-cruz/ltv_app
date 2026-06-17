@@ -89,3 +89,31 @@ def get_transactions(db, trade_date):
                     sorted_transactions[_ccy][_bank_name] = transactions[_ccy][_bank_name]
 
     return sorted_transactions
+
+
+TRANSFER_SQL = """
+    SELECT
+        out_t.ref_num       AS out_ref,
+        out_bank.bank_name  AS out_bank,
+        out_bank.bank_id    AS out_bank_id,
+        in_bank.bank_name   AS in_bank,
+        in_bank.bank_id     AS in_bank_id,
+        C.stock_name,
+        C.code,
+        CY.ccy_id,
+        ABS(out_t.quantity) AS quantity
+    FROM tbl_transaction out_t
+    INNER JOIN tbl_bank_account out_bank ON out_bank.ref_num = out_t.bank_ref
+    INNER JOIN tbl_bank_account in_bank  ON in_bank.ref_num  = out_t.counter_bank_ref
+    INNER JOIN tbl_code C      ON C.ref_num  = out_t.code_ref
+    INNER JOIN tbl_currency CY ON CY.ref_num = C.ccy_ref
+    WHERE out_t.transaction_type = 'Transfer-Out'
+      AND out_t.counter_bank_ref IS NOT NULL
+      AND out_t.trade_date = ?
+    ORDER BY C.code, out_t.ref_num
+"""
+
+
+def get_transfers(db, trade_date):
+    rows = db.execute(TRANSFER_SQL, (trade_date,)).fetchall()
+    return [dict(r) for r in rows]

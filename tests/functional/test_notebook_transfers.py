@@ -1,0 +1,99 @@
+# tests/functional/test_notebook_transfers.py
+import pytest
+from ltv_app.blueprints.notebook.extensions.transactions import get_transfers
+
+
+def test_get_transfers_returns_pair(db_conn):
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(10,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(11,'2026-05-18',NULL,'2026-05-20',2,1,'Transfer-In',500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,0,0)"
+    )
+    db_conn.commit()
+
+    result = get_transfers(db_conn, '2026-05-18')
+
+    assert len(result) == 1
+    assert result[0]['out_bank']   == 'Citibank No. 1'
+    assert result[0]['in_bank']    == 'Citibank No. 2'
+    assert result[0]['quantity']   == 500
+    assert result[0]['code']       == '700'
+    assert result[0]['stock_name'] == 'Tencent Holdings Limited'
+    assert result[0]['ccy_id']     == 'HKD'
+
+
+def test_get_transfers_empty_when_no_transfers(db_conn):
+    result = get_transfers(db_conn, '2026-05-18')
+    assert result == []
+
+
+def test_get_transfers_ignores_other_dates(db_conn):
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(10,'2026-05-17',NULL,'2026-05-19',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(11,'2026-05-17',NULL,'2026-05-19',2,1,'Transfer-In',500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,0,0)"
+    )
+    db_conn.commit()
+
+    result = get_transfers(db_conn, '2026-05-18')
+    assert result == []
+
+
+def test_get_transfers_no_duplicate_for_identical_same_day_pairs(db_conn):
+    # Two identical transfers (same stock/qty/date/banks) on one day.
+    # Driving off Transfer-Out yields exactly one row per Transfer-Out (2),
+    # never a fan-out from matching both Transfer-In rows (would be 4).
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(10,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(11,'2026-05-18',NULL,'2026-05-20',2,1,'Transfer-In',500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(12,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(13,'2026-05-18',NULL,'2026-05-20',2,1,'Transfer-In',500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,0,0,0)"
+    )
+    db_conn.commit()
+
+    result = get_transfers(db_conn, '2026-05-18')
+
+    assert len(result) == 2
+    assert {r['out_ref'] for r in result} == {10, 12}
+
+
+def test_get_transfers_includes_pair_with_mismatched_partner(db_conn):
+    # A Transfer-Out whose Transfer-In partner differs (here: no partner row at
+    # all). It must still appear — the destination bank comes from
+    # counter_bank_ref, so unmatched partners are never silently dropped.
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(10,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.commit()
+
+    result = get_transfers(db_conn, '2026-05-18')
+
+    assert len(result) == 1
+    assert result[0]['out_bank'] == 'Citibank No. 1'
+    assert result[0]['in_bank']  == 'Citibank No. 2'
