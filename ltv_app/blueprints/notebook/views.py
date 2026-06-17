@@ -4,7 +4,7 @@ from .. auth import login_required
 from .. database import get_db
 
 from .forms import DateForm
-from .extensions import get_transactions, CreateNotebook
+from .extensions import get_transactions, get_transfers, CreateNotebook
 
 bp = Blueprint('notebook', __name__, template_folder="pages", url_prefix="/notebook")
 
@@ -29,6 +29,10 @@ def home():
 def generate(trade_date):
     db = get_db()
     transactions = get_transactions(db=db, trade_date=trade_date)
-    notebook = CreateNotebook(db=db, trade_date=trade_date, transactions=transactions)
+    transfers    = get_transfers(db=db, trade_date=trade_date)
+    notebook = CreateNotebook(
+        db=db, trade_date=trade_date,
+        transactions=transactions, transfers=transfers
+    )
 
     return send_file('{}'.format(notebook.filename), as_attachment=True)
