@@ -28,7 +28,7 @@
 - Modify: `ltv_app/blueprints/notebook/extensions/transactions.py`
 - Create: `tests/functional/test_notebook_transfers.py`
 
-- [ ] **Step 1: Create the test file**
+- [x] **Step 1: Create the test file**
 
 ```python
 # tests/functional/test_notebook_transfers.py
@@ -80,9 +80,59 @@ def test_get_transfers_ignores_other_dates(db_conn):
 
     result = get_transfers(db_conn, '2026-05-18')
     assert result == []
+
+
+def test_get_transfers_no_duplicate_for_identical_same_day_pairs(db_conn):
+    # Two identical transfers (same stock/qty/date/banks) on one day.
+    # Driving off Transfer-Out yields exactly one row per Transfer-Out (2),
+    # never a fan-out from matching both Transfer-In rows (would be 4).
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(10,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(11,'2026-05-18',NULL,'2026-05-20',2,1,'Transfer-In',500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(12,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(13,'2026-05-18',NULL,'2026-05-20',2,1,'Transfer-In',500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,0,0,0)"
+    )
+    db_conn.commit()
+
+    result = get_transfers(db_conn, '2026-05-18')
+
+    assert len(result) == 2
+    assert {r['out_ref'] for r in result} == {10, 12}
+
+
+def test_get_transfers_includes_pair_with_mismatched_partner(db_conn):
+    # A Transfer-Out whose Transfer-In partner differs (here: no partner row at
+    # all). It must still appear — the destination bank comes from
+    # counter_bank_ref, so unmatched partners are never silently dropped.
+    db_conn.execute(
+        "INSERT INTO tbl_transaction VALUES "
+        "(10,'2026-05-18',NULL,'2026-05-20',1,1,'Transfer-Out',-500,320.5,"
+        "0,0,0,0,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,0,0,0)"
+    )
+    db_conn.commit()
+
+    result = get_transfers(db_conn, '2026-05-18')
+
+    assert len(result) == 1
+    assert result[0]['out_bank'] == 'Citibank No. 1'
+    assert result[0]['in_bank']  == 'Citibank No. 2'
 ```
 
-- [ ] **Step 2: Run tests to confirm they fail**
+- [x] **Step 2: Run tests to confirm they fail**
 
 ```
 pytest tests/functional/test_notebook_transfers.py -v
@@ -90,7 +140,7 @@ pytest tests/functional/test_notebook_transfers.py -v
 
 Expected: `ImportError` or `AttributeError` — `get_transfers` does not exist yet.
 
-- [ ] **Step 3: Add `TRANSFER_SQL` and `get_transfers()` to `transactions.py`**
+- [x] **Step 3: Add `TRANSFER_SQL` and `get_transfers()` to `transactions.py`**
 
 Append after the existing `get_transactions()` function in `ltv_app/blueprints/notebook/extensions/transactions.py`:
 
@@ -98,7 +148,6 @@ Append after the existing `get_transactions()` function in `ltv_app/blueprints/n
 TRANSFER_SQL = """
     SELECT
         out_t.ref_num       AS out_ref,
-        in_t.ref_num        AS in_ref,
         out_bank.bank_name  AS out_bank,
         out_bank.bank_id    AS out_bank_id,
         in_bank.bank_name   AS in_bank,
@@ -108,20 +157,14 @@ TRANSFER_SQL = """
         CY.ccy_id,
         ABS(out_t.quantity) AS quantity
     FROM tbl_transaction out_t
-    INNER JOIN tbl_transaction in_t
-        ON  in_t.transaction_type LIKE 'Transfer%'
-        AND in_t.bank_ref      = out_t.counter_bank_ref
-        AND in_t.code_ref      = out_t.code_ref
-        AND in_t.trade_date    = out_t.trade_date
-        AND ABS(in_t.quantity) = ABS(out_t.quantity)
     INNER JOIN tbl_bank_account out_bank ON out_bank.ref_num = out_t.bank_ref
-    INNER JOIN tbl_bank_account in_bank  ON in_bank.ref_num  = in_t.bank_ref
+    INNER JOIN tbl_bank_account in_bank  ON in_bank.ref_num  = out_t.counter_bank_ref
     INNER JOIN tbl_code C      ON C.ref_num  = out_t.code_ref
     INNER JOIN tbl_currency CY ON CY.ref_num = C.ccy_ref
     WHERE out_t.transaction_type = 'Transfer-Out'
       AND out_t.counter_bank_ref IS NOT NULL
       AND out_t.trade_date = ?
-    ORDER BY C.code
+    ORDER BY C.code, out_t.ref_num
 """
 
 
@@ -130,15 +173,26 @@ def get_transfers(db, trade_date):
     return [dict(r) for r in rows]
 ```
 
-- [ ] **Step 4: Run tests — all three must pass**
+> **Why no self-join to the Transfer-In row?** The destination bank is reachable
+> directly via `out_t.counter_bank_ref → tbl_bank_account`, so each Transfer-Out
+> yields exactly one row. Joining the matching `Transfer-In` row on
+> `(qty, date, code, bank)` instead (1) **double-counts** when two identical
+> transfers occur the same day — verified on live data: out_ref 132 (55,000 HSBC,
+> same banks/date) matches two Transfer-In rows and renders twice — and
+> (2) **silently drops** transfers whose partner row differs in qty/date
+> (5 such rows in live history). Driving off Transfer-Out alone shows every
+> transfer once. `write_transfers()` only consumes `in_bank`/`in_bank_id`, never
+> the in-row's `ref_num`, so nothing downstream needs the join.
+
+- [x] **Step 4: Run tests — all five must pass**
 
 ```
 pytest tests/functional/test_notebook_transfers.py -v
 ```
 
-Expected: 3 PASSED.
+Expected: 5 PASSED.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```
 git add ltv_app/blueprints/notebook/extensions/transactions.py tests/functional/test_notebook_transfers.py
@@ -154,7 +208,7 @@ git commit -m "Add get_transfers() to notebook data layer"
 
 Context: `create_notebook.py` lives at `ltv_app/blueprints/notebook/extensions/create_notebook.py`. It already imports `Font`, `Alignment`, `Border`, `Side` from openpyxl. It has a module-level `border_line(ws, row_num)` function that applies thin grey (`color='00C0C0C0'`) top+bottom borders to all columns A–Q. `ROW_HEIGHT = 17.25` is a module-level constant. `TradesDoneAverage` is already imported at the top.
 
-- [ ] **Step 6: Update `__init__` to accept `transfers`, add `_opening_balance()` helper, update `create_file()`, add `write_transfers()`**
+- [x] **Step 6: Update `__init__` to accept `transfers`, add `_opening_balance()` helper, update `create_file()`, add `write_transfers()`**
 
 Replace the `CreateNotebook` class body entirely. The diff is:
 
@@ -372,15 +426,15 @@ def write_transfers(self, ws, row_num):
     return row_num
 ```
 
-- [ ] **Step 7: Run the full test suite to confirm nothing broke**
+- [x] **Step 7: Run the full test suite to confirm nothing broke**
 
 ```
 pytest tests/functional/ -v
 ```
 
-Expected: all existing tests PASS, 3 notebook transfer tests PASS.
+Expected: all existing tests PASS, 5 notebook transfer tests PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```
 git add ltv_app/blueprints/notebook/extensions/create_notebook.py
@@ -395,7 +449,7 @@ git commit -m "Add write_transfers() and _opening_balance() to CreateNotebook"
 - Modify: `ltv_app/blueprints/notebook/extensions/__init__.py`
 - Modify: `ltv_app/blueprints/notebook/views.py`
 
-- [ ] **Step 9: Export `get_transfers` from `extensions/__init__.py`**
+- [x] **Step 9: Export `get_transfers` from `extensions/__init__.py`**
 
 Current content of `ltv_app/blueprints/notebook/extensions/__init__.py`:
 ```python
@@ -409,7 +463,7 @@ from .transactions import get_transactions, get_transfers
 from .create_notebook import CreateNotebook
 ```
 
-- [ ] **Step 10: Update `views.py` to fetch transfers and pass to `CreateNotebook`**
+- [x] **Step 10: Update `views.py` to fetch transfers and pass to `CreateNotebook`**
 
 Current `generate` route in `ltv_app/blueprints/notebook/views.py`:
 ```python
@@ -441,7 +495,7 @@ def generate(trade_date):
     return send_file('{}'.format(notebook.filename), as_attachment=True)
 ```
 
-- [ ] **Step 11: Run full test suite**
+- [x] **Step 11: Run full test suite**
 
 ```
 pytest tests/functional/ -v
@@ -449,7 +503,7 @@ pytest tests/functional/ -v
 
 Expected: all tests PASS.
 
-- [ ] **Step 12: Manual smoke test**
+- [x] **Step 12: Manual smoke test**
 
 1. Start the app: `! python flask_app.py`
 2. Navigate to `/notebook/`
@@ -460,7 +514,7 @@ Expected: all tests PASS.
    - A "Transfer of Stocks" section appears after the last bank section
    - Each pair shows: counter, "Transfer [Stock] ([Code])", "from [bank]", "to [bank]", "[qty] shares", two-column balance table, Average at destination bank
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```
 git add ltv_app/blueprints/notebook/extensions/__init__.py ltv_app/blueprints/notebook/views.py
