@@ -417,13 +417,14 @@ function shiftDate(fieldId, days) {
                 <colgroup>
                     <col style="width:4%">
                     <col style="width:9%">
-                    <col style="width:17%">
-                    <col style="width:12%">
+                    <col style="width:15%">
+                    <col style="width:11%">
+                    <col style="width:7%">
                     <col style="width:7%">
                     <col style="width:8%">
-                    <col style="width:8%">
-                    <col style="width:8%">
-                    <col style="width:27%">
+                    <col style="width:7%">
+                    <col style="width:9%">
+                    <col style="width:23%">
                 </colgroup>
                 <thead>
                     <tr>
@@ -439,6 +440,7 @@ function shiftDate(fieldId, days) {
                         <th class="text-right">Price</th>
                         <th class="text-right">Amount</th>
                         <th class="text-right">Charges</th>
+                        <th class="text-right">Amt ± Chg</th>
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
@@ -462,6 +464,7 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-right">{{ row.net_amount }}</td>
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openEditModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
@@ -475,7 +478,7 @@ function shiftDate(fieldId, days) {
                 {% endfor %}
                 {% if fixing_rows %}
                 <tr>
-                    <td colspan="9"
+                    <td colspan="10"
                         style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
                                color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
                         FIXINGS (ACCU / DECU)
@@ -497,6 +500,7 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-right">{{ row.net_amount }}</td>
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openFixingWfModal('{{ row.source }}', {{ row.ref_num }})">Edit</button>
@@ -511,7 +515,7 @@ function shiftDate(fieldId, days) {
                 {% endif %}
                 {% if contract_rows %}
                 <tr>
-                    <td colspan="9"
+                    <td colspan="10"
                         style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
                                color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
                         TERM SHEETS (ACCU / DECU)
@@ -533,6 +537,7 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
+                    <td></td>
                     <td class="text-center" style="white-space:nowrap">
                         <button type="button" class="btn btn-outline btn-sm"
                                 onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
@@ -572,13 +577,14 @@ function shiftDate(fieldId, days) {
             <table class="table" style="table-layout:fixed;width:100%">
                 <colgroup>
                     <col style="width:9%">
-                    <col style="width:20%">
-                    <col style="width:13%">
-                    <col style="width:8%">
-                    <col style="width:10%">
-                    <col style="width:10%">
-                    <col style="width:10%">
-                    <col style="width:20%">
+                    <col style="width:18%">
+                    <col style="width:11%">
+                    <col style="width:7%">
+                    <col style="width:9%">
+                    <col style="width:9%">
+                    <col style="width:9%">
+                    <col style="width:9%">
+                    <col style="width:19%">
                 </colgroup>
                 <thead>
                     <tr>
@@ -589,6 +595,7 @@ function shiftDate(fieldId, days) {
                         <th class="text-right">Price</th>
                         <th class="text-right">Amount</th>
                         <th class="text-right">Charges</th>
+                        <th class="text-right">Amt ± Chg</th>
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
@@ -605,6 +612,7 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-right">{{ row.net_amount }}</td>
                     <td class="text-center">
                         <span style="color:var(--success);font-weight:500;">✓ Locked</span>
                     </td>
@@ -612,7 +620,7 @@ function shiftDate(fieldId, days) {
                 {% endfor %}
                 {% if fixing_rows %}
                 <tr>
-                    <td colspan="8"
+                    <td colspan="9"
                         style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
                                color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
                         FIXINGS (ACCU / DECU)
@@ -627,6 +635,7 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
+                    <td class="text-right">{{ row.net_amount }}</td>
                     <td class="text-center">
                         <span style="color:var(--success);font-weight:500;">✓ Locked</span>
                     </td>
@@ -635,7 +644,7 @@ function shiftDate(fieldId, days) {
                 {% endif %}
                 {% if contract_rows %}
                 <tr>
-                    <td colspan="8"
+                    <td colspan="9"
                         style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
                                color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
                         TERM SHEETS (ACCU / DECU)
@@ -650,6 +659,7 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.price }}</td>
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
+                    <td></td>
                     <td class="text-center">
                         <span style="color:var(--success);font-weight:500;">✓ Locked</span>
                     </td>
@@ -1266,7 +1276,7 @@ function updateFwAmount() {
             <div class="form-row">
                 <div class="form-group">
                     <label>Price</label>
-                    <input type="number" step="0.0001" name="price" id="editPrice" required oninput="updateEditAmount()">
+                    <input type="number" step="any" name="price" id="editPrice" required oninput="updateEditAmount()">
                 </div>
                 <div class="form-group">
                     <label>Amount</label>
@@ -1366,7 +1376,7 @@ function updateFwAmount() {
                 </div>
                 <div class="form-group">
                     <label>Price</label>
-                    <input type="number" step="0.0001" name="price" id="fwPrice" required oninput="updateFwAmount()">
+                    <input type="number" step="any" name="price" id="fwPrice" required oninput="updateFwAmount()">
                 </div>
             </div>
 
@@ -1499,7 +1509,7 @@ function updateFwAmount() {
             <div class="form-row">
                 <div class="form-group">
                     <label>Spot</label>
-                    <input type="number" step="0.0001" name="price" id="cwSpot" required oninput="updateCwPrices()">
+                    <input type="number" step="any" name="price" id="cwSpot" required oninput="updateCwPrices()">
                 </div>
                 <div class="form-group">
                     <label>Daily Shares</label>

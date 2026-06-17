@@ -246,6 +246,11 @@ def _fetch_lock(db, date_from=None, date_to=None):
     def fmt(rows):
         result = []
         for r in rows:
+            if r['source'] != 'contract':
+                net = r['amount'] + r['charges'] if r['quantity'] >= 0 else r['amount'] - r['charges']
+                net_amount = '{:,.2f}'.format(net)
+            else:
+                net_amount = ''
             result.append({
                 'ref_num': r['ref_num'],
                 'source': r['source'],
@@ -260,6 +265,7 @@ def _fetch_lock(db, date_from=None, date_to=None):
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
                 'charges': '{:,.2f}'.format(r['charges']),
+                'net_amount': net_amount,
                 'is_fixing': r['source'] == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
@@ -339,6 +345,11 @@ def _fetch_locked(db, date_from=None, date_to=None):
     def fmt(rows):
         result = []
         for r in rows:
+            if r['source'] != 'contract':
+                net = r['amount'] + r['charges'] if r['quantity'] >= 0 else r['amount'] - r['charges']
+                net_amount = '{:,.2f}'.format(net)
+            else:
+                net_amount = ''
             result.append({
                 'ref_num': r['ref_num'],
                 'source': r['source'],
@@ -351,6 +362,7 @@ def _fetch_locked(db, date_from=None, date_to=None):
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
                 'charges': '{:,.2f}'.format(r['charges']),
+                'net_amount': net_amount,
                 'is_fixing': r['source'] == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
