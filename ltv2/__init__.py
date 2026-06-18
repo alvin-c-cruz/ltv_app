@@ -45,6 +45,9 @@ def create_app(config_object="ltv2.config.DevConfig"):
     from ltv2.blueprints.holidays import bp as holidays_bp
     app.register_blueprint(holidays_bp)
 
+    from ltv2.blueprints.transaction_types import bp as transaction_types_bp
+    app.register_blueprint(transaction_types_bp)
+
     from flask import session
 
     @app.before_request
