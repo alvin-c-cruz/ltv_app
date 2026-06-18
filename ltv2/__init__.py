@@ -30,4 +30,11 @@ def create_app(config_object="ltv2.config.DevConfig"):
     from ltv2.blueprints.auth import bp as auth_bp
     app.register_blueprint(auth_bp)
 
+    from flask import session
+
+    @app.before_request
+    def _refresh_session():
+        session.permanent = True
+        session.modified = True
+
     return app
