@@ -3,7 +3,8 @@
 <nav>
   <a href="{{ url_for('main.index') }}">Dashboard</a>
   {% block nav %}<a href="{{ url_for('currencies.list_currencies') }}">Currencies</a>
-  <a href="{{ url_for('banks.list_banks') }}">Banks</a>{% endblock %}
+  <a href="{{ url_for('banks.list_banks') }}">Banks</a>
+  <a href="{{ url_for('stocks.list_stocks') }}">Stocks</a>{% endblock %}
   <a href="{{ url_for('auth.logout') }}">Logout</a>
 </nav>
 <main>{% block main %}{% endblock %}</main>

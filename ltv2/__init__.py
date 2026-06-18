@@ -39,6 +39,9 @@ def create_app(config_object="ltv2.config.DevConfig"):
     from ltv2.blueprints.banks import bp as banks_bp
     app.register_blueprint(banks_bp)
 
+    from ltv2.blueprints.stocks import bp as stocks_bp
+    app.register_blueprint(stocks_bp)
+
     from flask import session
 
     @app.before_request
