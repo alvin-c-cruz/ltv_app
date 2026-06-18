@@ -25,8 +25,9 @@ def add_currency():
             flash(f"Currency {form.code.data!r} already exists", "error")
             return redirect(url_for("currencies.add_currency"))
         c = Currency(code=form.code.data, name=form.name.data,
-                     priority=form.priority.data or 0)
-        db.session.add(c); db.session.commit()
+                     priority=form.priority.data if form.priority.data is not None else 0)
+        db.session.add(c)
+        db.session.commit()
         flash("Currency added", "success")
         return redirect(url_for("currencies.list_currencies"))
     return render_template("currencies/form.html", form=form, mode="add")
@@ -44,7 +45,7 @@ def edit_currency(cid):
             return redirect(url_for("currencies.edit_currency", cid=cid))
         c.code = form.code.data
         c.name = form.name.data
-        c.priority = form.priority.data or 0
+        c.priority = form.priority.data if form.priority.data is not None else 0
         db.session.commit()
         flash("Currency updated", "success")
         return redirect(url_for("currencies.list_currencies"))
@@ -58,4 +59,6 @@ def toggle_active(cid):
     c.is_active = not c.is_active
     db.session.commit()
     flash("Status updated", "success")
-    return redirect(url_for("currencies.list_currencies", show=request.args.get("show", "active")))
+    # Read show from POST body, not query string
+    show = request.form.get("show", "active")
+    return redirect(url_for("currencies.list_currencies", show=show))

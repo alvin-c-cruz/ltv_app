@@ -71,7 +71,7 @@ def test_edit_bank(logged_in_client, app):
         "bank_code": "DB1", "name": "Deutsche 1", "report_label": "",
         "transaction_basis": "trade_date", "priority": "3"})
     with app.app_context():
-        b = Bank.query.get(bid)
+        b = db.session.get(Bank, bid)
         assert b.name == "Deutsche 1" and b.priority == 3
 
 
@@ -87,7 +87,7 @@ def test_edit_same_code_no_error(logged_in_client, app):
         "transaction_basis": "trade_date", "priority": "5"}, follow_redirects=True)
     assert b"already exists" not in resp.data
     with app.app_context():
-        b = Bank.query.get(bid)
+        b = db.session.get(Bank, bid)
         assert b.name == "HSBC updated" and b.priority == 5
 
 
@@ -98,10 +98,11 @@ def test_toggle_active(logged_in_client, app):
         db.session.commit()
         bid = b.id
     # Improvement 3: carry show as hidden field in POST body
-    logged_in_client.post(f"/banks/{bid}/toggle-active",
-                          data={"show": "active"})
+    resp = logged_in_client.post(f"/banks/{bid}/toggle-active",
+                                 data={"show": "active"})
+    assert "show=active" in resp.headers["Location"]
     with app.app_context():
-        b = Bank.query.get(bid)
+        b = db.session.get(Bank, bid)
         assert b.is_active is False
 
 
