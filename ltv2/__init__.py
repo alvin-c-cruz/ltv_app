@@ -16,6 +16,8 @@ def create_app(config_object="ltv2.config.DevConfig"):
     migrate.init_app(app, db)
     login_manager.init_app(app)
 
+    from ltv2 import models  # noqa: F401  (ensures models are registered)
+
     from ltv2.blueprints.main import bp as main_bp
     app.register_blueprint(main_bp)
 

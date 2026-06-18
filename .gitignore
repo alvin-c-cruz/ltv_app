@@ -17,6 +17,7 @@
 !/ltv_app/
 !/ltv2/
 !/tests/
+!/migrations/
 
 # Keep documentation
 !/docs/
