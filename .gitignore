@@ -4,6 +4,8 @@
 # Keep essential files for the application
 !.gitignore
 !flask_app.py
+!flask_app_v2.py
+!requirements.txt
 !VERSION
 !push.sh
 !CLAUDE.md
@@ -13,6 +15,7 @@
 
 # Keep source code and tests
 !/ltv_app/
+!/ltv2/
 !/tests/
 
 # Keep documentation
