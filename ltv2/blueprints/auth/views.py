@@ -1,8 +1,19 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from flask_login import login_user, logout_user, login_required
+from functools import wraps
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, abort
+from flask_login import login_user, logout_user, login_required, current_user
 from ltv2.models.user import User
 
 bp = Blueprint("auth", __name__)
+
+
+def admin_required(view):
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if not current_user.is_admin:
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapped
 
 
 @bp.route("/login", methods=["GET", "POST"])

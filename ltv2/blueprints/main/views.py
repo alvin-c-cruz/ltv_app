@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template
+from ltv2.blueprints.auth.views import admin_required
 
 bp = Blueprint("main", __name__)
 
@@ -11,3 +12,9 @@ def healthz():
 @bp.route("/")
 def index():
     return render_template("index.html")
+
+
+@bp.route("/admin/ping")
+@admin_required
+def admin_ping():
+    return {"pong": True}, 200
