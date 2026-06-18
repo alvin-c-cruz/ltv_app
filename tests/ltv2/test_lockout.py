@@ -6,7 +6,8 @@ from ltv2.models.user import User
 def _seed(app):
     u = User(username="alice", email="a@x.com", role="user")
     u.set_password("password123")
-    db.session.add(u); db.session.commit()
+    db.session.add(u)
+    db.session.commit()
     return u
 
 
@@ -21,6 +22,7 @@ def test_lock_after_five_failures(client, app):
     u = User.query.filter_by(username="alice").first()
     assert u.locked_until is not None
 
+
 def test_success_resets_counter(client, app):
     u = _seed(app)
     for _ in range(2):
@@ -30,6 +32,7 @@ def test_success_resets_counter(client, app):
     assert u.failed_logins == 0
     assert u.locked_until is None
 
+
 def test_lock_expires(client, app):
     u = _seed(app)
     u.locked_until = datetime.utcnow() - timedelta(minutes=1)  # already expired
@@ -37,3 +40,6 @@ def test_lock_expires(client, app):
     db.session.commit()
     resp = client.post("/login", data={"username": "alice", "password": "password123"})
     assert resp.status_code == 302  # allowed through
+    u = User.query.filter_by(username="alice").first()
+    assert u.failed_logins == 0
+    assert u.locked_until is None

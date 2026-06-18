@@ -1,5 +1,4 @@
 import click
-from flask.cli import with_appcontext
 from ltv2.extensions import db
 from ltv2.models.user import User
 
@@ -8,7 +7,6 @@ from ltv2.models.user import User
 @click.argument("username")
 @click.argument("email")
 @click.argument("password")
-@with_appcontext
 def create_admin(username, email, password):
     if len(password) < 8:
         raise click.ClickException("Password must be at least 8 characters.")

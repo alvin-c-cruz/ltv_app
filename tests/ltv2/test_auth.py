@@ -14,6 +14,8 @@ def test_login_success_redirects(client, app):
     _seed(app)
     resp = client.post("/login", data={"username": "alice", "password": "password123"})
     assert resp.status_code == 302
+    assert "/" in resp.headers["Location"]
+
 
 def test_login_wrong_password_shows_error(client, app):
     _seed(app)
@@ -21,8 +23,10 @@ def test_login_wrong_password_shows_error(client, app):
                        follow_redirects=True)
     assert b"Invalid username or password" in resp.data
 
+
 def test_logout(client, app):
     _seed(app)
     client.post("/login", data={"username": "alice", "password": "password123"})
     resp = client.get("/logout")
     assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]

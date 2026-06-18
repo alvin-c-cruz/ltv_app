@@ -1,4 +1,3 @@
-from datetime import datetime
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
 from flask_login import UserMixin
