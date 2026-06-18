@@ -4,10 +4,9 @@ def test_healthz_ok(client):
     assert resp.get_json() == {"status": "ok"}
 
 
-def test_index_renders(client):
+def test_index_redirects_anonymous(client):
     resp = client.get("/")
-    assert resp.status_code == 200
-    assert b"LTV2" in resp.data
+    assert resp.status_code in (301, 302)
 
 
 def test_test_config_uses_memory_db(app):

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<nav>
+  <a href="{{ url_for('main.index') }}">Dashboard</a>
+  {% block nav %}{% endblock %}
+  <a href="{{ url_for('auth.logout') }}">Logout</a>
+</nav>
+<main>{% block main %}{% endblock %}</main>
+{% endblock %}
