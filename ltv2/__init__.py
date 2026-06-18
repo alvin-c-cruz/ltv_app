@@ -37,4 +37,7 @@ def create_app(config_object="ltv2.config.DevConfig"):
         session.permanent = True
         session.modified = True
 
+    from ltv2.cli import create_admin
+    app.cli.add_command(create_admin)
+
     return app
