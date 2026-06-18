@@ -2,7 +2,7 @@
 {% block content %}
 <nav>
   <a href="{{ url_for('main.index') }}">Dashboard</a>
-  {% block nav %}{% endblock %}
+  {% block nav %}<a href="{{ url_for('currencies.list_currencies') }}">Currencies</a>{% endblock %}
   <a href="{{ url_for('auth.logout') }}">Logout</a>
 </nav>
 <main>{% block main %}{% endblock %}</main>

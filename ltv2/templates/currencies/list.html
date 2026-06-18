@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block main %}
+<h1>Currencies</h1>
+<a href="{{ url_for('currencies.add_currency') }}">+ Add</a>
+<a href="{{ url_for('currencies.list_currencies', show='all' if show!='all' else 'active') }}">
+  {{ 'Show active' if show=='all' else 'Show all' }}</a>
+<table>
+  <tr><th>Code</th><th>Name</th><th>Priority</th><th>Active</th><th></th></tr>
+  {% for c in rows %}
+  <tr>
+    <td>{{ c.code }}</td><td>{{ c.name }}</td><td>{{ c.priority }}</td>
+    <td>{{ 'Yes' if c.is_active else 'No' }}</td>
+    <td>
+      <a href="{{ url_for('currencies.edit_currency', cid=c.id) }}">Edit</a>
+      <form method="post" action="{{ url_for('currencies.toggle_active', cid=c.id, show=show) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">{{ 'Deactivate' if c.is_active else 'Activate' }}</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}
