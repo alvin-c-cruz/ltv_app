@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block main %}
+<h1>{{ 'Add' if mode=='add' else 'Edit' }} Bank</h1>
+<form method="post">
+  {{ form.csrf_token }}
+  <p>{{ form.bank_code.label }} {{ form.bank_code() }}</p>
+  <p>{{ form.name.label }} {{ form.name() }}</p>
+  <p>{{ form.report_label.label }} {{ form.report_label() }}</p>
+  <p>{{ form.transaction_basis.label }} {{ form.transaction_basis() }}</p>
+  <p>{{ form.priority.label }} {{ form.priority() }}</p>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

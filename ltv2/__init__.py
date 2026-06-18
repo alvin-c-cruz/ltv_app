@@ -36,6 +36,9 @@ def create_app(config_object="ltv2.config.DevConfig"):
     from ltv2.blueprints.currencies import bp as currencies_bp
     app.register_blueprint(currencies_bp)
 
+    from ltv2.blueprints.banks import bp as banks_bp
+    app.register_blueprint(banks_bp)
+
     from flask import session
 
     @app.before_request
