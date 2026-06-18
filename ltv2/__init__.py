@@ -21,9 +21,13 @@ def create_app(config_object="ltv2.config.DevConfig"):
     from ltv2.blueprints.main import bp as main_bp
     app.register_blueprint(main_bp)
 
-    # Stub user_loader — replaced in Task 2 when the User model is added.
+    from ltv2.models.user import User
+
     @login_manager.user_loader
-    def load_user(user_id):  # noqa: F841
-        return None
+    def load_user(user_id):
+        return db.session.get(User, int(user_id))
+
+    from ltv2.blueprints.auth import bp as auth_bp
+    app.register_blueprint(auth_bp)
 
     return app
