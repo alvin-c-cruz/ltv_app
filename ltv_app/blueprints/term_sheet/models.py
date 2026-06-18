@@ -3,6 +3,23 @@ from dataclasses import dataclass, field
 from .. data_model import Model
 
 
+def _to_int(value):
+    """Coerce a period's numeric column (received/days) to int.
+
+    `tbl_stock_contract_period.received` and `.days` hold mixed types in the
+    live DB — int, numeric string, comma-formatted string like '24,000', or
+    empty. Strip commas/whitespace (matching the convention used in the
+    transactions download extensions) and treat blank/None as 0.
+    """
+    if value is None or value == "":
+        return 0
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+        if value == "":
+            return 0
+    return int(float(value))
+
+
 @dataclass
 class StockContract(Model):
     table_name: str = field(repr=False, default="tbl_stock_contract")
@@ -62,8 +79,8 @@ class StockContract(Model):
 
                 if period['received']:
                     self.received_periods += 1
-                    self.received_shares += period['received']
-                    self.received_days += period['days']
+                    self.received_shares += _to_int(period['received'])
+                    self.received_days += _to_int(period['days'])
 
                     try:
                         self.next_date = self.next_working_day(periods[i+1]['end_date'])
@@ -71,7 +88,7 @@ class StockContract(Model):
                         self.next_date = "DONE"
 
 
-                self.total_days += period['days']
+                self.total_days += _to_int(period['days'])
                
                 self.end_date = period['end_date']  # The last end_date shall be used by the term sheet
 
