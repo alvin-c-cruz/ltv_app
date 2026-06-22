@@ -20,6 +20,23 @@ def _to_int(value):
     return int(float(value))
 
 
+def _normalize_period_value(value):
+    """Coerce a period column for *storage*: strip commas/whitespace and store
+    as int, but preserve blank/None as the empty-string marker.
+
+    Mirrors `_to_int` (which guards reads of legacy mixed-type data) but keeps
+    un-received periods as "" rather than 0, matching the existing column
+    convention and avoiding needless row churn on edit-save.
+    """
+    if value is None or value == "":
+        return ""
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+        if value == "":
+            return ""
+    return int(float(value))
+
+
 @dataclass
 class StockContract(Model):
     table_name: str = field(repr=False, default="tbl_stock_contract")
@@ -238,6 +255,14 @@ class FixingSchedule(Model):
     days: any = ""  # TODO: Refactor to int when migration to v1.0 is done
     received: any = ""  # TODO: Refactor to int when migration to v1.0 is done
     gtd: str = ""
+
+    def __post_init__(self):
+        # Normalise on save so no new comma-strings (e.g. '24,000' from the edit
+        # form) get written to tbl_stock_contract_period. Blank stays "" to
+        # preserve the "not received" marker. Reads of legacy data are still
+        # guarded by _to_int in StockContract.__post_init__.
+        self.days = _normalize_period_value(self.days)
+        self.received = _normalize_period_value(self.received)
 
 
 @dataclass
