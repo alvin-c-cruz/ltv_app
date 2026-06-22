@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block main %}
+<h1>{{ 'Add' if mode=='add' else 'Edit' }} Stock</h1>
+<form method="post">
+  {{ form.csrf_token }}
+  <p>{{ form.code.label }} {{ form.code() }}</p>
+  <p>{{ form.company_name.label }} {{ form.company_name() }}</p>
+  <p>{{ form.stock_name.label }} {{ form.stock_name() }}</p>
+  <p>{{ form.yahoo_ticker.label }} {{ form.yahoo_ticker() }}</p>
+  <p>{{ form.security_code.label }} {{ form.security_code() }}</p>
+  <p>{{ form.currency_id.label }} {{ form.currency_id() }}</p>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

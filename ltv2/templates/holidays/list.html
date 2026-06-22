@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block main %}
+<h1>Holidays</h1>
+<a href="{{ url_for('holidays.add_holiday') }}">+ Add</a>
+<a href="{{ url_for('holidays.list_holidays', show='all' if show!='all' else 'active') }}">
+  {{ 'Show active' if show=='all' else 'Show all' }}</a>
+<table>
+  <tr><th>Currency</th><th>Date</th><th>Active</th><th></th></tr>
+  {% for h in rows %}
+  <tr>
+    <td>{{ h.currency.code if h.currency }}</td>
+    <td>{{ h.holiday_date.isoformat() }}</td>
+    <td>{{ 'Yes' if h.is_active else 'No' }}</td>
+    <td>
+      <form method="post" action="{{ url_for('holidays.toggle_active', hid=h.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="show" value="{{ show }}">
+        <button type="submit">{{ 'Deactivate' if h.is_active else 'Activate' }}</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}
