@@ -207,7 +207,10 @@ def edit(ref_num):
         flash("This transaction is locked and cannot be edited.")
         return redirect(url_for('transactions.home'))
 
-    transaction_types = [(i, i) for i in ['Buy (Spot)', 'Sell (Spot)', 'Transfer-In', 'Transfer-Out', "Stock Dividend"]]
+    transaction_types = [(i, i) for i in [
+        'Buy (Spot)', 'Sell (Spot)', 'Transfer-In', 'Transfer-Out',
+        'Stock Dividend', 'Return Shares', 'Borrow Shares'
+    ]]
 
     if request.method == 'POST':
         error = ""
@@ -386,7 +389,9 @@ def edit_short(ref_num):
         flash("This transaction is locked and cannot be edited.")
         return redirect(url_for('transactions.home'))
 
-    transaction_types = [(i, i) for i in ['Sell (Short)', 'Buy (Pay Short)']]
+    transaction_types = [(i, i) for i in [
+        'Sell (Short)', 'Buy (Pay Short)', 'Return Shares', 'Borrow Shares'
+    ]]
 
     if request.method == 'POST':
         error = ""
@@ -473,7 +478,9 @@ def view_short(ref_num):
     transaction = TransactionShort(db=get_db())
     transaction.get(ref_num=ref_num)
 
-    transaction_types = [(i, i) for i in ['Buy (Pay Short)', 'Sell (Short)']]
+    transaction_types = [(i, i) for i in [
+        'Buy (Pay Short)', 'Sell (Short)', 'Return Shares', 'Borrow Shares'
+    ]]
 
     form = {
         "trade_date": transaction.trade_date,
@@ -587,6 +594,58 @@ def print_with_gain_loss(trade_date):
         return redirect(url_for("transactions.home"))
     report = TradesDoneReport(db=db, trade_date=trade_date, trade_summary=summary)
     return render_template('transactions/print_trades_done.html', report=report)
+
+
+@bp.route('/borrow_return', methods=['GET', 'POST'])
+@login_required
+def borrow_return_shares():
+    """One form entry that dual-inserts into both tbl_transaction (long book)
+    and tbl_transaction_short (short book).
+
+    Return Shares: long qty = -N, short qty = +N  (reduces holding, closes borrow)
+    Borrow Shares: long qty = +N, short qty = -N  (adds holding, opens borrow)
+    """
+    if request.method == 'POST':
+        trade_date = request.form['trade_date']
+        value_date = request.form['value_date']
+        bank_ref = int(request.form['bank_ref'])
+        code_ref = int(request.form['code_ref'])
+        transaction_type = request.form['transaction_type']
+        quantity = abs(int(request.form['quantity']))
+        price = float(request.form['price'])
+
+        if transaction_type not in ('Return Shares', 'Borrow Shares'):
+            flash('Invalid transaction type.')
+            return redirect(url_for('transactions.home', trade_date=trade_date))
+
+        from ..database import get_db
+        db = get_db()
+
+        if transaction_type == 'Return Shares':
+            long_qty = -quantity
+            short_qty = quantity
+        else:
+            long_qty = quantity
+            short_qty = -quantity
+
+        Transaction(db=db,
+                    trade_date=trade_date, value_date=value_date,
+                    bank_ref=bank_ref, code_ref=code_ref,
+                    transaction_type=transaction_type,
+                    quantity=long_qty, price=price).save()
+
+        TransactionShort(db=db,
+                         trade_date=trade_date, value_date=value_date,
+                         bank_ref=bank_ref, code_ref=code_ref,
+                         transaction_type=transaction_type,
+                         quantity=short_qty, price=price).save()
+
+        flash(f'{transaction_type}: {quantity:,} shares recorded in both books.')
+        return redirect(url_for('transactions.home', trade_date=trade_date))
+
+    trade_date = str(ph_today())
+    value_date = str(add_business_days(ph_today(), 2))
+    return redirect(url_for('transactions.home', trade_date=trade_date))
 
 
 @bp.route('/add_stock_dividends', methods=['GET', 'POST'])
