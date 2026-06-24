@@ -40,7 +40,9 @@ class TransactionSummary:
             AND (t.transaction_type LIKE "%Spot%"
                 OR t.transaction_type LIKE "%Short%"
                 OR t.transaction_type LIKE "Transfer%"
-                OR t.transaction_type = "Stock Dividend")
+                OR t.transaction_type = "Stock Dividend"
+                OR t.transaction_type LIKE "Return%"
+                OR t.transaction_type LIKE "Borrow%")
           ORDER BY currency.priority, tbl_transaction_type.priority, bank.priority, stock.code
           ;"""
 
@@ -103,7 +105,10 @@ class TransactionSummary:
           INNER JOIN tbl_currency AS currency ON currency.ref_num = stock.ccy_ref
           INNER JOIN tbl_transaction_type ON tbl_transaction_type.transaction_type = t.transaction_type
           WHERE trade_date=?
-            AND (t.transaction_type LIKE "%Spot%" OR t.transaction_type LIKE "%Short%")
+            AND (t.transaction_type LIKE "%Spot%"
+                OR t.transaction_type LIKE "%Short%"
+                OR t.transaction_type LIKE "Return%"
+                OR t.transaction_type LIKE "Borrow%")
           ORDER BY currency.priority, tbl_transaction_type.priority, bank.priority, stock.code
           ;"""
 
