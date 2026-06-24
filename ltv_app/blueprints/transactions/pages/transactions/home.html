@@ -159,7 +159,7 @@
 
 {% for ccy in transactions %}
     {% for transaction_type in transactions[ccy] %}
-    <h2>{{ ccy }} — {{ transaction_type }}</h2>
+    <h2>{{ ccy }} — {{ transaction_type }}{% if transaction_type in ('Return Shares', 'Borrow Shares') %} (Long Book){% endif %}</h2>
     <div class="table-wrap mb-3">
         <table class="table">
             <thead>
@@ -224,7 +224,7 @@
 
 {% for ccy in short_transactions %}
     {% for transaction_type in short_transactions[ccy] %}
-    <h2>{{ ccy }} — {{ transaction_type }}</h2>
+    <h2>{{ ccy }} — {{ transaction_type }}{% if transaction_type in ('Return Shares', 'Borrow Shares') %} (Short Book){% endif %}</h2>
     <div class="table-wrap mb-3">
         <table class="table">
             <thead>
