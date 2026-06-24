@@ -25,6 +25,8 @@ DERIVATIVES = [
     "DECU"
 ]
 
+BORROW_RETURN = ["Return Shares", "Borrow Shares"]
+
 RED_COLOR = "00FF0000"
 
 
@@ -228,6 +230,12 @@ class CreateNotebook:
                         ws.row_dimensions[row_num].height = ROW_HEIGHT
                         border_line(ws, row_num)
 
+                    for transaction_type in BORROW_RETURN:
+                        if transaction_type in trades:
+                            for row in trades[transaction_type]:
+                                row_num, counter = self.write_borrow_return(
+                                    ws, row_num, counter, row, bank_name)
+
                     for transaction_type in DERIVATIVES:
                         if transaction_type in trades:
                             for row in trades[transaction_type]:
@@ -258,6 +266,133 @@ class CreateNotebook:
             return int(row[0]) if row and row[0] is not None else 0
         except (TypeError, IndexError):
             return 0
+
+    def write_borrow_return(self, ws, row_num, counter, row, bank_name):
+        ccy = row["ccy_id"]
+        transaction_type = row["transaction_type"]
+        stock_name = row["stock_name"]
+        code = row["code"]
+        quantity = abs(int(row["quantity"]))
+        price = row["price"]
+
+        long_change = int(row["quantity"])   # negative for Return, positive for Borrow
+        short_change = -long_change
+
+        long_sign = "+" if long_change >= 0 else "-"
+        short_sign = "+" if short_change >= 0 else "-"
+
+        prior_long = self.db.execute(
+            "SELECT SUM(t.quantity) FROM tbl_transaction t "
+            "INNER JOIN tbl_bank_account b ON b.ref_num = t.bank_ref "
+            "INNER JOIN tbl_code c ON c.ref_num = t.code_ref "
+            "WHERE b.bank_name = ? AND c.code = ? AND t.trade_date < ?",
+            (bank_name, code, self.trade_date)
+        ).fetchone()[0] or 0
+
+        prior_short = self.db.execute(
+            "SELECT SUM(t.quantity) FROM tbl_transaction_short t "
+            "INNER JOIN tbl_bank_account b ON b.ref_num = t.bank_ref "
+            "INNER JOIN tbl_code c ON c.ref_num = t.code_ref "
+            "WHERE b.bank_name = ? AND c.code = ? AND t.trade_date < ?",
+            (bank_name, code, self.trade_date)
+        ).fetchone()[0] or 0
+
+        result_long = int(prior_long) + long_change
+        result_short = int(prior_short) + short_change
+
+        price_str = str(price)
+        dec_len = len(price_str) - price_str.find(".") - 1
+        number_format = "#,##0.00" if dec_len <= 2 else "#,##0.0000"
+
+        # Row 1: counter + title
+        border_line(ws, row_num)
+        ws[f"B{row_num}"].value = counter
+        ws[f"B{row_num}"].font = Font(size=13)
+        ws[f"B{row_num}"].number_format = "0)"
+        ws[f"B{row_num}"].alignment = Alignment(horizontal="right")
+        ws[f"C{row_num}"].value = f"{transaction_type} - {stock_name} ({code})"
+        ws[f"C{row_num}"].font = Font(size=13)
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        # Row 2: quantity @ price summary
+        border_line(ws, row_num)
+        ws[f"R{row_num}"].value = quantity
+        ws[f"S{row_num}"].value = price
+        ws[f"C{row_num}"].value = (
+            f'=TEXT(R{row_num},"#,###,###,##0")&" shares @ "'
+            f'&TEXT(S{row_num},"{number_format}")&'
+            f'" Average = {ccy} "&TEXT(R{row_num}*S{row_num},"#,###,###,###,##0.00")'
+        )
+        ws[f"C{row_num}"].font = Font(size=13)
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        # Row 3: Long / Short headers
+        border_line(ws, row_num)
+        for col, label in (("D", "Long"), ("M", "Short")):
+            ws[f"{col}{row_num}"].value = label
+            ws[f"{col}{row_num}"].font = Font(size=13)
+            ws[f"{col}{row_num}"].alignment = Alignment(horizontal="center")
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        # Row 4: prior positions
+        border_line(ws, row_num)
+        for col, val in (("D", prior_long), ("M", prior_short)):
+            cell = ws[f"{col}{row_num}"]
+            cell.value = int(val)
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "#,##0_ ;[Red](#,##0)"
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        # Row 5: change (+/- quantity on each side)
+        border_line(ws, row_num)
+        ws[f"C{row_num}"].value = long_sign
+        ws[f"C{row_num}"].font = Font(size=13, name="AR JULIAN")
+        ws[f"C{row_num}"].alignment = Alignment(horizontal="right")
+        ws[f"L{row_num}"].value = short_sign
+        ws[f"L{row_num}"].font = Font(size=13, name="AR JULIAN")
+        ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
+        for col in ("D", "M"):
+            cell = ws[f"{col}{row_num}"]
+            cell.value = quantity
+            cell.font = Font(size=13)
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "#,##0"
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        # Row 6: result (with top rule)
+        border_line(ws, row_num)
+        long_label = "shares" if result_long >= 0 else "short"
+        short_label = "short" if result_short < 0 else "shares"
+        ws[f"C{row_num}"].value = long_label
+        ws[f"C{row_num}"].font = Font(size=13)
+        ws[f"C{row_num}"].alignment = Alignment(horizontal="right")
+        ws[f"L{row_num}"].value = short_label
+        ws[f"L{row_num}"].font = Font(size=13)
+        ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
+        result_border = Border(top=Side(style="thin"))
+        for col, val in (("D", result_long), ("M", result_short)):
+            cell = ws[f"{col}{row_num}"]
+            cell.value = int(val)
+            cell.font = Font(size=13)
+            cell.border = result_border
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = "#,##0_ ;[Red](#,##0)"
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        # Blank spacer row
+        border_line(ws, row_num)
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        row_num += 1
+
+        counter += 1
+        return row_num, counter
 
     def write_transfers(self, ws, row_num):
         if not self.transfers:
