@@ -43,6 +43,7 @@
         <button type="button" class="btn btn-success" onclick="openTxnModal('transferModal')">+ Transfer</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('contractModal')">+ Contract</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('dividendModal')">+ Dividends</button>
+        <button type="button" class="btn btn-success" onclick="openTxnModal('borrowReturnModal')">+ Borrow/Return</button>
     </div>
 </div>
 
@@ -840,6 +841,91 @@ function openEditContractModal(contractRef) {
         })
         .catch(function(err) { console.error('Failed to load contract:', err); });
 }
+</script>
+
+{# ── + BORROW/RETURN MODAL ────────────────────────────────────── #}
+<div class="modal-overlay" id="borrowReturnModal">
+<div class="modal" style="max-width:520px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Borrow / Return Shares</span>
+        <button class="modal-close" onclick="closeTxnModal('borrowReturnModal')">&times;</button>
+    </div>
+    <form method="post" action="{{ url_for('transactions.borrow_return_shares') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
+            <div class="form-group">
+                <label>Trade Date</label>
+                <input type="date" name="trade_date" class="modal-date" required>
+            </div>
+            <div class="form-group">
+                <label>Value Date</label>
+                <input type="date" name="value_date" class="modal-value-date" required>
+            </div>
+            <div class="form-group">
+                <label>Account</label>
+                <select name="bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>Stock</label>
+                <select name="code_ref" required>{{ stock_options() }}</select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+                <label>Transaction Type</label>
+                <select name="transaction_type" required>
+                    <option value=""></option>
+                    <option value="Return Shares">Return Shares</option>
+                    <option value="Borrow Shares">Borrow Shares</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="text" name="quantity" id="borrowReturnQty" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Price (average)</label>
+                <input type="text" name="price" id="borrowReturnPrice" autocomplete="off" required>
+            </div>
+            <div id="borrowReturnWarning" style="grid-column:1/-1;display:none;color:#b00020;font-size:0.85rem;font-weight:600;"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('borrowReturnModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
+<script>
+(function wireBorrowReturn() {
+    var m = document.getElementById('borrowReturnModal');
+    if (!m) return;
+
+    function loadAverage() {
+        var tradeDate = m.querySelector('input[name="trade_date"]').value;
+        var bankRef   = m.querySelector('select[name="bank_ref"]').value;
+        var codeRef   = m.querySelector('select[name="code_ref"]').value;
+        var priceEl   = document.getElementById('borrowReturnPrice');
+        var warnEl    = document.getElementById('borrowReturnWarning');
+
+        if (!tradeDate || !bankRef || !codeRef) return;
+
+        fetch('/trades/average_price/' + bankRef + '/' + codeRef + '?trade_date=' + tradeDate)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                priceEl.value = (d.average !== null && d.average !== undefined) ? d.average : '';
+                if (!d.average) {
+                    warnEl.textContent = 'No position found for this account and stock.';
+                    warnEl.style.display = 'block';
+                } else {
+                    warnEl.style.display = 'none';
+                }
+            })
+            .catch(function(err) { console.error('Failed to load average price:', err); });
+    }
+
+    ['input[name="trade_date"]', 'select[name="bank_ref"]', 'select[name="code_ref"]'].forEach(function(sel) {
+        m.querySelector(sel).addEventListener('change', loadAverage);
+    });
+})();
 </script>
 
 {% endblock %}
