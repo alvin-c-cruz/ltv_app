@@ -33,7 +33,7 @@ class TradesDoneReport:
         return blocks
 
     def _build_block(self, db, trade_date, ccy, transaction_type, by_bank):
-        is_buy = "Buy" in transaction_type
+        is_buy = "Buy" in transaction_type or transaction_type == "Borrow Shares"
         is_sell_spot = transaction_type == "Sell (Spot)"
 
         banks = []

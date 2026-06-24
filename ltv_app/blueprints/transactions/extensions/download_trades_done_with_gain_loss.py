@@ -155,7 +155,7 @@ class DownloadTradesDoneWithGainLoss:
                 trade_total = False
                 # Headers
                 cols = {
-                    "A": "BUY" if "Buy" in transaction_type else "SELL",
+                    "A": "BUY" if ("Buy" in transaction_type or transaction_type == "Borrow Shares") else "SELL",
                     "D": ccy,
                     "E": "Price",
                     "G": "Shares",
