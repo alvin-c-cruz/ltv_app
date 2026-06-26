@@ -4,3 +4,4 @@ from ltv2.models.bank import Bank  # noqa: F401
 from ltv2.models.stock import Stock  # noqa: F401
 from ltv2.models.holiday import Holiday  # noqa: F401
 from ltv2.models.transaction_type import TransactionType  # noqa: F401
+from ltv2.models.transaction import Transaction  # noqa: F401
