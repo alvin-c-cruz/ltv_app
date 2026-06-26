@@ -85,7 +85,24 @@ def _apply(state, txn):
         state.balance += d
         return
 
-    raise NotImplementedError("zero-cross case added in the next task")
+    # Case 3: zero-crossing (close fully, then open the remainder)
+    close_qty = abs_bal
+    open_qty = qty - close_qty
+    charges_close = charges * (close_qty / qty)
+    charges_open = charges * (open_qty / qty)
+
+    # Step A: close the existing position fully
+    sign_bal = _sign(bal)
+    closing_cash = sign_bal * (close_qty * price) - charges_close
+    released = state.cost_basis
+    state.realized_pnl += closing_cash - released
+    state.cost_basis = ZERO
+    state.balance = ZERO
+
+    # Step B: open the remainder in the new direction
+    sign_new = _sign(d)
+    state.cost_basis = sign_new * (open_qty * price) + charges_open
+    state.balance = sign_new * open_qty
 
 
 def compute_position(transactions):
