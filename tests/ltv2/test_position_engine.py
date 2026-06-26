@@ -66,3 +66,39 @@ def test_neutral_has_no_effect():
     # neutral creates the key but leaves a zero position
     s = only(positions)
     assert s.balance == D("0") and s.cost_basis == D("0")
+
+
+def test_long_partial_sell_realizes_pnl():
+    s = only(compute_position([
+        txn(qty="100", price="10", charges="5", sort_date=date(2026, 1, 1)),
+        txn(behavior="decrease", qty="40", price="12", charges="3", sort_date=date(2026, 1, 2)),
+    ]))
+    # released = 40/100 * 1005 = 402 ; closing_cash = 40*12 - 3 = 477
+    assert s.realized_pnl == D("75")
+    assert s.cost_basis == D("603")
+    assert s.balance == D("60")
+    assert s.average == D("10.05")
+
+
+def test_long_full_sell_zeroes_position():
+    s = only(compute_position([
+        txn(qty="100", price="10", charges="0", sort_date=date(2026, 1, 1)),
+        txn(behavior="decrease", qty="100", price="12", charges="0", sort_date=date(2026, 1, 2)),
+    ]))
+    assert s.balance == D("0")
+    assert s.cost_basis == D("0")
+    assert s.realized_pnl == D("200")  # 1200 - 1000
+
+
+def test_short_partial_cover_realizes_pnl():
+    s = only(compute_position([
+        txn(book="short", behavior="increase", qty="50", price="15", charges="2",
+            sort_date=date(2026, 1, 1)),
+        txn(book="short", behavior="decrease", qty="20", price="14", charges="1",
+            sort_date=date(2026, 1, 2)),
+    ]))
+    # released = 20/50 * -748 = -299.2 ; closing_cash = -(20*14 + 1) = -281
+    assert s.realized_pnl == D("18.2")
+    assert s.cost_basis == D("-448.8")
+    assert s.balance == D("-30")
+    assert s.average == D("14.96")

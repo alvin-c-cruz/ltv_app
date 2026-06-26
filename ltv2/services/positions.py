@@ -74,7 +74,18 @@ def _apply(state, txn):
         state.balance += d
         return
 
-    raise NotImplementedError("reducing/zero-cross cases added in later tasks")
+    abs_bal = -bal if bal < ZERO else bal
+    # Case 2: reduce without crossing zero
+    if qty <= abs_bal:
+        sign_bal = _sign(bal)
+        closing_cash = sign_bal * (qty * price) - charges
+        released = (qty / abs_bal) * state.cost_basis
+        state.realized_pnl += closing_cash - released
+        state.cost_basis -= released
+        state.balance += d
+        return
+
+    raise NotImplementedError("zero-cross case added in the next task")
 
 
 def compute_position(transactions):
