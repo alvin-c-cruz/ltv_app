@@ -26,6 +26,7 @@ def add_type():
             return redirect(url_for("transaction_types.add_type"))
         t = TransactionType(name=form.name.data,
                             behavior_category=form.behavior_category.data,
+                            book=form.book.data,
                             priority=form.priority.data if form.priority.data is not None else 0)
         db.session.add(t); db.session.commit()
         flash("Transaction type added", "success")
@@ -45,6 +46,7 @@ def edit_type(tid):
             return redirect(url_for("transaction_types.edit_type", tid=tid))
         t.name = form.name.data
         t.behavior_category = form.behavior_category.data
+        t.book = form.book.data
         t.priority = form.priority.data if form.priority.data is not None else 0
         db.session.commit()
         flash("Transaction type updated", "success")

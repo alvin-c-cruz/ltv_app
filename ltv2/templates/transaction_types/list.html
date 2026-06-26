@@ -5,10 +5,10 @@
 <a href="{{ url_for('transaction_types.list_types', show='all' if show!='all' else 'active') }}">
   {{ 'Show active' if show=='all' else 'Show all' }}</a>
 <table>
-  <tr><th>Name</th><th>Behavior</th><th>Priority</th><th>Active</th><th></th></tr>
+  <tr><th>Name</th><th>Behavior</th><th>Book</th><th>Priority</th><th>Active</th><th></th></tr>
   {% for t in rows %}
   <tr>
-    <td>{{ t.name }}</td><td>{{ t.behavior_category }}</td><td>{{ t.priority }}</td>
+    <td>{{ t.name }}</td><td>{{ t.behavior_category }}</td><td>{{ t.book }}</td><td>{{ t.priority }}</td>
     <td>{{ 'Yes' if t.is_active else 'No' }}</td>
     <td>
       <a href="{{ url_for('transaction_types.edit_type', tid=t.id) }}">Edit</a>

@@ -80,3 +80,31 @@ def test_toggle_active(logged_in_client, app):
     assert "show=active" in resp.headers["Location"]
     with app.app_context():
         assert db.session.get(TransactionType, tid).is_active is False
+
+
+def test_add_saves_book(logged_in_client, app):
+    logged_in_client.post("/transaction-types/add", data={
+        "name": "Sell (Short)", "behavior_category": "increase",
+        "priority": "0", "book": "short"})
+    with app.app_context():
+        t = TransactionType.query.filter_by(name="Sell (Short)").first()
+        assert t is not None and t.book == "short"
+
+
+def test_add_defaults_book_to_long(logged_in_client, app):
+    logged_in_client.post("/transaction-types/add", data={
+        "name": "Buy (Spot)", "behavior_category": "increase", "priority": "0"})
+    with app.app_context():
+        t = TransactionType.query.filter_by(name="Buy (Spot)").first()
+        assert t is not None and t.book == "long"
+
+
+def test_edit_updates_book(logged_in_client, app):
+    with app.app_context():
+        t = TransactionType(name="Flip", behavior_category="increase", book="long")
+        db.session.add(t); db.session.commit()
+        tid = t.id
+    logged_in_client.post(f"/transaction-types/{tid}/edit", data={
+        "name": "Flip", "behavior_category": "increase", "priority": "0", "book": "short"})
+    with app.app_context():
+        assert db.session.get(TransactionType, tid).book == "short"
