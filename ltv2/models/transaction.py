@@ -26,8 +26,8 @@ class Transaction(db.Model):
     counter_bank_id = db.Column(db.Integer, db.ForeignKey("banks.id"), nullable=True)
     comments = db.Column(db.Text, nullable=True)
     locked = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("0"))
-    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow, server_default=db.text("CURRENT_TIMESTAMP"))
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utcnow, onupdate=_utcnow, server_default=db.text("CURRENT_TIMESTAMP"))
 
     bank = db.relationship("Bank", foreign_keys=[bank_id])
     counter_bank = db.relationship("Bank", foreign_keys=[counter_bank_id])

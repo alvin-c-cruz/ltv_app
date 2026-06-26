@@ -84,7 +84,7 @@ def _apply(state, txn):
     if qty <= abs_bal:
         sign_bal = _sign(bal)
         closing_cash = sign_bal * (qty * price) - charges
-        released = (qty / abs_bal) * state.cost_basis
+        released = state.cost_basis * qty / abs_bal
         state.realized_pnl += closing_cash - released
         state.cost_basis -= released
         state.balance += d
@@ -93,8 +93,8 @@ def _apply(state, txn):
     # Case 3: zero-crossing (close fully, then open the remainder)
     close_qty = abs_bal
     open_qty = qty - close_qty
-    charges_close = charges * (close_qty / qty)
-    charges_open = charges * (open_qty / qty)
+    charges_close = charges * close_qty / qty
+    charges_open = charges * open_qty / qty
 
     # Step A: close the existing position fully
     sign_bal = _sign(bal)

@@ -221,3 +221,16 @@ def test_priority_breaks_ties_within_same_date():
     # If ordered correctly: buy 100@10 then sell 50@12 -> balance 50, pnl = 600-500 = 100
     assert s.balance == D("50")
     assert s.realized_pnl == D("100")
+
+
+def test_partial_sell_odd_lot_stays_exact():
+    # Non-terminating ratio (1/3): multiply-before-divide keeps released = 30*1/3 = 10
+    # EXACT. Divide-first ((1/3)*30) yields 9.999...9 and would fail these asserts.
+    s = only(compute_position([
+        txn(qty="3", price="10", charges="0", sort_date=date(2026, 1, 1)),
+        txn(behavior="decrease", qty="1", price="12", charges="0", sort_date=date(2026, 1, 2)),
+    ]))
+    assert s.realized_pnl == D("2")
+    assert s.cost_basis == D("20")
+    assert s.balance == D("2")
+    assert s.average == D("10")
