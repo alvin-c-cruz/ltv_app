@@ -13,8 +13,8 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(255), unique=True, nullable=False)
     email = db.Column(db.String(255))
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default="user")
-    failed_logins = db.Column(db.Integer, nullable=False, default=0)
+    role = db.Column(db.String(20), nullable=False, default="user", server_default="user")
+    failed_logins = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     locked_until = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, raw: str) -> None:

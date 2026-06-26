@@ -7,4 +7,5 @@ class TransactionType(ActiveMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     behavior_category = db.Column(db.String(20), nullable=False)
-    priority = db.Column(db.Integer, nullable=False, default=0)
+    priority = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    book = db.Column(db.String(10), nullable=False, default="long", server_default="long")

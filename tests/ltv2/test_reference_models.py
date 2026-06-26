@@ -51,3 +51,23 @@ def test_transaction_type_create(app):
     db.session.add(t); db.session.commit()
     assert t.id is not None
     assert t.behavior_category == "increase"
+
+
+def test_transaction_type_book_defaults_to_long(app):
+    from ltv2.extensions import db
+    from ltv2.models.transaction_type import TransactionType
+    with app.app_context():
+        t = TransactionType(name="Buy (Spot)", behavior_category="increase")
+        db.session.add(t)
+        db.session.commit()
+        assert t.book == "long"
+
+
+def test_transaction_type_book_can_be_short(app):
+    from ltv2.extensions import db
+    from ltv2.models.transaction_type import TransactionType
+    with app.app_context():
+        t = TransactionType(name="Sell (Short)", behavior_category="increase", book="short")
+        db.session.add(t)
+        db.session.commit()
+        assert t.book == "short"
