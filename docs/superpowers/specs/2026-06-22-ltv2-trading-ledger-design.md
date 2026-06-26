@@ -29,7 +29,7 @@ The reference-data layer (Plans A–C) is complete on `main`: `currencies`, `ban
 
 A new `book` column (`"long"` or `"short"`) on the existing `transaction_types` table determines which position book a transaction affects. This means the *type* drives everything — the user just picks a type and both `behavior_category` and `book` are implied.
 
-**Migration:** add a `book` column, non-nullable, default `"long"` for all existing rows.
+**Migration:** add a `book` column, non-nullable, `server_default "long"` for all existing rows. The same migration also backfills `server_default` onto the existing `is_active`, `priority` (reference models / transaction_types) and `role`, `failed_logins` (users) columns, so the future v1→v2 data migration's raw-SQL inserts cannot violate NOT NULL. (This clears a deferred backlog item from the reference-data work.)
 
 **CRUD:** add a `<select long/short>` field to the existing transaction-types Add/Edit form and to `TransactionTypeForm`.
 
@@ -293,7 +293,29 @@ Uses `auth_client` + `db_conn` from `tests/ltv2/conftest.py`. Covers:
 
 ---
 
-## 7. Out of Scope (deferred)
+## 7. Implementation Strategy
+
+This design is built in **two sequential plans**, engine-first, so the risky pure-logic core is proven before any UI depends on it. Each plan gets its own writing-plans pass and execution branch.
+
+### Isolation guardrail (applies to both plans)
+
+Every file touched lives under `ltv2/`, `tests/ltv2/`, or `migrations/versions/`. **No edits to `ltv_app/`.** The v2 app runs migrations and reads/writes only its own DB `instance/ltv2.db` (via `FLASK_APP=flask_app_v2.py`). The live `ltv_app/` package and `instance/LTV Stocks.db` are never opened, migrated, or modified. This is a hard non-goal for both plans.
+
+### Plan 1 — Schema + Position Engine
+
+1. **Migration A** — add `book` to `transaction_types` (NOT NULL, `server_default "long"`) + backfill `server_default` on `is_active`/`priority`/`role`/`failed_logins` (§2a).
+2. **transaction_types CRUD form** — add the `<select long/short>` field to `TransactionTypeForm` + add/edit templates, and update the existing `test_transaction_types_crud.py`. Required here so the new NOT NULL column keeps the current suite green.
+3. **Migration B** — create the `transactions` table (§2b) + the `Transaction` model with the `total_charges` property.
+4. **Engine** — `ltv2/services/positions.py`: pure `PositionState` + `compute_position(transactions)` implementing the signed-delta mapping and three-case averaging rule, plus dividend and transfer handling (§3).
+5. **Unit tests** — `tests/ltv2/test_position_engine.py`, the full §6 scenario list (no DB, no Flask).
+
+**Definition of done:** engine + tables in place, exhaustive engine unit tests pass, and the pre-existing ltv2 suite stays green. Items 1–2 are the only places Plan 1 touches existing files; everything else is new.
+
+### Plan 2 — Entry CRUD + Snapshot
+
+Built on the `banks` blueprint pattern: list (filterable, current-month default), add/edit/delete, transfer auto-pairing (both legs in one commit, price stamped at source average), locked-row read-only handling, and the read-only position-snapshot page. Functional tests in `tests/ltv2/test_transactions_crud.py` (§4, §6). Brainstormed and planned separately once Plan 1 is merged.
+
+## 8. Out of Scope (deferred)
 
 - Excel / PDF reports
 - Date-range P&L reports and gain/loss sheets
