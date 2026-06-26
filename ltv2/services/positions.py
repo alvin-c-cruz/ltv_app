@@ -65,6 +65,11 @@ def _apply(state, txn):
     if d == ZERO:
         return
 
+    if behavior == "dividend":
+        # Zero-cost shares: add to balance, leave cost_basis untouched.
+        state.balance += d
+        return
+
     bal = state.balance
     # Case 1: opening or adding (flat, or delta same sign as balance)
     if bal == ZERO or (d > ZERO) == (bal > ZERO):

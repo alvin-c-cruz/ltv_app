@@ -159,3 +159,65 @@ def test_zero_cross_prorates_charges():
     assert s.realized_pnl == D("195")
     assert s.balance == D("-100")
     assert s.cost_basis == D("-1195")
+
+
+def test_dividend_lowers_average_without_changing_cost_basis():
+    # Non-zero price proves the dividend branch ignores price (no cost added).
+    # Without the branch, Case 1 would wrongly add 10*10 = 100 to cost_basis.
+    s = only(compute_position([
+        txn(qty="100", price="10", charges="0", sort_date=date(2026, 1, 1)),
+        txn(behavior="dividend", qty="10", price="10", charges="0", sort_date=date(2026, 1, 2)),
+    ]))
+    assert s.balance == D("110")
+    assert s.cost_basis == D("1000")
+    assert s.realized_pnl == D("0")
+    assert s.average == D("1000") / D("110")
+
+
+def test_transfer_is_cost_basis_neutral_across_banks():
+    # Source bank 1 holds 100 @ avg 10 (cost 1000). Transfer 40 out at avg 10;
+    # destination bank 2 receives 40 in at the same stamped price 10.
+    positions = compute_position([
+        txn(bank_id=1, qty="100", price="10", charges="0", sort_date=date(2026, 1, 1)),
+        txn(bank_id=1, behavior="transfer_out", qty="40", price="10", charges="0",
+            sort_date=date(2026, 1, 2)),
+        txn(bank_id=2, behavior="transfer_in", qty="40", price="10", charges="0",
+            sort_date=date(2026, 1, 2), priority=1),
+    ])
+    src = positions[(1, 1, "long")]
+    dst = positions[(2, 1, "long")]
+    assert src.balance == D("60") and src.cost_basis == D("600")
+    assert dst.balance == D("40") and dst.cost_basis == D("400")
+    assert src.realized_pnl == D("0")  # transfer at average realizes nothing
+    assert src.cost_basis + dst.cost_basis == D("1000")  # combined neutral
+
+
+def test_ordering_by_sort_date_changes_intermediate_state():
+    # Same three trades; only the sell's sort_date differs.
+    # Variant A: sell occurs BEFORE the second buy (avg at sell = 10).
+    buy1 = txn(qty="100", price="10", sort_date=date(2026, 1, 1), priority=0)
+    buy2 = txn(qty="100", price="20", sort_date=date(2026, 1, 3), priority=0)
+    sell_early = txn(behavior="decrease", qty="50", price="30",
+                     sort_date=date(2026, 1, 2), priority=0)
+    a = only(compute_position([buy1, buy2, sell_early]))
+    # sell vs 100 @10: released 500, closing_cash 1500, pnl +1000
+    assert a.realized_pnl == D("1000")
+
+    # Variant B: sell occurs AFTER the second buy (avg at sell = 15).
+    sell_late = txn(behavior="decrease", qty="50", price="30",
+                    sort_date=date(2026, 1, 4), priority=0)
+    b = only(compute_position([buy1, buy2, sell_late]))
+    # sell vs 200 @15: released 750, closing_cash 1500, pnl +750
+    assert b.realized_pnl == D("750")
+    assert a.realized_pnl != b.realized_pnl
+
+
+def test_priority_breaks_ties_within_same_date():
+    # Same date: a buy (priority 0) must apply before a sell (priority 1).
+    s = only(compute_position([
+        txn(behavior="decrease", qty="50", price="12", sort_date=date(2026, 1, 1), priority=1),
+        txn(qty="100", price="10", sort_date=date(2026, 1, 1), priority=0),
+    ]))
+    # If ordered correctly: buy 100@10 then sell 50@12 -> balance 50, pnl = 600-500 = 100
+    assert s.balance == D("50")
+    assert s.realized_pnl == D("100")
