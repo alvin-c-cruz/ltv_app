@@ -666,7 +666,6 @@
 
 <script>
 var _today = '{{ trade_date }}';
-var _sdStr = (function(){ var d=new Date(_today); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
 
 function addBusinessDays(dateStr, days) {
     var d = new Date(dateStr + 'T00:00:00');
@@ -705,20 +704,42 @@ function updateValueDate(modal) {
     }
 }
 
+function updateStartDate(modal) {
+    var startDateInput = modal.querySelector('.modal-start-date');
+    if (!startDateInput) return;  // only the Add Contract modal has this field
+
+    var stockSelect = modal.querySelector('select[name="code_ref"]');
+    var tradeDateInput = modal.querySelector('input[name="trade_date"]');
+    if (!tradeDateInput) return;
+
+    var codeRef = stockSelect ? stockSelect.value : '';
+    var tradeDate = tradeDateInput.value;
+
+    if (codeRef && tradeDate) {
+        fetch('/trades/api/next-banking-day?code_ref=' + codeRef + '&trade_date=' + tradeDate + '&days=1')
+            .then(function(r){ return r.json(); })
+            .then(function(data){ if (data.value_date) startDateInput.value = data.value_date; })
+            .catch(function(err){ console.error('Error calculating start date:', err); });
+    } else if (tradeDate) {
+        startDateInput.value = addBusinessDays(tradeDate, 1);
+    }
+}
+
 function openTxnModal(id) {
     var m = document.getElementById(id);
     m.querySelectorAll('.modal-date').forEach(function(el){ el.value = _today; });
-    m.querySelectorAll('.modal-start-date').forEach(function(el){ el.value = _sdStr; });
+    // Start Date: weekend-only fallback now; refined to a banking day below.
+    m.querySelectorAll('.modal-start-date').forEach(function(el){ el.value = addBusinessDays(_today, 1); });
 
     // Set up listeners for stock and trade date changes
     var stockSelect = m.querySelector('select[name="code_ref"]');
     var tradeDateInput = m.querySelector('input[name="trade_date"]');
 
     if (stockSelect) {
-        stockSelect.addEventListener('change', function(){ updateValueDate(m); });
+        stockSelect.addEventListener('change', function(){ updateValueDate(m); updateStartDate(m); });
     }
     if (tradeDateInput) {
-        tradeDateInput.addEventListener('change', function(){ updateValueDate(m); });
+        tradeDateInput.addEventListener('change', function(){ updateValueDate(m); updateStartDate(m); });
     }
 
     // Default value date: T+2 business days from trade date
@@ -728,6 +749,8 @@ function openTxnModal(id) {
     if (stockSelect && stockSelect.value) {
         updateValueDate(m);
     }
+    // Refine Start Date (no-op for modals without a .modal-start-date field)
+    updateStartDate(m);
 
     m.classList.add('active');
 }
