@@ -311,7 +311,7 @@ class CreateSchedules:
         i = 0
         while end_date < self.end_date:
             i += 1
-            end_date = self.__next_end_date(end_date)
+            end_date = self.__next_end_date(end_date, i)
 
             if end_date < self.end_date or self.frequency == "monthly":
                 end_date_on_record = self.check_date(end_date)
@@ -346,16 +346,22 @@ class CreateSchedules:
 
         return end_day, end_date
 
-    def __next_end_date(self, previous_end_date):
+    def __next_end_date(self, previous_end_date, i):
         year = int(previous_end_date[:4])
         month = int(previous_end_date[5:7])
-        
+
         if self.frequency == "monthly":
-            end_year = year
-            end_month = month + 1
-            if end_month > 12: 
-                end_month -= 12            
-                end_year += 1
+            # Anchor the period-end on the trade month + i, NOT on the previous
+            # end date. Deriving the month from previous_end_date skips a whole
+            # month whenever an earlier end was pushed forward across a month
+            # boundary by check_date (e.g. Feb 29->28 on a Sunday -> Mar 1),
+            # producing a single ~40-day period. End-of-month trades hit this
+            # routinely. See tests/unit/test_term_sheet_schedule.py.
+            trade_year = int(self.trade_date[:4])
+            trade_month = int(self.trade_date[5:7])
+            total = (trade_month - 1) + i
+            end_year = trade_year + total // 12
+            end_month = total % 12 + 1
 
             end_date = None
             day = self.end_day
