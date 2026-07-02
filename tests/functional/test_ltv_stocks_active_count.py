@@ -8,21 +8,22 @@ from ltv_app.blueprints.ltv_stocks.create_ltv_stocks import _load_contracts
 from ltv_app.blueprints.ltv_stocks.views import _active_count, _generate_excel
 
 
-def _add_contract(conn, ref_num, ttype, status, *, tenor='12m'):
+def _add_contract(conn, ref_num, ttype, status, *, tenor='12m', trade_date='2026-01-01'):
     """Insert a contract with a single period.
 
     With the default tenor ('12m') the contract expects 12 periods, so its one
     period leaves it not-DONE (remaining > 0). Pass tenor='1m' to make the one
-    period complete the contract (remaining == 0).
+    period complete the contract (remaining == 0). `trade_date` sets the
+    contract's inception date used by the current-week filter.
     """
     conn.execute(
         "INSERT INTO tbl_stock_contract "
         "(ref_num, reference, bank_ref, code_ref, trade_date, start_date, "
         " transaction_type, daily_shares, leveraged, spot, strike_rate, ko_rate, "
         " tenor, frequency, gtd, bank_doc, status) "
-        "VALUES (?, ?, 1, 1, '2026-01-01', '2026-01-01', ?, 1000, 'No', "
+        "VALUES (?, ?, 1, 1, ?, '2026-01-01', ?, 1000, 'No', "
         " 100.0, 95.0, 110.0, ?, 'monthly', '1m', 'DOC', ?)",
-        (ref_num, f"REF{ref_num}", ttype, tenor, status),
+        (ref_num, f"REF{ref_num}", trade_date, ttype, tenor, status),
     )
     conn.execute(
         "INSERT INTO tbl_stock_contract_period "
@@ -40,7 +41,7 @@ def test_load_contracts_sets_is_ko(app):
     conn.commit()
 
     result = {}
-    _load_contracts(conn, result, {})
+    _load_contracts(conn, result, {}, date(2026, 1, 1))
     conn.close()
 
     by_ref = {c['ref_num']: c for c in result['HKD']['CB1']['accu']}
@@ -61,7 +62,7 @@ def test_ko_overrides_done_when_all_periods_received(app):
     conn.commit()
 
     result = {}
-    _load_contracts(conn, result, {})
+    _load_contracts(conn, result, {}, date(2026, 1, 1))
     conn.close()
 
     by_ref = {c['ref_num']: c for c in result['HKD']['CB1']['accu']}
@@ -119,3 +120,45 @@ def test_generate_excel_count_is_plain_integer():
     value = ws['A3'].value
     assert value == 1
     assert isinstance(value, int)
+
+
+def test_current_week_filters_done_and_ko(app):
+    """Active always shown; DONE/KO only when trade_date is in the current week."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    conn.row_factory = sqlite3.Row
+    # Report date 2026-07-02 (Thu) -> week Mon 2026-06-29 .. Fri 2026-07-03.
+    report_date = date(2026, 7, 2)
+    in_week, out_week = '2026-06-30', '2026-05-01'
+
+    _add_contract(conn, 30, 'ACCU', 'active', trade_date=out_week)             # active, old
+    _add_contract(conn, 31, 'ACCU', 'active', tenor='1m', trade_date=in_week)  # DONE in week
+    _add_contract(conn, 32, 'ACCU', 'active', tenor='1m', trade_date=out_week) # DONE out of week
+    _add_contract(conn, 33, 'ACCU', 'KO', trade_date=in_week)                  # KO in week
+    _add_contract(conn, 34, 'ACCU', 'KO', trade_date=out_week)                 # KO out of week
+    conn.commit()
+
+    result = {}
+    _load_contracts(conn, result, {}, report_date)
+    conn.close()
+
+    refs = {c['ref_num'] for c in result['HKD']['CB1']['accu']}
+    assert 30 in refs            # active always listed, even though trade_date is old
+    assert 31 in refs            # DONE in current week -> listed
+    assert 33 in refs            # KO in current week -> listed
+    assert 32 not in refs        # DONE out of week -> omitted
+    assert 34 not in refs        # KO out of week -> omitted
+
+
+def test_missing_trade_date_done_ko_omitted(app):
+    """A DONE/KO contract with NULL trade_date is treated as not-in-week (omitted)."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    conn.row_factory = sqlite3.Row
+    _add_contract(conn, 40, 'ACCU', 'KO', trade_date=None)
+    conn.commit()
+
+    result = {}
+    _load_contracts(conn, result, {}, date(2026, 7, 2))
+    conn.close()
+
+    accu = result.get('HKD', {}).get('CB1', {}).get('accu', [])
+    assert all(c['ref_num'] != 40 for c in accu)

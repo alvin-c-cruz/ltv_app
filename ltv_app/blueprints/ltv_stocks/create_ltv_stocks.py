@@ -15,7 +15,7 @@ def get_ltv_stocks_full(db, report_date: date):
     """Excel download: contracts + positions + two-week closing prices."""
     result = {}
     price_map = _load_closing_prices(db, report_date)
-    _load_contracts(db, result, price_map)
+    _load_contracts(db, result, price_map, report_date)
     _load_positions(db, result, report_date, price_map)
     week_start = report_date - timedelta(days=report_date.weekday())
     _load_transactions(db, result, week_start, report_date)
@@ -47,12 +47,20 @@ def _load_closing_prices(db, report_date: date) -> dict:
 # Contracts (ACCU / DECU)
 # ---------------------------------------------------------------------------
 
-def _load_contracts(db, result: dict, price_map: dict):
+def _parse_trade_date(value):
+    """Parse a stored trade_date (ISO YYYY-MM-DD...) to a date, or None."""
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _load_contracts(db, result: dict, price_map: dict, report_date: date):
     rows = db.execute("""
         SELECT
             c.ref_num, c.transaction_type, c.bank_doc,
             c.daily_shares, c.spot, c.strike_rate, c.ko_rate,
-            c.start_date, c.tenor, c.frequency, c.leveraged, c.status,
+            c.start_date, c.trade_date, c.tenor, c.frequency, c.leveraged, c.status,
             b.bank_id, b.bank_name, b.report_label, b.priority AS bank_priority,
             s.ref_num AS code_ref, s.code, s.stock_name,
             cy.ccy_id, cy.priority AS ccy_priority,
@@ -67,6 +75,9 @@ def _load_contracts(db, result: dict, price_map: dict):
         GROUP BY c.ref_num
         ORDER BY cy.priority, b.priority, s.code
     """).fetchall()
+
+    week_start = report_date - timedelta(days=report_date.weekday())
+    week_end   = week_start + timedelta(days=4)
 
     for row in rows:
         ccy  = row['ccy_id']
@@ -96,6 +107,13 @@ def _load_contracts(db, result: dict, price_map: dict):
         # it keeps showing a next-month date (like an active contract).
         is_ko   = row['status'] == 'KO'
         is_done = remaining == 0 and not is_ko
+
+        # DONE/KO contracts are listed only when traded in the current week
+        # (Mon-Fri of the report date). Active contracts are always listed.
+        if is_done or is_ko:
+            td = _parse_trade_date(row['trade_date'])
+            if td is None or not (week_start <= td <= week_end):
+                continue
 
         next_date = 'DONE' if is_done else _next_month_date(row['last_end_date'])
         closing_raw = price_map.get(row['code_ref'])
