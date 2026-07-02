@@ -52,7 +52,7 @@ def _load_contracts(db, result: dict, price_map: dict):
         SELECT
             c.ref_num, c.transaction_type, c.bank_doc,
             c.daily_shares, c.spot, c.strike_rate, c.ko_rate,
-            c.start_date, c.tenor, c.frequency, c.leveraged,
+            c.start_date, c.tenor, c.frequency, c.leveraged, c.status,
             b.bank_id, b.bank_name, b.report_label, b.priority AS bank_priority,
             s.ref_num AS code_ref, s.code, s.stock_name,
             cy.ccy_id, cy.priority AS ccy_priority,
@@ -94,6 +94,8 @@ def _load_contracts(db, result: dict, price_map: dict):
         next_date = 'DONE' if remaining == 0 else _next_month_date(row['last_end_date'])
         closing_raw = price_map.get(row['code_ref'])
 
+        is_ko = row['status'] == 'KO'
+
         try:
             start_date_raw = date.fromisoformat(str(row['start_date']))
         except (TypeError, ValueError):
@@ -129,6 +131,7 @@ def _load_contracts(db, result: dict, price_map: dict):
             'total_months':     raw_months,
             'next_date':        next_date,
             'is_done':          remaining == 0,
+            'is_ko':            is_ko,
             'closing':          closing_raw,
             'closing_fmt':      _fmt_price(closing_raw) if closing_raw is not None else '—',
         }
