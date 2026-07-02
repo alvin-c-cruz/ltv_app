@@ -58,6 +58,11 @@ def download():
 # Excel generation (self-contained, no external templates needed)
 # ---------------------------------------------------------------------------
 
+def _active_count(contracts) -> int:
+    """Number of contracts that are neither DONE nor KO."""
+    return sum(1 for ct in contracts if not ct['is_done'] and not ct['is_ko'])
+
+
 def _generate_excel(data: dict, report_date: date,
                     price_map_multi: dict, trading_dates: list) -> io.BytesIO:
     from openpyxl import Workbook
@@ -153,13 +158,9 @@ def _xl_contracts(ws, contracts, title, row,
         '9988': '00008080',  # Teal (Alibaba)
     }
 
-    # ── Row 1: Active contract count formula (legacy feature) ────────
+    # ── Row 1: Active contract count (excludes DONE and KO) ──────────
     if contracts:
-        count_row = row
-        next_col_start = count_row + 4
-        next_col_end = next_col_start + len(contracts) - 1
-        formula = f'={len(contracts)}-COUNTIF(M{next_col_start}:M{next_col_end},"*DONE*")'
-        c = ws.cell(row, 1, formula)
+        c = ws.cell(row, 1, _active_count(contracts))
         c.font = Font(name='Arial', size=7, bold=False)
         c.number_format = '0'
         c.alignment = Alignment(horizontal='left', vertical='center')

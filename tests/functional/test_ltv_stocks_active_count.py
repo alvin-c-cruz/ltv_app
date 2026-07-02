@@ -42,3 +42,54 @@ def test_load_contracts_sets_is_ko(app):
     # KO contract is not DONE and keeps a date in the next-month column.
     assert by_ref[11]['is_done'] is False
     assert by_ref[11]['next_date'] != 'DONE'
+
+
+from openpyxl import load_workbook
+
+from ltv_app.blueprints.ltv_stocks.views import _active_count, _generate_excel
+from datetime import date
+
+
+def test_active_count_excludes_done_and_ko():
+    contracts = [
+        {'is_done': False, 'is_ko': False},  # active   -> counted
+        {'is_done': True,  'is_ko': False},  # done     -> excluded
+        {'is_done': False, 'is_ko': True},   # ko       -> excluded
+        {'is_done': False, 'is_ko': False},  # active   -> counted
+    ]
+    assert _active_count(contracts) == 2
+    assert _active_count([]) == 0
+
+
+def _contract(**overrides):
+    base = {
+        'stock_name': 'Tencent', 'code': '700', 'code_ref': 1, 'bank_doc': 'DOC',
+        'shares_day': '1,000', 'spot_raw': 100.0, 'strike_raw': 95.0, 'ko_raw': 110.0,
+        'start_date_raw': date(2026, 1, 1), 'last_end_date_raw': date(2026, 1, 31),
+        'received_months': 1.0, 'remaining_months': 11.0, 'total_months': 12,
+        'next_date': '2026-08-01', 'is_done': False, 'is_ko': False,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_generate_excel_count_is_plain_integer():
+    accu = [
+        _contract(),                    # active
+        _contract(is_ko=True),          # ko
+        _contract(is_done=True, next_date='DONE'),  # done
+    ]
+    data = {'HKD': {'CB1': {
+        'bank_name': 'Citibank No. 1', 'bank_priority': 1, 'report_label': None,
+        'accu': accu, 'decu': [], 'positions': {},
+    }}}
+
+    output = _generate_excel(data, date(2026, 7, 2), {}, [])
+    wb = load_workbook(output)
+    ws = wb['CB1-HKD']
+
+    # ACCU count cell is column A of the section's first row (A3).
+    value = ws['A3'].value
+    assert value == 1
+    assert isinstance(value, int)
+    assert not (isinstance(value, str) and str(value).startswith('='))
