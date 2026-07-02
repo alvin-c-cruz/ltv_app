@@ -91,10 +91,14 @@ def _load_contracts(db, result: dict, price_map: dict):
         daily = row['daily_shares']
         shares_day = f"{daily:,.0f} / {daily*2:,.0f}" if row['leveraged'] == 'Yes' else f"{daily:,.0f}"
 
-        next_date = 'DONE' if remaining == 0 else _next_month_date(row['last_end_date'])
-        closing_raw = price_map.get(row['code_ref'])
+        # KO is a distinct terminal state from DONE: a contract flagged KO is
+        # never treated as DONE, even if all its periods have been received, so
+        # it keeps showing a next-month date (like an active contract).
+        is_ko   = row['status'] == 'KO'
+        is_done = remaining == 0 and not is_ko
 
-        is_ko = row['status'] == 'KO'
+        next_date = 'DONE' if is_done else _next_month_date(row['last_end_date'])
+        closing_raw = price_map.get(row['code_ref'])
 
         try:
             start_date_raw = date.fromisoformat(str(row['start_date']))
@@ -130,7 +134,7 @@ def _load_contracts(db, result: dict, price_map: dict):
             'remaining_months': remaining_months,
             'total_months':     raw_months,
             'next_date':        next_date,
-            'is_done':          remaining == 0,
+            'is_done':          is_done,
             'is_ko':            is_ko,
             'closing':          closing_raw,
             'closing_fmt':      _fmt_price(closing_raw) if closing_raw is not None else '—',

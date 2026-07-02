@@ -1,24 +1,33 @@
 """Active-count / KO handling for the LTV Stocks report."""
 import sqlite3
+from datetime import date
+
+from openpyxl import load_workbook
 
 from ltv_app.blueprints.ltv_stocks.create_ltv_stocks import _load_contracts
+from ltv_app.blueprints.ltv_stocks.views import _active_count, _generate_excel
 
 
-def _add_contract(conn, ref_num, ttype, status):
+def _add_contract(conn, ref_num, ttype, status, *, tenor='12m'):
+    """Insert a contract with a single period.
+
+    With the default tenor ('12m') the contract expects 12 periods, so its one
+    period leaves it not-DONE (remaining > 0). Pass tenor='1m' to make the one
+    period complete the contract (remaining == 0).
+    """
     conn.execute(
         "INSERT INTO tbl_stock_contract "
         "(ref_num, reference, bank_ref, code_ref, trade_date, start_date, "
         " transaction_type, daily_shares, leveraged, spot, strike_rate, ko_rate, "
         " tenor, frequency, gtd, bank_doc, status) "
         "VALUES (?, ?, 1, 1, '2026-01-01', '2026-01-01', ?, 1000, 'No', "
-        " 100.0, 95.0, 110.0, '12m', 'monthly', '1m', 'DOC', ?)",
-        (ref_num, f"REF{ref_num}", ttype, status),
+        " 100.0, 95.0, 110.0, ?, 'monthly', '1m', 'DOC', ?)",
+        (ref_num, f"REF{ref_num}", ttype, tenor, status),
     )
-    # One unreceived period so the contract is not DONE (remaining > 0).
     conn.execute(
         "INSERT INTO tbl_stock_contract_period "
         "(contract_ref, start_date, end_date, days, received, gtd) "
-        "VALUES (?, '2026-01-01', '2026-01-31', '20', '', '1m')",
+        "VALUES (?, '2026-01-01', '2026-01-31', '20', '1000', '1m')",
         (ref_num,),
     )
 
@@ -34,8 +43,7 @@ def test_load_contracts_sets_is_ko(app):
     _load_contracts(conn, result, {})
     conn.close()
 
-    accu = result['HKD']['CB1']['accu']
-    by_ref = {c['ref_num']: c for c in accu}
+    by_ref = {c['ref_num']: c for c in result['HKD']['CB1']['accu']}
 
     assert by_ref[10]['is_ko'] is False
     assert by_ref[11]['is_ko'] is True
@@ -44,10 +52,29 @@ def test_load_contracts_sets_is_ko(app):
     assert by_ref[11]['next_date'] != 'DONE'
 
 
-from openpyxl import load_workbook
+def test_ko_overrides_done_when_all_periods_received(app):
+    """A KO contract is never DONE, even when every period is received."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    conn.row_factory = sqlite3.Row
+    _add_contract(conn, 20, 'ACCU', 'active', tenor='1m')  # completes -> DONE
+    _add_contract(conn, 21, 'ACCU', 'KO', tenor='1m')      # completes but is KO
+    conn.commit()
 
-from ltv_app.blueprints.ltv_stocks.views import _active_count, _generate_excel
-from datetime import date
+    result = {}
+    _load_contracts(conn, result, {})
+    conn.close()
+
+    by_ref = {c['ref_num']: c for c in result['HKD']['CB1']['accu']}
+
+    # Completed non-KO contract is DONE.
+    assert by_ref[20]['is_done'] is True
+    assert by_ref[20]['is_ko'] is False
+    assert by_ref[20]['next_date'] == 'DONE'
+
+    # KO overrides DONE: not DONE, keeps a next-month date (not 'DONE').
+    assert by_ref[21]['is_ko'] is True
+    assert by_ref[21]['is_done'] is False
+    assert by_ref[21]['next_date'] != 'DONE'
 
 
 def test_active_count_excludes_done_and_ko():
@@ -92,4 +119,3 @@ def test_generate_excel_count_is_plain_integer():
     value = ws['A3'].value
     assert value == 1
     assert isinstance(value, int)
-    assert not (isinstance(value, str) and str(value).startswith('='))
