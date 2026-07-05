@@ -16,6 +16,7 @@ TRADE_SQL = "SELECT " \
             "INNER JOIN tbl_transaction_type " \
             "   ON tbl_transaction_type.transaction_type = tbl_transaction.transaction_type " \
             "WHERE tbl_transaction.trade_date = ? " \
+            "   AND tbl_transaction.transaction_type NOT IN ('Transfer-Out', 'Transfer-In') " \
             "ORDER BY " \
             "   tbl_currency.priority, " \
             "   tbl_bank_account.priority, " \

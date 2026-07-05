@@ -22,6 +22,11 @@
 # Keep documentation
 !/docs/
 
+# Keep Claude Code skills only (not worktrees, venvs, or local settings)
+!/.claude/
+/.claude/*
+!/.claude/skills/
+
 # Keep Excel templates needed by the application
 !/instance/
 /instance/*

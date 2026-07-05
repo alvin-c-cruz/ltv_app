@@ -269,6 +269,10 @@ class ContractTests:
         assert response.status_code == 302
         assert '/trades' in response.headers['Location']
 
+    def test_success_redirects_to_correct_date(self, auth_client):
+        response = auth_client.post(CONTRACT_URL, data=_CONTRACT_FORM)
+        assert _CONTRACT_FORM['trade_date'] in response.headers['Location']
+
     def test_success_shows_flash_message(self, auth_client):
         response = auth_client.post(CONTRACT_URL, data=_CONTRACT_FORM, follow_redirects=True)
         assert b'ACCU' in response.data

@@ -159,7 +159,7 @@ def add():
         #     schedule.save()
 
         flash(f"{ts.ref_num}: {ts.transaction_type} {ts.reference} has been saved.")
-        return redirect(url_for('transactions.home'))
+        return redirect(url_for('transactions.home', trade_date=trade_date))
     else:
         ts = {}
         trade_date = str(datetime.datetime.now())[:10]
