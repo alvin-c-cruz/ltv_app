@@ -188,6 +188,76 @@ def get_transactions(db, bank_ref, code_ref, date_from, date_to):
     return restructured_data
 
 
+def _update_short_cost(balance, cost_to_date, qty, price, charges):
+    amount = abs(qty) * price + charges
+    if qty < 0:  # opening/deepening short
+        if balance <= 0:
+            cost_to_date += amount
+    else:  # closing short
+        if balance < 0:
+            if abs(balance) - qty > 0:
+                cost_to_date -= cost_to_date * qty / abs(balance)
+            else:
+                cost_to_date = 0.0
+    return cost_to_date
+
+
+def get_short_balance(db, bank_ref, code_ref, trade_date):
+    """Net short position and cost basis from tbl_transaction_short as of trade_date."""
+    transaction_basis = db.execute(
+        "SELECT transaction_basis FROM tbl_bank_account WHERE ref_num=?",
+        (bank_ref,)).fetchone()[0]
+
+    rows = db.execute(
+        "SELECT quantity, price, brokerage, commission, foreign_charge, stamp_duty, misc "
+        "FROM tbl_transaction_short "
+        f"WHERE bank_ref=? AND code_ref=? AND {transaction_basis}<=? "
+        f"ORDER BY {transaction_basis}",
+        (bank_ref, code_ref, trade_date)
+    ).fetchall()
+
+    balance = 0
+    cost_to_date = 0.0
+    for row in rows:
+        charges = row['brokerage'] + row['commission'] + row['foreign_charge'] + row['stamp_duty'] + row['misc']
+        cost_to_date = _update_short_cost(balance, cost_to_date, row['quantity'], row['price'], charges)
+        balance += row['quantity']
+
+    return balance, cost_to_date
+
+
+def get_short_transactions(db, bank_ref, code_ref, date_from, date_to):
+    """Short book transactions for a period from tbl_transaction_short."""
+    transaction_basis = db.execute(
+        "SELECT transaction_basis FROM tbl_bank_account WHERE ref_num=?",
+        (bank_ref,)).fetchone()[0]
+
+    rows = db.execute(
+        "SELECT ref_num, trade_date, value_date, transaction_type, quantity, price, "
+        "brokerage, commission, foreign_charge, stamp_duty, misc "
+        "FROM tbl_transaction_short "
+        f"WHERE bank_ref=? AND code_ref=? AND {transaction_basis}>=? AND {transaction_basis}<=? "
+        f"ORDER BY {transaction_basis}",
+        (bank_ref, code_ref, date_from, date_to)
+    ).fetchall()
+
+    result = []
+    for row in rows:
+        charges = (row['brokerage'] + row['commission'] + row['foreign_charge']
+                   + row['stamp_duty'] + row['misc'])
+        result.append({
+            'ref_num': row['ref_num'],
+            'trade_date': row['trade_date'],
+            'value_date': row['value_date'],
+            'description': row['transaction_type'],
+            'quantity': row['quantity'],
+            'price': row['price'],
+            'charges': charges,
+        })
+
+    return result
+
+
 @dataclass
 class TransactionShort(Model):
     ref_num: int = None

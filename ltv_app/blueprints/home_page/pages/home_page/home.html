@@ -31,6 +31,32 @@
             </table>
         </div>
         {% endfor %}
+        {% if bank.short_position %}
+        {% for ccy in bank.short_position %}
+        <h3 class="bank-card-ccy">{{ ccy }} Short Position</h3>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Stock</th>
+                        <th class="text-center">Code</th>
+                        <th class="text-right">Short Shares</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for code_ref in bank.short_position[ccy] %}
+                    {% set stock = bank.short_position[ccy][code_ref] %}
+                    <tr class="clickable-row" data-href="{{ url_for('bank.short_transaction_list', bank_id=bank.bank_id, code=stock.code) }}">
+                        <td>{{ stock.name }}</td>
+                        <td class="text-center">{{ stock.code }}</td>
+                        <td class="text-right{% if stock.is_short %} text-danger{% endif %}">{{ stock.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        {% endif %}
     </div>
     {% endfor %}
 </div>

@@ -234,7 +234,7 @@ class CreateNotebook:
                         if transaction_type in trades:
                             for row in trades[transaction_type]:
                                 row_num, counter = self.write_borrow_return(
-                                    ws, row_num, counter, row, bank_name)
+                                    ws, row_num, counter, row, bank_name, bank_id)
 
                     for transaction_type in DERIVATIVES:
                         if transaction_type in trades:
@@ -267,7 +267,7 @@ class CreateNotebook:
         except (TypeError, IndexError):
             return 0
 
-    def write_borrow_return(self, ws, row_num, counter, row, bank_name):
+    def write_borrow_return(self, ws, row_num, counter, row, bank_name, bank_id):
         ccy = row["ccy_id"]
         transaction_type = row["transaction_type"]
         stock_name = row["stock_name"]
@@ -275,11 +275,9 @@ class CreateNotebook:
         quantity = abs(int(row["quantity"]))
         price = row["price"]
 
-        long_change = int(row["quantity"])   # negative for Return, positive for Borrow
-        short_change = -long_change
-
-        long_sign = "+" if long_change >= 0 else "-"
-        short_sign = "+" if short_change >= 0 else "-"
+        is_return = transaction_type == "Return Shares"
+        long_sign = "-" if is_return else "+"
+        short_sign = "+" if is_return else "-"
 
         prior_long = self.db.execute(
             "SELECT SUM(t.quantity) FROM tbl_transaction t "
@@ -297,102 +295,125 @@ class CreateNotebook:
             (bank_name, code, self.trade_date)
         ).fetchone()[0] or 0
 
-        result_long = int(prior_long) + long_change
-        result_short = int(prior_short) + short_change
-
         price_str = str(price)
         dec_len = len(price_str) - price_str.find(".") - 1
         number_format = "#,##0.00" if dec_len <= 2 else "#,##0.0000"
 
-        # Row 1: counter + title
-        border_line(ws, row_num)
-        ws[f"B{row_num}"].value = counter
-        ws[f"B{row_num}"].font = Font(size=13)
-        ws[f"B{row_num}"].number_format = "0)"
-        ws[f"B{row_num}"].alignment = Alignment(horizontal="right")
-        ws[f"C{row_num}"].value = f"{transaction_type} - {stock_name} ({code})"
-        ws[f"C{row_num}"].font = Font(size=13)
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        r1 = row_num      # title
+        r2 = row_num + 1  # hidden data (R, S) + formula summary
+        r3 = row_num + 2  # Long / Short headers
+        r4 = row_num + 3  # prior positions
+        r5 = row_num + 4  # change (+/- quantity)
+        r6 = row_num + 5  # result (top rule)
+        r7 = row_num + 6  # blank spacer
 
-        # Row 2: quantity @ price summary
-        border_line(ws, row_num)
-        ws[f"R{row_num}"].value = quantity
-        ws[f"S{row_num}"].value = price
-        ws[f"C{row_num}"].value = (
-            f'=TEXT(R{row_num},"#,###,###,##0")&" shares @ "'
-            f'&TEXT(S{row_num},"{number_format}")&'
-            f'" Average = {ccy} "&TEXT(R{row_num}*S{row_num},"#,###,###,###,##0.00")'
+        # --- Row 1: counter + title ---
+        border_line(ws, r1)
+        ws[f"B{r1}"].value = counter
+        ws[f"B{r1}"].font = Font(size=13)
+        ws[f"B{r1}"].number_format = "0)"
+        ws[f"B{r1}"].alignment = Alignment(horizontal="right")
+        ws[f"C{r1}"].value = f"{transaction_type} - {stock_name} ({code})"
+        ws[f"C{r1}"].font = Font(size=13)
+        ws.row_dimensions[r1].height = ROW_HEIGHT
+
+        # --- Row 2: hidden data + formula summary ---
+        border_line(ws, r2)
+        ws[f"R{r2}"].value = quantity
+        ws[f"S{r2}"].value = price
+        ws[f"C{r2}"].value = (
+            f'=TEXT(R{r2},"#,###,###,##0")&" shares @ "'
+            f'&TEXT(S{r2},"{number_format}")&'
+            f'" Average = {ccy} "&TEXT(R{r2}*S{r2},"#,###,###,###,##0.00")'
         )
-        ws[f"C{row_num}"].font = Font(size=13)
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        ws[f"C{r2}"].font = Font(size=13)
+        ws.row_dimensions[r2].height = ROW_HEIGHT
 
-        # Row 3: Long / Short headers
-        border_line(ws, row_num)
-        for col, label in (("D", "Long"), ("M", "Short")):
-            ws[f"{col}{row_num}"].value = label
-            ws[f"{col}{row_num}"].font = Font(size=13)
-            ws[f"{col}{row_num}"].alignment = Alignment(horizontal="center")
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        # --- Row 3: Long / Short headers (font 11, merged D:G and L:O) ---
+        border_line(ws, r3)
+        ws[f"D{r3}"].value = "Long"
+        ws[f"D{r3}"].font = Font(size=11)
+        ws[f"D{r3}"].alignment = Alignment(horizontal="center")
+        ws.merge_cells(f"D{r3}:G{r3}")
+        ws[f"L{r3}"].value = "Short"
+        ws[f"L{r3}"].font = Font(size=11)
+        ws[f"L{r3}"].alignment = Alignment(horizontal="center")
+        ws.merge_cells(f"L{r3}:O{r3}")
+        ws.row_dimensions[r3].height = ROW_HEIGHT
 
-        # Row 4: prior positions
-        border_line(ws, row_num)
-        for col, val in (("D", prior_long), ("M", prior_short)):
-            cell = ws[f"{col}{row_num}"]
-            cell.value = int(val)
-            cell.font = Font(size=13)
-            cell.alignment = Alignment(horizontal="right")
-            cell.number_format = "#,##0_ ;[Red](#,##0)"
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        # --- Row 4: prior positions (merged D:G and L:O) ---
+        border_line(ws, r4)
+        ws[f"D{r4}"].value = int(prior_long)
+        ws[f"D{r4}"].font = Font(size=13)
+        ws[f"D{r4}"].number_format = "#,##0_ ;[Red](#,##0)"
+        ws.merge_cells(f"D{r4}:G{r4}")
+        ws[f"L{r4}"].value = int(prior_short)
+        ws[f"L{r4}"].font = Font(size=13)
+        ws[f"L{r4}"].number_format = "#,##0_ ;[Red](#,##0)"
+        ws.merge_cells(f"L{r4}:O{r4}")
+        ws.row_dimensions[r4].height = ROW_HEIGHT
 
-        # Row 5: change (+/- quantity on each side)
-        border_line(ws, row_num)
-        ws[f"C{row_num}"].value = long_sign
-        ws[f"C{row_num}"].font = Font(size=13, name="AR JULIAN")
-        ws[f"C{row_num}"].alignment = Alignment(horizontal="right")
-        ws[f"L{row_num}"].value = short_sign
-        ws[f"L{row_num}"].font = Font(size=13, name="AR JULIAN")
-        ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
-        for col in ("D", "M"):
-            cell = ws[f"{col}{row_num}"]
-            cell.value = quantity
-            cell.font = Font(size=13)
-            cell.alignment = Alignment(horizontal="right")
-            cell.number_format = "#,##0"
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        # --- Row 5: change — live formula =R{r2}, merged D:G and L:O ---
+        # Short sign moves to K (one left) to free P for Average in Borrow
+        border_line(ws, r5)
+        ws[f"C{r5}"].value = long_sign
+        ws[f"C{r5}"].font = Font(size=13)
+        ws[f"C{r5}"].alignment = Alignment(horizontal="right")
+        ws[f"D{r5}"].value = f"=R{r2}"
+        ws[f"D{r5}"].font = Font(size=13)
+        ws[f"D{r5}"].number_format = "#,##0"
+        ws.merge_cells(f"D{r5}:G{r5}")
+        ws[f"K{r5}"].value = short_sign
+        ws[f"K{r5}"].font = Font(size=13)
+        ws[f"K{r5}"].alignment = Alignment(horizontal="right")
+        ws[f"L{r5}"].value = f"=R{r2}"
+        ws[f"L{r5}"].font = Font(size=13)
+        ws[f"L{r5}"].number_format = "#,##0"
+        ws.merge_cells(f"L{r5}:O{r5}")
+        if not is_return:
+            ws[f"P{r5}"].value = "Average"
+            ws[f"P{r5}"].font = Font(size=11)
+            ws[f"P{r5}"].alignment = Alignment(horizontal="center")
+        ws.row_dimensions[r5].height = ROW_HEIGHT
 
-        # Row 6: result (with top rule)
-        border_line(ws, row_num)
-        long_label = "shares" if result_long >= 0 else "short"
-        short_label = "short" if result_short < 0 else "shares"
-        ws[f"C{row_num}"].value = long_label
-        ws[f"C{row_num}"].font = Font(size=13)
-        ws[f"C{row_num}"].alignment = Alignment(horizontal="right")
-        ws[f"L{row_num}"].value = short_label
-        ws[f"L{row_num}"].font = Font(size=13)
-        ws[f"L{row_num}"].alignment = Alignment(horizontal="right")
+        # --- Row 6: result — live formulas, top rule ---
+        border_line(ws, r6)
         result_border = Border(top=Side(style="thin"))
-        for col, val in (("D", result_long), ("M", result_short)):
-            cell = ws[f"{col}{row_num}"]
-            cell.value = int(val)
-            cell.font = Font(size=13)
-            cell.border = result_border
-            cell.alignment = Alignment(horizontal="right")
-            cell.number_format = "#,##0_ ;[Red](#,##0)"
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        long_formula = f"=D{r4}-D{r5}" if is_return else f"=D{r4}+D{r5}"
+        short_formula = f"=+L{r4}+L{r5}" if is_return else f"=L{r4}-L{r5}"
+        ws[f"C{r6}"].value = f'=IF(D{r6}>=0,"shares","short")'
+        ws[f"C{r6}"].font = Font(size=13)
+        ws[f"C{r6}"].alignment = Alignment(horizontal="right")
+        ws[f"D{r6}"].value = long_formula
+        ws[f"D{r6}"].font = Font(size=13)
+        ws[f"D{r6}"].border = result_border
+        ws[f"D{r6}"].number_format = "#,##0_ ;[Red](#,##0)"
+        ws.merge_cells(f"D{r6}:G{r6}")
+        ws[f"K{r6}"].value = f'=IF(L{r6}>=0,"shares","short")'
+        ws[f"K{r6}"].font = Font(size=13)
+        ws[f"K{r6}"].alignment = Alignment(horizontal="right")
+        ws[f"L{r6}"].value = short_formula
+        ws[f"L{r6}"].font = Font(size=13)
+        ws[f"L{r6}"].border = result_border
+        ws[f"L{r6}"].number_format = "#,##0_ ;[Red](#,##0)"
+        ws.merge_cells(f"L{r6}:O{r6}")
+        if not is_return:
+            average = TradesDoneAverage(
+                db=self.db, trade_date=self.trade_date,
+                code=code, bank_id=bank_id
+            ).average
+            ws[f"P{r6}"].value = average
+            ws[f"P{r6}"].font = Font(size=13)
+            ws[f"P{r6}"].number_format = "#,##0.0000"
+            ws[f"P{r6}"].alignment = Alignment(horizontal="center")
+        ws.row_dimensions[r6].height = ROW_HEIGHT
 
-        # Blank spacer row
-        border_line(ws, row_num)
-        ws.row_dimensions[row_num].height = ROW_HEIGHT
-        row_num += 1
+        # --- Row 7: blank spacer ---
+        border_line(ws, r7)
+        ws.row_dimensions[r7].height = ROW_HEIGHT
 
         counter += 1
-        return row_num, counter
+        return r7 + 1, counter
 
     def write_transfers(self, ws, row_num):
         if not self.transfers:
@@ -542,7 +563,8 @@ class CreateNotebook:
             ws[f"K{row_num}"].font  = Font(size=13)
             average = TradesDoneAverage(
                 db=self.db, trade_date=self.trade_date,
-                code=code, bank_id=in_bank_id
+                code=code, bank_id=in_bank_id,
+                include_transfers=True
             ).average
             cell = ws[f"N{row_num}"]
             cell.value         = average

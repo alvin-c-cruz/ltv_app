@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from flask import current_app, url_for
 
 from .. database import get_db
-from .. transactions import get_balance, get_transactions
+from .. transactions import get_balance, get_transactions, get_short_balance, get_short_transactions
 
 
 def list_currency():
@@ -89,6 +89,7 @@ def create_file(date_from, date_to, bank_ref, code_ref):
     wb['SUMMARY']['A3'] = f'As of {datetime.strftime(datetime.strptime(date_to, "%Y-%m-%d"), "%B %d, %Y")}'
 
     head_line = {}
+    short_head_line = {}
 
     if date_from[:4] == date_to[:4]:
         if date_from[5:7] == date_to[5:7]:
@@ -142,6 +143,7 @@ def create_file(date_from, date_to, bank_ref, code_ref):
 
         for bank_ref in dict_gain_loss[ccy]:
             head_line[ccy][bank_ref] = {}
+            short_head_line.setdefault(ccy, {})[bank_ref] = {}
             bank_id = get_bank_id(bank_ref)
             bank_name = get_bank_name(bank_ref)
             sheet_name = f'{bank_id}-{ccy}'
@@ -190,31 +192,58 @@ def create_file(date_from, date_to, bank_ref, code_ref):
             write_title(ws, 'L10', 'Stock', 11, 'center', True)
             ws.merge_cells('L10:M10')
 
-            # Beginning Balance Details
+            # Beginning Balance Details (long + short interleaved)
             row_num = 11
             start_total = row_num
-            for code_ref in dict_gain_loss[ccy][bank_ref]['beginning']:
-                head_line[ccy][bank_ref][code_ref] = row_num
 
+            long_beg = dict_gain_loss[ccy][bank_ref]['beginning']
+            short_beg = dict_gain_loss[ccy][bank_ref].get('short_beginning', {})
+
+            # Collect all code_refs from both books, sorted by stock code
+            all_code_refs = set(long_beg.keys()) | set(short_beg.keys())
+            ordered_code_refs = sorted(all_code_refs, key=lambda cr: get_code(cr))
+
+            for code_ref in ordered_code_refs:
                 code = get_code(code_ref)
                 stock_name = get_stock_name(code_ref)
-                beginning_balance = dict_gain_loss[ccy][bank_ref]['beginning'][code_ref]['quantity']
-                average = dict_gain_loss[ccy][bank_ref]['beginning'][code_ref]['average']
 
-                write_box_normal(ws, f'A{row_num}', f'=INDIRECT("A"&row()-1)+1', "integer")
-                write_box_normal(ws, f'B{row_num}', stock_name)
-                ws.merge_cells(f'B{row_num}:C{row_num}')
-                write_box_normal(ws, f'D{row_num}', code, "code")
-                write_box_normal(ws, f'E{row_num}', beginning_balance, "shares")
-                write_box_normal(ws, f'F{row_num}', average, "currency_4")
-                write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
-                write_box_normal(ws, f'H{row_num}', f'=G{row_num}/hkd_per_usd', "currency_2")
-                ws.merge_cells(f'H{row_num}:I{row_num}')
-                write_box_normal(ws, f'K{row_num}', '')
-                write_box_normal(ws, f'L{row_num}', f'=B{row_num}')
-                ws.merge_cells(f'L{row_num}:M{row_num}')
+                if code_ref in long_beg:
+                    head_line[ccy][bank_ref][code_ref] = row_num
+                    beginning_balance = long_beg[code_ref]['quantity']
+                    average = long_beg[code_ref]['average']
 
-                row_num += 1
+                    write_box_normal(ws, f'A{row_num}', f'=INDIRECT("A"&row()-1)+1', "integer")
+                    write_box_normal(ws, f'B{row_num}', stock_name)
+                    ws.merge_cells(f'B{row_num}:C{row_num}')
+                    write_box_normal(ws, f'D{row_num}', code, "code")
+                    write_box_normal(ws, f'E{row_num}', beginning_balance, "shares")
+                    write_box_normal(ws, f'F{row_num}', average, "currency_4")
+                    write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
+                    write_box_normal(ws, f'H{row_num}', f'=G{row_num}/hkd_per_usd', "currency_2")
+                    ws.merge_cells(f'H{row_num}:I{row_num}')
+                    write_box_normal(ws, f'K{row_num}', '')
+                    write_box_normal(ws, f'L{row_num}', f'=B{row_num}')
+                    ws.merge_cells(f'L{row_num}:M{row_num}')
+                    row_num += 1
+
+                if code_ref in short_beg:
+                    short_head_line[ccy][bank_ref][code_ref] = row_num
+                    s_qty = short_beg[code_ref]['quantity']
+                    s_avg = short_beg[code_ref]['average']
+
+                    write_box_normal(ws, f'A{row_num}', f'=INDIRECT("A"&row()-1)+1', "integer")
+                    write_box_normal(ws, f'B{row_num}', stock_name + ' - Short')
+                    ws.merge_cells(f'B{row_num}:C{row_num}')
+                    write_box_normal(ws, f'D{row_num}', code, "code")
+                    write_box_normal(ws, f'E{row_num}', s_qty, "shares")
+                    write_box_normal(ws, f'F{row_num}', s_avg, "currency_4")
+                    write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
+                    write_box_normal(ws, f'H{row_num}', f'=G{row_num}/hkd_per_usd', "currency_2")
+                    ws.merge_cells(f'H{row_num}:I{row_num}')
+                    write_box_normal(ws, f'K{row_num}', 0, "currency_2")
+                    write_box_normal(ws, f'L{row_num}', f'=B{row_num}')
+                    ws.merge_cells(f'L{row_num}:M{row_num}')
+                    row_num += 1
 
             end_total = row_num - 1
 
@@ -240,12 +269,18 @@ def create_file(date_from, date_to, bank_ref, code_ref):
 
             row_num += 2
 
-            # Stock Transactions
-            for code_ref in dict_gain_loss[ccy][bank_ref]['trades']:
-                if dict_gain_loss[ccy][bank_ref]['trades'][code_ref]:
-                    code = get_code(code_ref)
-                    name = get_stock_name(code_ref)
-                    # Stock Name
+            # Detail sections: one pass over all code_refs sorted by stock code,
+            # writing the long section then the short section for each.
+            all_detail_code_refs = set(dict_gain_loss[ccy][bank_ref]['trades']) | \
+                                   set(dict_gain_loss[ccy][bank_ref].get('short_trades', {}))
+            for code_ref in sorted(all_detail_code_refs, key=lambda cr: get_code(cr)):
+                code = get_code(code_ref)
+                name = get_stock_name(code_ref)
+                trades      = dict_gain_loss[ccy][bank_ref]['trades'].get(code_ref, [])
+                short_trades = dict_gain_loss[ccy][bank_ref].get('short_trades', {}).get(code_ref, [])
+
+                # ── Long detail section ──────────────────────────────────────────
+                if trades:
                     stock_name = f'{code}:{ccy[:2]} - {name}'
                     write_title(ws, f'A{row_num}', stock_name, 12, 'left')
                     for cell_name in (f'A{row_num}', f'B{row_num}', f'C{row_num}'):
@@ -255,13 +290,9 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                     write(ws, f'E{row_num}', f'=E{head_row_num}', 11, 'right', 'shares', True)
                     write(ws, f'F{row_num}', f'=F{head_row_num}', 11, 'right', 'currency_4', True)
                     start_balance = row_num
-
-                    # For gain_loss_per_stock
                     ws[f"O{row_num}"].value = f"=E{row_num}"
-
                     row_num += 1
 
-                    # Headers
                     write_title(ws, f'A{row_num}', '', 11, 'center', True)
                     write_title(ws, f'B{row_num}', 'Trade  Date', 11, 'center', True)
                     write_title(ws, f'C{row_num}', 'Settlement Date', 11, 'center', True)
@@ -275,18 +306,15 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                     write_title(ws, f'K{row_num}', 'Avg. Cost', 11, 'center', True)
                     write_title(ws, f'L{row_num}', 'Net Gain Loss', 11, 'center', True)
                     write_title(ws, f'M{row_num}', '%', 11, 'center', True)
-
-                    # For gain_loss_per_stock
                     ws[f"O{row_num}"].value = f"=O{row_num-1}"
-
+                    ws[f"P{row_num}"].value = f"=E{start_balance}"
+                    ws[f"Q{row_num}"].value = f"=R{row_num}/P{row_num}"
+                    ws[f"R{row_num}"].value = f"=E{start_balance}*F{start_balance}"
                     row_num += 1
-                    i = 0
                     g_l = False
 
-                    # Details
-                    for record in dict_gain_loss[ccy][bank_ref]['trades'][code_ref]:
+                    for record in trades:
                         write_box_normal(ws, f'A{row_num}', f'=INDIRECT("A"&row()-1)+1', "integer")
-
                         write_box_normal(ws, f'B{row_num}', datetime.strptime(record['trade_date'], "%Y-%m-%d"), "date")
                         write_box_normal(ws, f'C{row_num}', datetime.strptime(record['value_date'], "%Y-%m-%d"), "date")
                         write_box_normal(ws, f'D{row_num}', record['description'])
@@ -295,14 +323,10 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                         write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
                         write_box_normal(ws, f'H{row_num}', record['charges'], "currency_2")
                         write_box_normal(ws, f'I{row_num}', f'=G{row_num}+H{row_num}', "currency_2")
-
-                        if not i:
-                            formula = f'=if(sum(E{start_balance}:E{row_num})=0,F{row_num - 2},if(left(D{row_num},4)="Sell",F{start_balance},(E{start_balance}*F{start_balance}+I{row_num})/sum(E{start_balance}:E{row_num})))'
-                            i = 1
-                        else:
-                            # formula = f'=if(sum(E{start_balance}:E{row_num})=0,J{row_num - 1},if(left(D{row_num},4)="Sell",J{row_num - 1},(sum(E{start_balance}:E{row_num - 1})*if(isnumber(J{row_num - 1}),J{row_num - 1},0)+I{row_num})/sum(E{start_balance}:E{row_num})))'
-                            formula = f'=IF(SUM(INDIRECT("E{start_balance}:E"&ROW()))=0,INDIRECT("J"&ROW()-1),IF(LEFT(D{row_num},4)="Sell",INDIRECT("J"&ROW()-1),(SUM(INDIRECT("E{start_balance}:E"&ROW()-1))*IF(ISNUMBER(INDIRECT("J"&ROW()-1)),INDIRECT("J"&ROW()-1),0)+I{row_num})/SUM(INDIRECT("E{start_balance}:E"&ROW()))))'
-                        write_box_normal(ws, f'J{row_num}', formula, "currency_4")
+                        ws[f"P{row_num}"].value = f"=P{row_num-1}+E{row_num}"
+                        ws[f"Q{row_num}"].value = f"=IFERROR(R{row_num}/P{row_num},Q{row_num-1})"
+                        ws[f"R{row_num}"].value = f"=IF(E{row_num}>0,R{row_num-1}+I{row_num},R{row_num-1}+Q{row_num-1}*E{row_num})"
+                        write_box_normal(ws, f'J{row_num}', f'=Q{row_num}', "currency_4")
 
                         if record['description'][:4] == 'Sell':
                             write_box_normal(ws, f'K{row_num}', f'=E{row_num}*J{row_num}', "currency_2")
@@ -314,49 +338,123 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                             write_box_normal(ws, f'L{row_num}', '', "currency_2")
                             write_box_normal(ws, f'M{row_num}', '', "percentage")
 
-                        # For gain_loss_per_stock
                         ws[f"O{row_num}"].value = f'=INDIRECT("O"&row()-1)+E{row_num}'
                         ws[f"O{row_num}"].number_format = "#,##0;[RED]-#,##0"
-                        
-                        # HyperLink
                         cell = ws[f"D{row_num}"]
                         if 'Accu' in record['description'] or 'Decu' in record['description']:
                             cell.hyperlink = url_for('fixings.edit', ref_num=record['ref_num'], _external=True)
                         else:
                             cell.hyperlink = url_for('transactions.edit', ref_num=record['ref_num'], _external=True)
-
                         row_num += 1
 
-                    # Footer
                     write_box_normal(ws, f'A{row_num}', "")
                     write_box_normal(ws, f'B{row_num}', "")
                     write_box_normal(ws, f'C{row_num}', "")
                     write_box_normal(ws, f'D{row_num}', "TOTAL", "string", True)
                     write_box_normal(ws, f'E{row_num}', f'=SUM(E{start_balance}:E{row_num - 1})', "shares", True)
                     write_box_normal(ws, f'F{row_num}', "")
-
                     write_box_normal(ws, f'G{row_num}', f'=SUM(G{start_balance}:G{row_num - 1})', "currency_2", True)
                     ws[f'G{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
-
                     write_box_normal(ws, f'H{row_num}', "")
-
                     write_box_normal(ws, f'I{row_num}', f'=SUM(I{start_balance}:I{row_num - 1})', "currency_2", True)
                     ws[f'I{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
-
                     write_box_normal(ws, f'J{row_num}', "")
-
                     write_box_normal(ws, f'K{row_num}', f'=SUM(K{start_balance}:K{row_num - 1})', "currency_2", True)
                     ws[f'K{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
-
                     write_box_normal(ws, f'L{row_num}', f'=SUM(L{start_balance}:L{row_num - 1})', "currency_2", True)
                     ws[f'L{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
-
                     if g_l:
                         fill_color(ws, f'L{row_num}', "00FF9900")
-
                     write_box_normal(ws, f'M{row_num}', "")
-
                     write_box_normal(ws, f'K{head_row_num}', f'=L{row_num}', "currency_2")
+                    row_num += 2
+
+                # ── Short detail section ─────────────────────────────────────────
+                if short_trades:
+                    stock_name = f'{code}:{ccy[:2]} - {name} - Short'
+                    write_title(ws, f'A{row_num}', stock_name, 12, 'left')
+                    for cell_name in (f'A{row_num}', f'B{row_num}', f'C{row_num}'):
+                        fill_color(ws, cell_name, "00FFFF00")
+
+                    short_head_row_num = short_head_line.get(ccy, {}).get(bank_ref, {}).get(code_ref)
+                    write(ws, f'E{row_num}', f'=E{short_head_row_num}', 11, 'right', 'shares', True)
+                    write(ws, f'F{row_num}', f'=F{short_head_row_num}', 11, 'right', 'currency_4', True)
+                    start_balance = row_num
+                    ws[f"O{row_num}"].value = f"=E{row_num}"
+                    row_num += 1
+
+                    write_title(ws, f'A{row_num}', '', 11, 'center', True)
+                    write_title(ws, f'B{row_num}', 'Trade  Date', 11, 'center', True)
+                    write_title(ws, f'C{row_num}', 'Settlement Date', 11, 'center', True)
+                    write_title(ws, f'D{row_num}', 'Transaction', 11, 'center', True)
+                    write_title(ws, f'E{row_num}', 'Shares', 11, 'center', True)
+                    write_title(ws, f'F{row_num}', 'Price', 11, 'center', True)
+                    write_title(ws, f'G{row_num}', 'Gross Total', 11, 'center', True)
+                    write_title(ws, f'H{row_num}', 'Charges', 11, 'center', True)
+                    write_title(ws, f'I{row_num}', 'Net Total', 11, 'center', True)
+                    write_title(ws, f'J{row_num}', 'Avg. Price', 11, 'center', True)
+                    write_title(ws, f'K{row_num}', 'Avg. Cost', 11, 'center', True)
+                    write_title(ws, f'L{row_num}', 'Net Gain Loss', 11, 'center', True)
+                    write_title(ws, f'M{row_num}', '%', 11, 'center', True)
+                    ws[f"O{row_num}"].value = f"=O{row_num-1}"
+                    ws[f"P{row_num}"].value = f"=E{start_balance}"
+                    ws[f"Q{row_num}"].value = f"=R{row_num}/P{row_num}"
+                    ws[f"R{row_num}"].value = f"=E{start_balance}*F{start_balance}"
+                    row_num += 1
+                    g_l = False
+
+                    for record in short_trades:
+                        qty = record['quantity']
+                        write_box_normal(ws, f'A{row_num}', f'=INDIRECT("A"&row()-1)+1', "integer")
+                        write_box_normal(ws, f'B{row_num}', datetime.strptime(record['trade_date'], "%Y-%m-%d"), "date")
+                        write_box_normal(ws, f'C{row_num}', datetime.strptime(record['value_date'], "%Y-%m-%d"), "date")
+                        write_box_normal(ws, f'D{row_num}', record['description'])
+                        write_box_normal(ws, f'E{row_num}', record['quantity'], "shares")
+                        write_box_normal(ws, f'F{row_num}', record['price'], "currency_4")
+                        write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
+                        write_box_normal(ws, f'H{row_num}', record['charges'], "currency_2")
+                        write_box_normal(ws, f'I{row_num}', f'=G{row_num}+H{row_num}', "currency_2")
+                        ws[f"P{row_num}"].value = f"=P{row_num-1}+E{row_num}"
+                        ws[f"Q{row_num}"].value = f"=IFERROR(R{row_num}/P{row_num},Q{row_num-1})"
+                        ws[f"R{row_num}"].value = f"=IF(E{row_num}<0,R{row_num-1}+I{row_num},R{row_num-1}+Q{row_num-1}*E{row_num})"
+                        write_box_normal(ws, f'J{row_num}', f'=Q{row_num}', "currency_4")
+
+                        if qty > 0:
+                            write_box_normal(ws, f'K{row_num}', f'=E{row_num}*J{row_num}', "currency_2")
+                            write_box_normal(ws, f'L{row_num}', f'=K{row_num}-I{row_num}', "currency_2")
+                            write_box_normal(ws, f'M{row_num}', f'=(I{row_num}/K{row_num})-1', "percentage")
+                            g_l = True
+                        else:
+                            write_box_normal(ws, f'K{row_num}', '', "currency_2")
+                            write_box_normal(ws, f'L{row_num}', '', "currency_2")
+                            write_box_normal(ws, f'M{row_num}', '', "percentage")
+
+                        ws[f"O{row_num}"].value = f'=INDIRECT("O"&row()-1)+E{row_num}'
+                        ws[f"O{row_num}"].number_format = "#,##0;[RED]-#,##0"
+                        ws[f"D{row_num}"].hyperlink = url_for('transactions.edit_short', ref_num=record['ref_num'], _external=True)
+                        row_num += 1
+
+                    write_box_normal(ws, f'A{row_num}', "")
+                    write_box_normal(ws, f'B{row_num}', "")
+                    write_box_normal(ws, f'C{row_num}', "")
+                    write_box_normal(ws, f'D{row_num}', "TOTAL", "string", True)
+                    write_box_normal(ws, f'E{row_num}', f'=SUM(E{start_balance}:E{row_num - 1})', "shares", True)
+                    write_box_normal(ws, f'F{row_num}', "")
+                    write_box_normal(ws, f'G{row_num}', f'=SUM(G{start_balance}:G{row_num - 1})', "currency_2", True)
+                    ws[f'G{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
+                    write_box_normal(ws, f'H{row_num}', "")
+                    write_box_normal(ws, f'I{row_num}', f'=SUM(I{start_balance}:I{row_num - 1})', "currency_2", True)
+                    ws[f'I{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
+                    write_box_normal(ws, f'J{row_num}', "")
+                    write_box_normal(ws, f'K{row_num}', f'=SUM(K{start_balance}:K{row_num - 1})', "currency_2", True)
+                    ws[f'K{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
+                    write_box_normal(ws, f'L{row_num}', f'=SUM(L{start_balance}:L{row_num - 1})', "currency_2", True)
+                    ws[f'L{row_num}'].number_format = f'[${ccy}] #,##0.00_);([${ccy}] #,##0.00)'
+                    if g_l:
+                        fill_color(ws, f'L{row_num}', "00FF9900")
+                    write_box_normal(ws, f'M{row_num}', "")
+                    if short_head_row_num:
+                        write_box_normal(ws, f'K{short_head_row_num}', f'=L{row_num}', "currency_2")
                     row_num += 2
 
     output = io.BytesIO()
@@ -439,43 +537,63 @@ def gather_gain_loss(date_from, date_to, bank_refs, code_refs):
 
     beginning_date = str(datetime.strptime(date_from, "%Y-%m-%d") - timedelta(days=1))[:10]
 
+    def _ensure(ccy, bank_ref):
+        if ccy not in dict_gain_loss:
+            dict_gain_loss[ccy] = {}
+        if bank_ref not in dict_gain_loss[ccy]:
+            dict_gain_loss[ccy][bank_ref] = {
+                "beginning": {}, "trades": {},
+                "short_beginning": {}, "short_trades": {},
+            }
+
     for bank_ref in bank_refs:
         for code_ref in code_refs:
-            #  1. Get balances
+            #  1. Long book balance
             quantity, cost_to_date = get_balance(db=db, bank_ref=bank_ref, code_ref=code_ref, trade_date=beginning_date)
             if quantity:
                 ccy = get_ccy(code_ref)
-                if ccy not in dict_gain_loss:
-                    dict_gain_loss[ccy] = {}
-
-                if bank_ref not in dict_gain_loss[ccy]:
-                    dict_gain_loss[ccy][bank_ref] = {"beginning": {}, "trades": {}}
-
+                _ensure(ccy, bank_ref)
                 dict_gain_loss[ccy][bank_ref]["beginning"][code_ref] = {
                     "quantity": quantity,
                     "cost_to_date": cost_to_date,
                     "average": cost_to_date / quantity,
                 }
 
-            #  2. Get Transactions
+            #  2. Long book transactions
             transactions = get_transactions(db=db, bank_ref=bank_ref, code_ref=code_ref,
                                             date_from=date_from, date_to=date_to)
             if transactions:
                 ccy = get_ccy(code_ref)
-                if ccy not in dict_gain_loss:
-                    dict_gain_loss[ccy] = {}
-
-                if bank_ref not in dict_gain_loss[ccy]:
-                    dict_gain_loss[ccy][bank_ref] = {"beginning": {}, "trades": {}}
-
+                _ensure(ccy, bank_ref)
                 if code_ref not in dict_gain_loss[ccy][bank_ref]["beginning"]:
                     dict_gain_loss[ccy][bank_ref]["beginning"][code_ref] = {
-                        "quantity": 0,
-                        "cost_to_date": 0,
-                        "average": 0,
+                        "quantity": 0, "cost_to_date": 0, "average": 0,
                     }
-
                 dict_gain_loss[ccy][bank_ref]["trades"][code_ref] = transactions
+
+            #  3. Short book balance
+            short_qty, short_cost = get_short_balance(db=db, bank_ref=bank_ref, code_ref=code_ref,
+                                                      trade_date=beginning_date)
+            if short_qty:
+                ccy = get_ccy(code_ref)
+                _ensure(ccy, bank_ref)
+                dict_gain_loss[ccy][bank_ref]["short_beginning"][code_ref] = {
+                    "quantity": short_qty,
+                    "cost_to_date": short_cost,
+                    "average": short_cost / abs(short_qty),
+                }
+
+            #  4. Short book transactions
+            short_transactions = get_short_transactions(db=db, bank_ref=bank_ref, code_ref=code_ref,
+                                                        date_from=date_from, date_to=date_to)
+            if short_transactions:
+                ccy = get_ccy(code_ref)
+                _ensure(ccy, bank_ref)
+                if code_ref not in dict_gain_loss[ccy][bank_ref]["short_beginning"]:
+                    dict_gain_loss[ccy][bank_ref]["short_beginning"][code_ref] = {
+                        "quantity": 0, "cost_to_date": 0, "average": 0,
+                    }
+                dict_gain_loss[ccy][bank_ref]["short_trades"][code_ref] = short_transactions
 
     return dict_gain_loss
 

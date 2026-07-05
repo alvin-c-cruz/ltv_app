@@ -173,6 +173,59 @@ def gather_position_bulk(db, bank_ref):
     return dict_position
 
 
+def gather_short_position_bulk(db, bank_ref):
+    """Net short positions for a bank from tbl_transaction_short."""
+    rows = db.execute(
+        "SELECT t.code_ref, SUM(t.quantity) as net_qty "
+        "FROM tbl_transaction_short t "
+        "WHERE t.bank_ref=? "
+        "GROUP BY t.code_ref "
+        "HAVING net_qty != 0",
+        (bank_ref,)
+    ).fetchall()
+
+    if not rows:
+        return {}
+
+    code_refs = [r['code_ref'] for r in rows]
+    placeholders = ','.join('?' * len(code_refs))
+    ccy_rows = db.execute(
+        "SELECT tbl_code.ref_num, tbl_currency.ccy_id "
+        "FROM tbl_currency "
+        "INNER JOIN tbl_code ON tbl_code.ccy_ref = tbl_currency.ref_num "
+        f"WHERE tbl_code.ref_num IN ({placeholders})",
+        code_refs
+    ).fetchall()
+    ccy_map = {row['ref_num']: row['ccy_id'] for row in ccy_rows}
+
+    stock_info = {s['ref_num']: s for s in g.stocks}
+    dict_position = {}
+    for row in rows:
+        code_ref = row['code_ref']
+        quantity = row['net_qty']
+        stock = stock_info.get(code_ref)
+        ccy = ccy_map.get(code_ref)
+        if not stock or not ccy:
+            continue
+        if ccy not in dict_position:
+            dict_position[ccy] = {}
+        qty_fmt = ('({:,.0f})'.format(abs(quantity)) if quantity < 0
+                   else '{:,.0f}'.format(quantity))
+        dict_position[ccy][code_ref] = {
+            "code": stock["code"],
+            "name": stock["stock_name"],
+            "quantity": qty_fmt,
+            "is_short": quantity < 0,
+        }
+
+    for ccy in dict_position:
+        dict_position[ccy] = dict(
+            sorted(dict_position[ccy].items(), key=lambda item: item[1]['code'])
+        )
+
+    return dict_position
+
+
 def _compute_transactions(db, bank_ref, code_ref, date_from, date_to):
     date_before = str(date.fromisoformat(date_from) - timedelta(days=1))
     start_qty, start_cost = get_balance(db=db, bank_ref=bank_ref, code_ref=code_ref, trade_date=date_before)
@@ -267,6 +320,100 @@ def transaction_list(bank_id, code):
     }
 
     return render_template('bank/transactions.html', form=form)
+
+
+@bp.route('/<bank_id>/<code>/short', methods=['GET', 'POST'])
+def short_transaction_list(bank_id, code):
+    from .. database import get_db
+    db = get_db()
+    bank_row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?;", (bank_id,)).fetchone()
+    bank_ref, bank_name = bank_row['ref_num'], bank_row['bank_name']
+    code_row = db.execute("SELECT ref_num, stock_name FROM tbl_code WHERE code=?;", (code,)).fetchone()
+    code_ref, stock_name = code_row['ref_num'], code_row['stock_name']
+
+    if request.method == 'POST':
+        date_from = request.form.get('date_from', '')
+        date_to = request.form.get('date_to', '')
+    else:
+        today = ph_today()
+        date_from = str(today.replace(month=1, day=1))
+        date_to = str(today.replace(month=12, day=31))
+
+    rows = db.execute(
+        "SELECT ref_num, trade_date, value_date, transaction_type, quantity, price, "
+        "brokerage, commission, foreign_charge, stamp_duty, misc "
+        "FROM tbl_transaction_short "
+        "WHERE bank_ref=? AND code_ref=? AND trade_date>=? AND trade_date<=? "
+        "ORDER BY trade_date",
+        (bank_ref, code_ref, date_from, date_to)
+    ).fetchall()
+
+    # compute balance and average cost forwarded from before date_from
+    prior_rows = db.execute(
+        "SELECT quantity, price, brokerage, commission, foreign_charge, stamp_duty, misc "
+        "FROM tbl_transaction_short "
+        "WHERE bank_ref=? AND code_ref=? AND trade_date<? "
+        "ORDER BY trade_date",
+        (bank_ref, code_ref, date_from)
+    ).fetchall()
+
+    def _update_short_cost(balance, cost_to_date, qty, price, charges):
+        amount = abs(qty) * price + charges
+        if qty < 0:  # opening/deepening short
+            if balance <= 0:
+                cost_to_date += amount
+        else:  # closing short
+            if balance < 0:
+                if abs(balance) - qty > 0:
+                    cost_to_date -= cost_to_date * qty / abs(balance)
+                else:
+                    cost_to_date = 0.0
+        return cost_to_date
+
+    balance = 0
+    cost_to_date = 0.0
+    for r in prior_rows:
+        charges = r['brokerage'] + r['commission'] + r['foreign_charge'] + r['stamp_duty'] + r['misc']
+        cost_to_date = _update_short_cost(balance, cost_to_date, r['quantity'], r['price'], charges)
+        balance += r['quantity']
+
+    start_qty = balance
+    start_avg = cost_to_date / abs(balance) if balance != 0 else 0.0
+
+    transactions = []
+    for row in rows:
+        charges = (row['brokerage'] + row['commission'] + row['foreign_charge']
+                   + row['stamp_duty'] + row['misc'])
+        cost_to_date = _update_short_cost(balance, cost_to_date, row['quantity'], row['price'], charges)
+        balance += row['quantity']
+        avg = cost_to_date / abs(balance) if balance != 0 else 0.0
+        transactions.append({
+            'ref_num': row['ref_num'],
+            'trade_date_fmt': _fmt_date(row['trade_date']),
+            'value_date_fmt': _fmt_date(row['value_date']),
+            'description': row['transaction_type'],
+            'quantity': row['quantity'],
+            'quantity_fmt': _fmt_int(row['quantity']),
+            'price_fmt': '{:,.4f}'.format(row['price']),
+            'charges_fmt': _fmt_num(charges, 2),
+            'amount_fmt': _fmt_num(row['quantity'] * row['price'] + charges, 2),
+            'balance_fmt': _fmt_int(balance),
+            'average_fmt': '{:,.4f}'.format(avg) if balance != 0 else '—',
+        })
+
+    form = {
+        'bank_name': bank_name,
+        'bank_id': bank_id,
+        'code': code,
+        'stock_name': stock_name,
+        'date_from': date_from,
+        'date_to': date_to,
+        'start_quantity': _fmt_int(start_qty) if start_qty else '—',
+        'start_average': '{:,.4f}'.format(start_avg) if start_qty else '—',
+        'transactions': transactions,
+    }
+
+    return render_template('bank/short_transactions.html', form=form)
 
 
 @bp.route('/<bank_id>/<code>/download')

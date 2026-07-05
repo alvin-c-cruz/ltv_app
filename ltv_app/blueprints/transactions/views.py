@@ -36,10 +36,11 @@ def home():
 @bp.route('/add', methods=['GET', 'POST'])
 @login_required
 def add():
-    transaction_types = [(i, i) for i in ['Buy (Spot)', 'Sell (Spot)', 'Sell (Short)', 'Buy (Pay Short)',
-                                          # 'Transfer-In', 'Transfer-Out'
-                                          ]
-                         ]
+    # Long book: Buy Spot, Sell Spot only
+    # Borrow/Return use the dedicated + Borrow/Return modal (borrow_return_shares route)
+    transaction_types = [(i, i) for i in [
+        'Buy (Spot)', 'Sell (Spot)',
+    ]]
 
     if request.method == 'POST':
         error = ""
@@ -62,36 +63,25 @@ def add():
           "price": price
         }
 
+        # Long book: Sell = negative; Buy = positive
         if "Sell" in transaction_type or "Out" in transaction_type:
             if quantity > 0:
                 error = "Sell transaction should have negative quantity."
         else:
             if quantity < 0:
-                error = "Buy transaction should have position quantity"
+                error = "Buy transaction should have positive quantity."
 
         if not error:
             from .. database import get_db
-            if transaction_type in ('Buy (Spot)', 'Sell (Spot)', 'Transfer-In', 'Transfer-Out'):
-                new_transaction = Transaction(db=get_db(),
-                  trade_date=trade_date,
-                  value_date=value_date,
-                  bank_ref=bank_ref,
-                  code_ref=code_ref,
-                  transaction_type=transaction_type,
-                  quantity=quantity,
-                  price=price
-                  )
-            else:
-                new_transaction = TransactionShort(db=get_db(),
-                  trade_date=trade_date,
-                  value_date=value_date,
-                  bank_ref=bank_ref,
-                  code_ref=code_ref,
-                  transaction_type=transaction_type,
-                  quantity=quantity,
-                  price=price
-                  )
-
+            new_transaction = Transaction(db=get_db(),
+              trade_date=trade_date,
+              value_date=value_date,
+              bank_ref=bank_ref,
+              code_ref=code_ref,
+              transaction_type=transaction_type,
+              quantity=quantity,
+              price=price
+              )
             new_transaction.save()
 
             flash(f"Transaction added: {transaction_type} {abs(quantity):,} shares.")
@@ -112,6 +102,77 @@ def add():
     }
 
     return render_template('transactions/add.html', **context)
+
+
+@bp.route('/add/short', methods=['GET', 'POST'])
+@login_required
+def add_short():
+    # Short book only: Sell Short (-), Buy Pay Short (+)
+    # Borrow/Return are entered via long book form and auto-mirrored here
+    transaction_types = [(i, i) for i in [
+        'Sell (Short)', 'Buy (Pay Short)',
+    ]]
+
+    if request.method == 'POST':
+        error = ""
+
+        trade_date = request.form["trade_date"]
+        value_date = request.form["value_date"]
+        bank_ref = int(request.form["bank_ref"])
+        code_ref = int(request.form["code_ref"])
+        transaction_type = request.form["transaction_type"]
+        quantity = int(request.form["quantity"])
+        price = float(request.form["price"])
+
+        form = {
+          "trade_date": trade_date,
+          "value_date": value_date,
+          "bank_ref": bank_ref,
+          "code_ref": code_ref,
+          "transaction_type": transaction_type,
+          "quantity": quantity,
+          "price": price
+        }
+
+        # Short book: Sell Short = negative; Buy Pay Short = positive
+        if "Sell" in transaction_type:
+            if quantity > 0:
+                error = "Sell (Short) should have negative quantity."
+        else:
+            if quantity < 0:
+                error = "Buy (Pay Short) should have positive quantity."
+
+        if not error:
+            from .. database import get_db
+            new_transaction = TransactionShort(db=get_db(),
+              trade_date=trade_date,
+              value_date=value_date,
+              bank_ref=bank_ref,
+              code_ref=code_ref,
+              transaction_type=transaction_type,
+              quantity=quantity,
+              price=price
+              )
+            new_transaction.save()
+
+            flash(f"Short transaction added: {transaction_type} {abs(quantity):,} shares.")
+            return redirect(url_for('transactions.home', trade_date=trade_date))
+        else:
+            flash(error)
+    else:
+        trade_date = str(ph_today())
+        value_date = str(add_business_days(ph_today(), 2))
+        form = {
+          "trade_date": trade_date,
+          "value_date": value_date
+        }
+
+    context = {
+        "form": form,
+        "transaction_types": transaction_types
+    }
+
+    return render_template('transactions/add_short.html', **context)
 
 
 @bp.route('/stock_transfer', methods=['GET', 'POST'])

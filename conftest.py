@@ -15,5 +15,5 @@ def test_client_logged_in():
     flask_app = create_app()
 
     with flask_app.test_client() as test_client:
-        test_client.post('/auth/login', data={"username": "alvin", "password": "saguiguilid"})
+        test_client.post('/auth/login', data={"username": "admin", "password": "ac1123581321"})
         yield test_client

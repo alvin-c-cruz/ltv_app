@@ -40,6 +40,7 @@
            onclick="window.open(this.href,'printTrades','width=1200,height=900,scrollbars=yes,resizable=yes'); return false;"
            class="btn btn-outline">Print Trades Done</a>
         <button type="button" class="btn btn-success" onclick="openTxnModal('spotModal')">+ Spot</button>
+        <button type="button" class="btn btn-success" onclick="openTxnModal('shortModal')">+ Short</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('transferModal')">+ Transfer</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('contractModal')">+ Contract</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('dividendModal')">+ Dividends</button>
@@ -291,7 +292,7 @@
 <div class="modal-overlay" id="spotModal">
 <div class="modal" style="max-width:520px;padding:0;">
     <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
-        <span class="modal-title">Add Spot / Short Transaction</span>
+        <span class="modal-title">Add Spot Transaction</span>
         <button class="modal-close" onclick="closeTxnModal('spotModal')">&times;</button>
     </div>
     <form method="post" action="{{ url_for('transactions.add') }}">
@@ -318,6 +319,54 @@
                     <option value=""></option>
                     <option value="Buy (Spot)">Buy (Spot)</option>
                     <option value="Sell (Spot)">Sell (Spot)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="text" name="quantity" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+                <label>Price</label>
+                <input type="text" name="price" autocomplete="off" required>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('spotModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Save</button>
+        </div>
+    </form>
+</div>
+</div>
+
+{# ── + SHORT MODAL ────────────────────────────────────────────── #}
+<div class="modal-overlay" id="shortModal">
+<div class="modal" style="max-width:520px;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Add Short Book Transaction</span>
+        <button class="modal-close" onclick="closeTxnModal('shortModal')">&times;</button>
+    </div>
+    <form method="post" action="{{ url_for('transactions.add_short') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px;">
+            <div class="form-group">
+                <label>Trade Date</label>
+                <input type="date" name="trade_date" class="modal-date" required>
+            </div>
+            <div class="form-group">
+                <label>Value Date</label>
+                <input type="date" name="value_date" class="modal-value-date" required>
+            </div>
+            <div class="form-group">
+                <label>Account</label>
+                <select name="bank_ref" required>{{ bank_options() }}</select>
+            </div>
+            <div class="form-group">
+                <label>Stock</label>
+                <select name="code_ref" required>{{ stock_options() }}</select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+                <label>Transaction Type</label>
+                <select name="transaction_type" required>
+                    <option value=""></option>
                     <option value="Sell (Short)">Sell (Short)</option>
                     <option value="Buy (Pay Short)">Buy (Pay Short)</option>
                 </select>
@@ -332,7 +381,7 @@
             </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px 16px;border-top:1px solid var(--border);">
-            <button type="button" class="btn btn-outline" onclick="closeTxnModal('spotModal')">Cancel</button>
+            <button type="button" class="btn btn-outline" onclick="closeTxnModal('shortModal')">Cancel</button>
             <button type="submit" class="btn btn-success">Save</button>
         </div>
     </form>

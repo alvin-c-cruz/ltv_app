@@ -217,7 +217,7 @@ There are two conftest files with different fixture names:
 
 **`conftest.py`** (root, legacy fixtures):
 - `test_client` - Unauthenticated
-- `test_client_logged_in` - Logged in as `alvin`/`saguiguilid` against live database
+- `test_client_logged_in` - Logged in as `admin`/`ac1123581321` against live database
 
 When writing tests:
 ```python

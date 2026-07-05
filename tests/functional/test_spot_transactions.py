@@ -120,7 +120,7 @@ class AddSpotValidationTests:
         bad_data = {**_BUY_FORM, 'quantity': -1000}
         response = auth_client.post(ADD_URL, data=bad_data, follow_redirects=True)
         assert response.status_code == 200
-        assert b'Buy transaction should have position quantity' in response.data
+        assert b'Buy transaction should have positive quantity' in response.data
         assert _count_transactions(db_conn) == 0
 
     def test_sell_spot_with_positive_quantity_is_rejected(self, auth_client, db_conn):
