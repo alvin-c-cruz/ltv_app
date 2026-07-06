@@ -1,5 +1,9 @@
 # LTV Stocks — Match Term-Sheet Contract Listing Implementation Plan
 
+> ⚠️ **SUPERSEDED** — replaced by the "reuse term-sheet's `StockContract` model" approach.
+> A new plan will be written from `docs/superpowers/specs/2026-07-06-ltv-stocks-reuse-termsheet-records-design.md`.
+> Do not execute this plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the downloaded LTV Stocks Excel list the same non-inactive ACCU/DECU contracts the term-sheet page shows, with correct DONE/active classification, correct blocked shares, and GTD-suffixed stock names.

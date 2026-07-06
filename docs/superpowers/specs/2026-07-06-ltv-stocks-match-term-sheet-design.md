@@ -1,7 +1,8 @@
 # LTV Stocks Report — Match the Term-Sheet Contract Listing
 
 **Date:** 2026-07-06
-**Status:** Approved (design)
+**Status:** ⚠️ SUPERSEDED by `2026-07-06-ltv-stocks-reuse-termsheet-records-design.md`
+(this SQL-patching approach was replaced by reusing term-sheet's `StockContract` model).
 **Scope:** `ltv_app/blueprints/ltv_stocks/` (Excel download only)
 **Supersedes:** the current-week DONE/KO filter from
 [2026-07-02-ltv-stocks-current-week-done-ko-filter-design.md](2026-07-02-ltv-stocks-current-week-done-ko-filter-design.md)
