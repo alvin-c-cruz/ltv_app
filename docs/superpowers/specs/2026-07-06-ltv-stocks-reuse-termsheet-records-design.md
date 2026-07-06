@@ -1,7 +1,9 @@
 # LTV Stocks Report — Reuse Term-Sheet Record Logic in the Excel
 
 **Date:** 2026-07-06
-**Status:** Approved (design)
+**Status:** ⚠️ SUPERSEDED — the authoritative target is the legacy `create_LTV_Stocks.py` Excel, to be
+reimplemented natively in `ltv_app` (exact replica, minus AA–AJ per-day markers). A new spec replaces this.
+Term-sheet's `StockContract` computes RCVD differently from the legacy (9.5 vs 10), so it is not the source of truth.
 **Scope:** `ltv_app/blueprints/ltv_stocks/` (Excel download only)
 **Supersedes:** `2026-07-06-ltv-stocks-match-term-sheet-design.md` (the SQL-patching approach) and the
 current-week DONE/KO filter from `2026-07-02-ltv-stocks-current-week-done-ko-filter-design.md`.

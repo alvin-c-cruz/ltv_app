@@ -1,5 +1,8 @@
 # LTV Stocks — Reuse Term-Sheet Records Implementation Plan
 
+> ⚠️ **SUPERSEDED** — the target is now an exact native replica of the legacy `create_LTV_Stocks.py`
+> Excel (porting `summary_ts_raw` + `blocked_shares`, minus AA–AJ per-day markers). Do not execute this plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the LTV Stocks Excel ACCU/DECU sections list every non-inactive contract, computed by reusing term-sheet's `StockContract` model, with term-sheet columns (Received/Remaining/Total months, DONE/KO Next Date, Contract No., Reference) and correct Positions blocked shares.
@@ -304,8 +307,8 @@ def _load_contracts(db, result: dict, price_map: dict):
             'code_ref':          sc.code_ref,
             'code':              sc.code,
             'stock_name':        _stock_name_with_gtd(sc.stock_name, sc.gtd),
-            'bank_doc':          sc.bank_doc or '—',
-            'reference':         sc.reference or '—',
+            'bank_doc':          sc.bank_doc or '-',
+            'reference':         sc.reference or '-',
             'shares_day':        shares_day,
             'spot_raw':          spot_raw,
             'strike_raw':        strike_raw,
