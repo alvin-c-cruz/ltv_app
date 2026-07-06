@@ -103,3 +103,33 @@ def test_week_dates_uses_isoweekday_and_has_ten_dates():
         date(2026, 7, 6), date(2026, 7, 7), date(2026, 7, 8),
         date(2026, 7, 9), date(2026, 7, 10),
     ]
+
+
+def test_write_contracts_zero_records_excludes_hidden_columns_from_border():
+    """Verify that zero-contracts blank row excludes C and M from border (legacy port)."""
+    report_date = date(2026, 7, 6)
+    date_range = week_dates(report_date)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    # Call with empty records list
+    next_row = _write_contracts(
+        ws, [], 'ACCU', 1, report_date, date_range,
+        _FakeWorkingDay(), price_lookup=lambda code_ref, d: None,
+    )
+
+    # Blank row is at first_data_row (1 + 4 = 5)
+    blank_row = 1 + 4
+
+    # Columns C (3) and M (13) should have NO border
+    cell_c = ws.cell(blank_row, 3)  # Column C
+    cell_m = ws.cell(blank_row, 13)  # Column M
+    assert cell_c.border.left.style is None, "Column C should have no border in zero-contracts row"
+    assert cell_m.border.left.style is None, "Column M should have no border in zero-contracts row"
+
+    # Visible columns like B (2) and N (14) SHOULD have borders
+    cell_b = ws.cell(blank_row, 2)  # Column B
+    cell_n = ws.cell(blank_row, 14)  # Column N
+    assert cell_b.border.left.style is not None, "Column B should have border in zero-contracts row"
+    assert cell_n.border.left.style is not None, "Column N should have border in zero-contracts row"

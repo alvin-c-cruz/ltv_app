@@ -69,6 +69,7 @@ _COL_DATE_OFFSET = {
 }
 _OX_COLS = ('O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 _ALL_DATA_COLS = ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N') + _OX_COLS
+_ZERO_ROW_COLS = ('A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 
 
 def week_dates(report_date: date) -> list:
@@ -177,7 +178,7 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
     row += 1  # == first_data_row
 
     if n == 0:
-        for col in _ALL_DATA_COLS:
+        for col in _ZERO_ROW_COLS:
             ws[f'{col}{row}'].border = xl_box()
         ws.row_dimensions[row].height = 17
     else:
