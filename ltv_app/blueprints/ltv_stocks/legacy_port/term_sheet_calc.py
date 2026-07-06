@@ -46,6 +46,44 @@ def _header(db, contract_ref):
     """, (contract_ref,)).fetchone()
 
 
+def build_schedule(db, contract_ref, wd):
+    """Port of term_sheet's per-contract period schedule builder.
+
+    Returns the in-order (period 1, 2, ...) list of period dicts, each with
+    `end_date` (date), `received` (raw), `days` (int), `total_shares` (int).
+    Empty list when the contract has no period rows.
+    """
+    h = db.execute(
+        "SELECT start_date, daily_shares, leveraged FROM tbl_stock_contract WHERE ref_num = ?",
+        (contract_ref,)
+    ).fetchone()
+
+    periods = db.execute(
+        "SELECT start_date, end_date, days, received, gtd "
+        "FROM tbl_stock_contract_period WHERE contract_ref = ?", (contract_ref,)
+    ).fetchall()
+    if not periods:
+        return []
+
+    leveraged = h['leveraged'] == 'Yes'
+    daily = h['daily_shares']
+
+    sched = []
+    prev_end = None
+    for i, p in enumerate(periods):
+        end_d = _to_date(p['end_date'])
+        if i == 0:
+            start_d = _to_date(h['start_date'])
+        else:
+            start_d = wd.next_day(prev_end)
+        days = _to_int(p['days']) or wd.count_days(start_d, end_d)
+        total_shares = days * daily * (2 if leveraged else 1)
+        sched.append({'end_date': end_d, 'received': p['received'],
+                      'days': days, 'total_shares': total_shares})
+        prev_end = end_d
+    return sched
+
+
 def contract_records(db, bank_ref, transaction_type):
     ref_rows = db.execute(
         "SELECT c.ref_num FROM tbl_stock_contract c "
@@ -60,31 +98,13 @@ def contract_records(db, bank_ref, transaction_type):
         h = _header(db, contract_ref)
         wd = WorkingDay(db, h['ccy_id'])
 
-        periods = db.execute(
-            "SELECT start_date, end_date, days, received, gtd "
-            "FROM tbl_stock_contract_period WHERE contract_ref = ?", (contract_ref,)
-        ).fetchall()
-        if not periods:
+        sched = build_schedule(db, contract_ref, wd)
+        if not sched:
             continue  # no schedule -> not displayable (legacy would KeyError)
 
         leveraged = h['leveraged'] == 'Yes'
         daily = h['daily_shares']
         freq = h['frequency']
-
-        # Build schedule with per-period start_date/days/total_shares (period 1 start = contract start)
-        sched = []
-        prev_end = None
-        for i, p in enumerate(periods):
-            end_d = _to_date(p['end_date'])
-            if i == 0:
-                start_d = _to_date(h['start_date'])
-            else:
-                start_d = wd.next_day(prev_end)
-            days = _to_int(p['days']) or wd.count_days(start_d, end_d)
-            total_shares = days * daily * (2 if leveraged else 1)
-            sched.append({'end_date': end_d, 'received': p['received'],
-                          'days': days, 'total_shares': total_shares})
-            prev_end = end_d
 
         last = len(sched)
         total = last / _FREQ_DIV.get(freq, 2)
