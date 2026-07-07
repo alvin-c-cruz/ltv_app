@@ -171,3 +171,22 @@ def test_balance_snapshot_is_as_of_start_date_not_report_date(app):
 
     rec = recs['700']
     assert rec['balance'] == 50000
+
+
+def test_moving_average_engine_buy_sell_reset():
+    """Pure moving-average cost engine: buys add full amount; a sell removes a
+    proportional slice (cost * |qty| / prior balance); cost resets at balance 0."""
+    from ltv_app.blueprints.ltv_stocks.legacy_port.positions_calc import _moving_average_engine
+
+    def row(q, p):
+        return {'quantity': q, 'price': p, 'brokerage': 0, 'commission': 0,
+                'foreign_charge': 0, 'stamp_duty': 0, 'misc': 0}
+
+    out = _moving_average_engine([row(100, 10), row(100, 20), row(-100, 25), row(-100, 25)])
+    # after buy100@10: bal100 cost1000; buy100@20: bal200 cost3000;
+    # sell100: cost_of_sales=3000*100/200=1500 -> cost1500 bal100;
+    # sell100: bal0 -> cost reset 0
+    assert out[0] == (100, 1000.0)
+    assert out[1] == (200, 3000.0)
+    assert out[2] == (100, 1500.0)
+    assert out[3] == (0, 0.0)

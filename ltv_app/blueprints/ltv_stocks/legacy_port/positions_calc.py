@@ -1,7 +1,6 @@
 from datetime import date
 
 from ltv_app.blueprints.transactions.extensions.trades_done_average import get_transactions
-from ltv_app.blueprints.transactions.models import accumulate_position
 
 from .working_day import WorkingDay, position_start_date
 from .term_sheet_calc import build_schedule
@@ -65,13 +64,77 @@ def _transactions_narrative(db, bank_ref, code_ref, report_date, balance):
     return entry
 
 
+def _first_of_month(d):
+    return f"{d.year:04d}-{d.month:02d}-01"
+
+
+def _moving_average_engine(rows):
+    """Legacy transaction_list moving-average cost engine
+    (my_routes/transaction_list.py:286-324). Returns [(balance, cost_to_date), ...]
+    per row, in the given (transaction_basis, priority) order. A buy adds its full
+    amount to cost; a sell removes a proportional slice (cost * |qty| / prior
+    balance); cost resets to 0 when the running balance reaches 0."""
+    balance = 0
+    cost = 0.0
+    out = []
+    for r in rows:
+        q = r['quantity']
+        charges = (r['brokerage'] + r['commission'] + r['foreign_charge']
+                   + r['stamp_duty'] + r['misc'])
+        amount = q * r['price'] + charges
+        prev_balance = balance
+        balance = prev_balance + q
+        if q > 0:
+            cost = cost + amount
+        else:
+            cost_of_sales = cost * (abs(q) / prev_balance) if prev_balance != 0 else cost
+            cost = cost - cost_of_sales
+            if balance == 0:
+                cost = 0.0
+        out.append((balance, cost))
+    return out
+
+
 def _average(db, bank_id, code, as_of_date):
-    """Port of trades_done_average: '=cost_to_date/balance' formula, else running-average fallback."""
-    rows = get_transactions(db, as_of_date.isoformat(), code, bank_id)
-    balance, cost_to_date, last_average = accumulate_position(rows)
-    if balance:
-        return f"={cost_to_date}/{balance}"
-    return last_average
+    """Port of trades_done_average + ending_balance (my_routes/transaction_list.py
+    :249-432). The average is '=cost_to_date/balance', where cost/balance come from
+    the moving-average engine selecting the current month's footer OR, when the
+    footer is left unset, the prior-month-end beginning_balance.
+
+    trades_done_average runs the engine over the month window [1st-of-month ..
+    as_of], keyed on the bank's transaction_basis. Its footer loop breaks on the
+    first current-window row whose value_date settles in a LATER month
+    (value_date[:7] > as_of[:7]); if that break fires before any current row is
+    recorded, the footer stays unset and the function falls through to
+    beginning_balance (the moving-cost state at the last row before 1st-of-month)."""
+    basis = db.execute(
+        "SELECT transaction_basis FROM tbl_bank_account WHERE bank_id = ?", (bank_id,)
+    ).fetchone()[0]
+    rows = list(get_transactions(db, as_of_date.isoformat(), code, bank_id))
+    if not rows:
+        return 0
+    eng = _moving_average_engine(rows)
+    date_from = _first_of_month(as_of_date)
+    to_month = as_of_date.isoformat()[:7]
+
+    beginning = None   # last row with basis < 1st-of-month
+    footer = None      # last processed current-window row (basis >= 1st-of-month)
+    for r, (bal, cost) in zip(rows, eng):
+        basis_val = str(r[basis])[:10]
+        if basis_val < date_from:
+            beginning = (bal, cost)
+        else:
+            if basis == 'value_date' and str(r['value_date'])[:7] > to_month:
+                break
+            footer = (bal, cost)
+
+    sel = footer if footer is not None else beginning
+    if sel is None:
+        return 0
+    bal, cost = sel
+    if bal:
+        return f"={cost}/{bal}"
+    return 0
 
 
 def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=None) -> dict:

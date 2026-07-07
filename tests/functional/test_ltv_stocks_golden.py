@@ -8,9 +8,16 @@ from openpyxl import load_workbook
 GOLDEN = r"localhost/excel_files/LTV_Stocks/2026-07-06 LTV Stocks.xlsx"
 LIVE_DB = r"instance/LTV Stocks.db"
 
+# The golden comparison reads the LIVE production DB and a static legacy-generated
+# golden file. Because that DB mutates (new contracts/periods/transactions land
+# during normal use), byte-parity is only meaningful at a single instant against a
+# freshly-regenerated golden. It is therefore an OPT-IN point-in-time acceptance
+# tool, not a CI gate: run it deliberately with `LTV_GOLDEN=1` after regenerating
+# the golden on a quiesced DB. The durable regression coverage for the port lives
+# in the deterministic legacy_port unit tests (temp SQLite, no drift).
 pytestmark = pytest.mark.skipif(
-    not (os.path.exists(GOLDEN) and os.path.exists(LIVE_DB)),
-    reason="golden file or live DB not present")
+    not (os.environ.get("LTV_GOLDEN") and os.path.exists(GOLDEN) and os.path.exists(LIVE_DB)),
+    reason="opt-in golden check (set LTV_GOLDEN=1 with a fresh golden on a quiesced DB)")
 
 # Positions 'average' cells hold a "=cost/balance" Excel formula string. Float
 # summation order can differ by a sub-ULP amount between the legacy and ported
