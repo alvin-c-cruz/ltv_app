@@ -177,3 +177,43 @@ def test_borrow_return_carries_running_balance():
     assert ws['L4'].value == -950    # prior Short
     assert new_long == 0             # 950 - 950, carried forward
     assert new_short == 0            # -950 + 950
+
+
+def test_transfer_opening_follows_prior_same_day_transfer(app):
+    """Two same-day transfers of one stock into the same account: the 2nd
+    transfer's opening_in carries from the 1st's closing (day-open + 1st qty),
+    not a fresh day-open re-read. Regression for the transfer follow-through bug."""
+    import sqlite3
+    from openpyxl import Workbook
+    from ltv_app.blueprints.notebook.extensions.create_notebook import CreateNotebook
+
+    conn = sqlite3.connect(app.config['DATABASE']); conn.row_factory = sqlite3.Row
+
+    def _txn(ref, bank_ref, qty):
+        conn.execute(
+            "INSERT INTO tbl_transaction (ref_num, trade_date, value_date, bank_ref, "
+            " code_ref, transaction_type, quantity, price, brokerage, commission, "
+            " foreign_charge, stamp_duty, misc) VALUES (?,?,?,?,1,'Buy (Spot)',?,100.0,0,0,0,0,0)",
+            (ref, '2026-01-01', '2026-01-01', bank_ref, qty))
+
+    _txn(1, 1, 100)   # CB1 (in_bank) start-of-day = 100
+    _txn(2, 2, 500)   # CB2 (out_bank) start-of-day = 500
+    conn.commit()
+
+    nb = CreateNotebook.__new__(CreateNotebook)  # bypass __init__ (no template)
+    nb.db = conn
+    nb.trade_date = '2026-07-06'
+    nb.transfers = [
+        {'out_bank': 'Citibank No. 2', 'in_bank': 'Citibank No. 1', 'in_bank_id': 'CB1',
+         'stock_name': 'Tencent Holdings Limited', 'code': '700', 'quantity': 30},
+        {'out_bank': 'Citibank No. 2', 'in_bank': 'Citibank No. 1', 'in_bank_id': 'CB1',
+         'stock_name': 'Tencent Holdings Limited', 'code': '700', 'quantity': 20},
+    ]
+
+    ws = Workbook().active
+    nb.write_transfers(ws, 1)
+    conn.close()
+
+    # opening_in (col M): section header row 1; pair1 opening row 7; pair2 opening row 17
+    assert ws['M7'].value == 100    # 1st transfer opens at day-open
+    assert ws['M17'].value == 130   # 2nd follows the 1st's closing (100 + 30)
