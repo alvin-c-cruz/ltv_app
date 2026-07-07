@@ -157,20 +157,22 @@ def test_non_indicative_bank_uses_previous_day_of_start_date_as_cutoff(app):
     assert rec['unblocked'] == 50000 - 20000
 
 
-def test_balance_snapshot_is_as_of_start_date_not_report_date(app):
-    """A transaction dated between start_date (2026-06-29) and report_date
-    (2026-07-06) must NOT affect the reported balance -- Gather_Info snapshots
-    the position as of start_date, only the same-day 'transactions' narrative
-    reflects report_date itself."""
+def test_balance_snapshot_is_as_of_previous_week_friday(app):
+    """The beginning stock position is the on-hand balance as of the AS-OF date
+    -- the previous week's Friday, previous_day(start_date) -- NOT of start_date
+    (the walked-back Monday) as the legacy did. For report 2026-07-06:
+    start_date = Mon 2026-06-29, AS-OF = Fri 2026-06-26. A trade on the Monday
+    (start_date, in the Fri->Mon gap) and any trade after it must be EXCLUDED
+    from the beginning balance -- this is the legacy-bug fix."""
     conn = sqlite3.connect(app.config['DATABASE']); conn.row_factory = sqlite3.Row
-    _txn(conn, 1, BANK_REF, CODE_REF, '2026-01-01', 50000)
-    _txn(conn, 2, BANK_REF, CODE_REF, '2026-07-03', -20000)  # after start_date, before report_date
+    _txn(conn, 1, BANK_REF, CODE_REF, '2026-01-01', 50000)   # before Friday -> counted
+    _txn(conn, 2, BANK_REF, CODE_REF, '2026-06-29', -5000)   # Monday (start_date), after Friday -> EXCLUDED (the fix)
+    _txn(conn, 3, BANK_REF, CODE_REF, '2026-07-03', -20000)  # after start_date, before report -> excluded
 
     recs = position_records(conn, BANK_REF, BANK_ID, CCY_ID, date(2026, 7, 6))
     conn.close()
 
-    rec = recs['700']
-    assert rec['balance'] == 50000
+    assert recs['700']['balance'] == 50000
 
 
 def test_moving_average_engine_buy_sell_reset():

@@ -171,6 +171,16 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
     if hkd_wd is None:
         hkd_wd = wd if ccy_id == 'HKD' else WorkingDay(db, 'HKD')
     start_date = position_start_date(report_date, hkd_wd)
+    # BUG FIX (diverges from legacy): the beginning stock position must be the
+    # on-hand balance as of the AS-OF date shown in the header -- the previous
+    # week's Friday (previous_day(start_date)) -- NOT of start_date itself (the
+    # walked-back Monday). The legacy labels the column "AS OF <Friday>" yet
+    # snapshots the balance one working day later, wrongly folding Fri->Mon-gap
+    # trades into the beginning position. `beginning_date` is that Friday.
+    beginning_date = hkd_wd.previous_day(start_date)
+    # Blocked-shares cutoff is unchanged: the legacy's non-indicative cutoff
+    # previous_day(start_date) already equals beginning_date (the Friday), so
+    # blocked was already computed as of the correct beginning date.
     cutoff = start_date if indicative == 'YES' else wd.previous_day(start_date)
 
     rows = db.execute(
@@ -182,7 +192,7 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
         "WHERE t.bank_ref = ? AND cy.ccy_id = ? AND t.trade_date <= ? "
         "GROUP BY s.ref_num "
         "HAVING SUM(t.quantity) != 0",
-        (bank_ref, ccy_id, start_date.isoformat())
+        (bank_ref, ccy_id, beginning_date.isoformat())
     ).fetchall()
 
     result = {}

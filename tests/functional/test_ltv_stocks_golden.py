@@ -8,6 +8,14 @@ from openpyxl import load_workbook
 GOLDEN = r"localhost/excel_files/LTV_Stocks/2026-07-06 LTV Stocks.xlsx"
 LIVE_DB = r"instance/LTV Stocks.db"
 
+# INTENTIONAL DIVERGENCE FROM LEGACY: the positions "beginning" balance is now
+# taken as of the AS-OF Friday (previous_day(start_date)), fixing a legacy bug
+# that snapshotted it one working day later (the walked-back Monday). So the
+# positions Unblocked/Blocked cells for any stock with a Fri->Mon-gap trade will
+# differ from this legacy-generated golden BY DESIGN -- that is correct, not a
+# regression. The contract tables remain an exact replica; the beginning-balance
+# fix is proven by test_balance_snapshot_is_as_of_previous_week_friday.
+#
 # The golden comparison reads the LIVE production DB and a static legacy-generated
 # golden file. Because that DB mutates (new contracts/periods/transactions land
 # during normal use), byte-parity is only meaningful at a single instant against a
