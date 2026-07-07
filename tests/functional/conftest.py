@@ -144,6 +144,13 @@ CREATE TABLE IF NOT EXISTS tbl_holiday (
     holi_date TEXT,
     ccy_ref   INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS tbl_stock_price (
+    ref_num       INTEGER PRIMARY KEY,
+    code_ref      INTEGER,
+    trade_date    TEXT,
+    closing_price REAL
+);
 """
 
 
