@@ -69,11 +69,14 @@ def _first_of_month(d):
 
 
 def _moving_average_engine(rows):
-    """Legacy transaction_list moving-average cost engine
-    (my_routes/transaction_list.py:286-324). Returns [(balance, cost_to_date), ...]
-    per row, in the given (transaction_basis, priority) order. A buy adds its full
-    amount to cost; a sell removes a proportional slice (cost * |qty| / prior
-    balance); cost resets to 0 when the running balance reaches 0."""
+    """Per-row moving-average cost engine, mirroring
+    ``ltv_app.blueprints.transactions.models.accumulate_position`` (the engine the
+    golden's averages agree with) so the whole-report averages match the legacy.
+    Returns [(balance, cost_to_date), ...] per row, in the given
+    (transaction_basis, priority) order. A buy adds its full amount to cost; a
+    sell removes a proportional slice (cost * |qty| / prior balance) and resets
+    cost to 0 once the position is fully sold or oversold; a buy that covers a
+    short recomputes the residual cost."""
     balance = 0
     cost = 0.0
     out = []
@@ -82,15 +85,19 @@ def _moving_average_engine(rows):
         charges = (r['brokerage'] + r['commission'] + r['foreign_charge']
                    + r['stamp_duty'] + r['misc'])
         amount = q * r['price'] + charges
-        prev_balance = balance
-        balance = prev_balance + q
         if q > 0:
-            cost = cost + amount
-        else:
-            cost_of_sales = cost * (abs(q) / prev_balance) if prev_balance != 0 else cost
-            cost = cost - cost_of_sales
-            if balance == 0:
+            if balance >= 0:
+                cost = cost + amount
+            elif balance + q <= 0:
                 cost = 0.0
+            else:
+                cost = (balance + q) / q * amount
+        else:
+            if balance > 0 and balance - abs(q) > 0:
+                cost = cost - cost * abs(q) / balance
+            else:
+                cost = 0.0
+        balance = balance + q
         out.append((balance, cost))
     return out
 
