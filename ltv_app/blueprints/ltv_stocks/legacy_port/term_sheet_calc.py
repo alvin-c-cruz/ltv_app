@@ -127,6 +127,7 @@ def contract_records(db, bank_ref, transaction_type):
             'bank_doc': h['bank_doc'],
             'frequency': freq,
             'stock_name': _stock_name_gtd(h['stock_name'], h['gtd']),
+            'stock_name_plain': h['stock_name'],
             'code': h['code'],
             'code_ref': h['code_ref'],
             'yahoo_ticker': h['yahoo_ticker'],

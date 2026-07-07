@@ -115,14 +115,21 @@ def test_positions_sorted_by_code(app):
     assert list(recs.keys()) == ['005', '700']
 
 
-def test_indicative_bank_uses_report_date_as_cutoff(app):
+def test_indicative_bank_uses_start_date_not_report_date_as_cutoff(app):
+    """Port of ltv_stocks2.py's Gather_Info (line 33): the balance/blocked-shares
+    snapshot is taken as of `start_date` -- the HKD-working-day walk-back to the
+    current week's Monday -- not `report_date` itself. For report_date
+    2026-07-06 (a Monday), start_date walks back a full week to 2026-06-29.
+    For an indicative bank, `blocked_shares`' cutoff is exactly `start_date`
+    (ltv_stocks2.py's `blocked_shares.__init__`: `check_end_date = observation_date`
+    where `observation_date` is `start_date`, not the previous working day)."""
     conn = sqlite3.connect(app.config['DATABASE']); conn.row_factory = sqlite3.Row
     conn.execute("UPDATE tbl_bank_account SET indicative = 'YES' WHERE ref_num = ?", (BANK_REF,))
     _txn(conn, 1, BANK_REF, CODE_REF, '2026-01-01', 50000)
     _contract(conn, 104, 'DECU', daily=1000)
-    # end_date == report_date itself: with indicative bank, cutoff = report_date,
-    # so end_date > cutoff is False -> should NOT block.
-    _period(conn, 104, '2026-07-06')
+    # end_date == start_date (2026-06-29) itself: for an indicative bank the
+    # cutoff is start_date, so end_date > cutoff is False -> should NOT block.
+    _period(conn, 104, '2026-06-29')
     conn.commit()
 
     recs = position_records(conn, BANK_REF, BANK_ID, CCY_ID, date(2026, 7, 6))
@@ -131,3 +138,36 @@ def test_indicative_bank_uses_report_date_as_cutoff(app):
     rec = recs['700']
     assert rec['blocked'] == 0
     assert rec['unblocked'] == 50000
+
+
+def test_non_indicative_bank_uses_previous_day_of_start_date_as_cutoff(app):
+    """Same end_date (start_date itself) but a non-indicative bank: cutoff is the
+    working day *before* start_date, so end_date > cutoff -> blocks."""
+    conn = sqlite3.connect(app.config['DATABASE']); conn.row_factory = sqlite3.Row
+    _txn(conn, 1, BANK_REF, CODE_REF, '2026-01-01', 50000)
+    _contract(conn, 105, 'DECU', daily=1000)
+    _period(conn, 105, '2026-06-29')
+    conn.commit()
+
+    recs = position_records(conn, BANK_REF, BANK_ID, CCY_ID, date(2026, 7, 6))
+    conn.close()
+
+    rec = recs['700']
+    assert rec['blocked'] == 20 * 1000
+    assert rec['unblocked'] == 50000 - 20000
+
+
+def test_balance_snapshot_is_as_of_start_date_not_report_date(app):
+    """A transaction dated between start_date (2026-06-29) and report_date
+    (2026-07-06) must NOT affect the reported balance -- Gather_Info snapshots
+    the position as of start_date, only the same-day 'transactions' narrative
+    reflects report_date itself."""
+    conn = sqlite3.connect(app.config['DATABASE']); conn.row_factory = sqlite3.Row
+    _txn(conn, 1, BANK_REF, CODE_REF, '2026-01-01', 50000)
+    _txn(conn, 2, BANK_REF, CODE_REF, '2026-07-03', -20000)  # after start_date, before report_date
+
+    recs = position_records(conn, BANK_REF, BANK_ID, CCY_ID, date(2026, 7, 6))
+    conn.close()
+
+    rec = recs['700']
+    assert rec['balance'] == 50000

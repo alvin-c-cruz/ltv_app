@@ -21,7 +21,7 @@ from openpyxl.styles.fills import PatternFill
 
 from .term_sheet_calc import _FREQ_DIV, contract_records
 from .positions_calc import position_records
-from .working_day import WorkingDay
+from .working_day import WorkingDay, position_start_date
 from .stock_price import get_stock_price
 
 
@@ -406,15 +406,6 @@ def _set_column_widths(ws):
         ws.column_dimensions[col].hidden = True
 
 
-def _position_start_date(report_date, wd):
-    """Port of the LTV_Stocks.__init__ self.start_date computation (~121-123):
-    walk back via previous working day until landing on a Monday."""
-    d = wd.previous_day(report_date)
-    while d.isoweekday() != 1:
-        d = wd.previous_day(d)
-    return d
-
-
 def report_header(ws, bank_id, ccy, report_date, row, date_range):
     """Port of report_header() (342-407)."""
     cell = ws[f'A{row}']
@@ -471,13 +462,19 @@ def report_header(ws, bank_id, ccy, report_date, row, date_range):
     return row
 
 
-def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=None, ccy='HKD'):
+def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=None, ccy='HKD',
+                      hkd_wd=None):
     """Write the positions table starting at `row`. Returns the next free row.
 
     Port of position() (712-914), excluding the Y-AC reconciliation helper
     columns (out of scope for this port). `bank_id`/`ccy` drive the account-name
     header label and per-bank font color (position() ~716-758); both default so
     the function still degrades gracefully if the caller omits them.
+
+    `hkd_wd` is a `WorkingDay(db, 'HKD')` instance: the legacy start_date
+    walk-back and header column F (ltv_stocks2.py:121-123, 765) are always
+    computed against HKD, regardless of the sheet's own `ccy`. Falls back to
+    `wd` (the sheet's own-ccy WorkingDay) if the caller omits it.
     """
     ws.column_dimensions['C'].hidden = True
 
@@ -489,7 +486,9 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
 
     color = _POSITION_COLOR.get(bank_id, '00000000')
 
-    start_date = _position_start_date(report_date, wd)
+    if hkd_wd is None:
+        hkd_wd = wd
+    start_date = position_start_date(report_date, hkd_wd)
     end_date = report_date
 
     # Head Line 1
@@ -498,7 +497,7 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
         'A': account_label,
         'B': 'CODE',
         'D': 'AS OF',
-        'F': wd.previous_day(start_date),
+        'F': hkd_wd.previous_day(start_date),
         'I': end_date,
         'J': '% Inc. / Dec.',
         'L': report_date if ccy != 'USD' else wd.previous_day(report_date),
@@ -626,6 +625,32 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
     return r
 
 
+def _inject_accu_only_positions(positions, accu):
+    """Port of `contract()`'s side-effect on `self.stock_position` (ltv_stocks2.py
+    ~561-563): any ACCU contract whose code has no balance-derived position gets a
+    synthetic zero-share row (`unblocked=0, blocked=0, average=strike`, `average`
+    as a literal number rather than a formula, no `transactions` narrative). DECU
+    contracts get no such synthetic row (legacy sets them to `None`, which
+    `position()` skips entirely). Returns a fresh dict re-sorted by code.
+    """
+    positions = dict(positions)
+    for rec in accu:
+        code = rec['code']
+        if code not in positions:
+            positions[code] = {
+                'stock_name': rec['stock_name_plain'],
+                'code': code,
+                'code_ref': rec['code_ref'],
+                'yahoo_ticker': rec['yahoo_ticker'],
+                'balance': 0,
+                'blocked': 0,
+                'unblocked': 0,
+                'average': rec['strike'],
+                'transactions': None,
+            }
+    return dict(sorted(positions.items()))
+
+
 def build_workbook(db, report_date, bank_ids):
     """Port of create() (211-295). Returns the workbook as an `io.BytesIO`.
 
@@ -643,6 +668,7 @@ def build_workbook(db, report_date, bank_ids):
 
     date_range = week_dates(report_date)
     hkd_count = {'total_row': {}}
+    hkd_wd = WorkingDay(db, 'HKD')
 
     for ccy in _CCYS:
         for bank_id in bank_ids:
@@ -655,7 +681,8 @@ def build_workbook(db, report_date, bank_ids):
 
             accu = [r for r in contract_records(db, bank_ref, 'ACCU') if r['ccy_id'] == ccy]
             decu = [r for r in contract_records(db, bank_ref, 'DECU') if r['ccy_id'] == ccy]
-            positions = position_records(db, bank_ref, bank_id, ccy, report_date)
+            positions = position_records(db, bank_ref, bank_id, ccy, report_date, hkd_wd=hkd_wd)
+            positions = _inject_accu_only_positions(positions, accu)
 
             if not (accu or decu or positions):
                 continue
@@ -690,7 +717,7 @@ def build_workbook(db, report_date, bank_ids):
                                   price_lookup=price_lookup, bank_id=bank_id)
 
             r = _write_positions(ws, positions, report_date, r, wd, price_lookup,
-                                  bank_id=bank_id, ccy=ccy)
+                                  bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
 
             ws.print_area = f'A1:X{r}'
 

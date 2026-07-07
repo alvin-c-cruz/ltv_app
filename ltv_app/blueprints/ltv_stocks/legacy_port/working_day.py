@@ -36,3 +36,14 @@ class WorkingDay:
                 n += 1
             d = d + timedelta(days=1)
         return n
+
+
+def position_start_date(report_date: date, hkd_wd: 'WorkingDay') -> date:
+    """Port of LTV_Stocks.__init__'s self.start_date (ltv_stocks2.py ~121-123):
+    walk back via the **HKD** working day (regardless of the sheet's own currency)
+    until landing on a Monday. This is also the balance-snapshot date used by
+    Gather_Info/stock_position (ltv_stocks2.py:33), not just a header label."""
+    d = hkd_wd.previous_day(report_date)
+    while d.isoweekday() != 1:
+        d = hkd_wd.previous_day(d)
+    return d
