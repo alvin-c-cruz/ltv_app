@@ -208,20 +208,14 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
             blocked_v, unblocked_v = blocked, balance - blocked
 
         transactions = _transactions_narrative(db, bank_ref, code_ref, report_date, balance)
-        # Port of ltv_stocks2.py:analyze_position -- in principle the average
-        # snapshotted at start_date is re-derived as of report_date when the
-        # code has a report-date trade ('transactions' non-empty). In the
-        # legacy production code this branch is actually unreachable: Gather_Info
-        # calls get_ranged_transactions(self.report_date) with report_date as a
-        # datetime object, so its "trade_date == '{report_date}'" filter compares
-        # against a str(datetime) like '2026-07-06 00:00:00' that never matches
-        # the plain-date-string trade_date column ('2026-07-06') -- confirmed by
-        # the golden file's 'transactions'/column-O cells being blank throughout.
-        # So 'average' always uses start_date; only the narrative column here
-        # differs (it is computed from a live route, not the buggy Gather_Info
-        # path), which is why _transactions_narrative may be non-empty while
-        # 'average' must still use start_date to match the golden output.
-        average_date = start_date
+        # BUG FIX (diverges from legacy): the Ave. Price column is priced as of
+        # the REPORT date (its header reads the report date, e.g. "06-Jul"), so
+        # the average cost basis is computed as of report_date -- not the
+        # walked-back start_date the legacy used. (The legacy's analyze_position
+        # only re-derived it as of report_date for codes with a report-date
+        # trade, and even that branch was effectively unreachable, so it always
+        # showed the stale start_date average.)
+        average_date = report_date
 
         result[code] = {
             'stock_name': r['stock_name'],

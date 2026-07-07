@@ -192,3 +192,22 @@ def test_moving_average_engine_buy_sell_reset():
     assert out[1] == (200, 3000.0)
     assert out[2] == (100, 1500.0)
     assert out[3] == (0, 0.0)
+
+
+def test_average_priced_as_of_report_date(app):
+    """The Ave. Price column is computed as of the REPORT date (its header shows
+    the report date), not the walked-back start_date the legacy used -- a July
+    trade shifts the report-date average but not the start-date one."""
+    from ltv_app.blueprints.ltv_stocks.legacy_port.positions_calc import _average
+    conn = sqlite3.connect(app.config['DATABASE']); conn.row_factory = sqlite3.Row
+    _txn(conn, 1, BANK_REF, CODE_REF, '2026-05-15', 1000, price=100.0)   # May buy
+    _txn(conn, 2, BANK_REF, CODE_REF, '2026-07-03', 500, price=200.0)    # July buy (value_date in July)
+    conn.commit()
+
+    recs = position_records(conn, BANK_REF, BANK_ID, CCY_ID, date(2026, 7, 6))
+    report_avg = _average(conn, BANK_ID, '700', date(2026, 7, 6))
+    start_avg = _average(conn, BANK_ID, '700', date(2026, 6, 29))
+    conn.close()
+
+    assert recs['700']['average'] == report_avg   # wired to report_date
+    assert report_avg != start_avg                 # the July buy shifts it
