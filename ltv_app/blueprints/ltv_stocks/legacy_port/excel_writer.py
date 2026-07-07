@@ -1,16 +1,17 @@
-"""Excel writer — contract tables.
+"""Excel writer — contract + positions tables, and full workbook assembly.
 
-Ports the contract-table portion of `localhost/modules/ltv_stocks2.py`'s
-`contract()` method (lines 410-709) cell-for-cell, dropping the AA-AJ
-per-day status columns and the off-print-area helper columns `Z` (leverage
-flag) and `AK` (reference) — see docs/superpowers/specs/
+Ports `localhost/modules/ltv_stocks2.py`'s `contract()` method (lines 410-709,
+`_write_contracts` here), `position()` (712-914, `_write_positions`), `create()`
+(211-295, `build_workbook`), `report_header()` (342-407, `report_header`) and
+`column_width()` (298-339, `_set_column_widths`) cell-for-cell, dropping the
+AA-AJ per-day status columns and the off-print-area helper columns `Y`-`AC`
+(the reconciliation helper columns) — see docs/superpowers/specs/
 2026-07-06-ltv-stocks-legacy-exact-replica-design.md, "The Excel writer".
 
-`week_dates`, the style-constant factories, and `_write_contracts` are the
-public surface consumed by Phase 5 (`build_workbook`/`report_header`/
-`_write_positions`, not implemented here).
+`build_workbook(db, report_date, bank_ids)` is the public entry point.
 """
 
+import io
 from datetime import date, timedelta
 
 import openpyxl
@@ -18,7 +19,10 @@ from openpyxl.styles import Alignment, Font
 from openpyxl.styles.borders import Border, Side
 from openpyxl.styles.fills import PatternFill
 
-from .term_sheet_calc import _FREQ_DIV
+from .term_sheet_calc import _FREQ_DIV, contract_records
+from .positions_calc import position_records
+from .working_day import WorkingDay
+from .stock_price import get_stock_price
 
 
 # --- Style constants (port of ltv_stocks2's xl_font/xl_fill/xl_box/xl_align lambdas) ---
@@ -79,12 +83,16 @@ def week_dates(report_date: date) -> list:
     return [start + timedelta(days=o) for o in offsets]
 
 
-def _write_contracts(ws, records, product, row, report_date, date_range, wd, price_lookup):
+def _write_contracts(ws, records, product, row, report_date, date_range, wd, price_lookup,
+                      bank_id=None):
     """Write one ACCU/DECU contract table starting at `row`. Returns the next free row.
 
     `wd` supplies `.is_holiday(date) -> bool` for the O-X grid (a `WorkingDay`
     instance scoped to the table's currency). `price_lookup(code_ref, date) ->
-    float|None` supplies the O-X historical closing prices.
+    float|None` supplies the O-X historical closing prices. `bank_id` drives the
+    " bi-weekly" stock-name suffix (ltv_stocks2.py:620-621): banks other than
+    DBPe/DBPL get it appended whenever the contract's J/K/L number format is the
+    non-monthly '0.0' (i.e. any frequency other than 'monthly').
     """
     ws.column_dimensions['C'].hidden = True
     ws.column_dimensions['M'].hidden = True
@@ -216,7 +224,13 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
                 if col in ('E', 'F', 'G'):
                     cell.number_format = '#,##0.0000'
                 elif col in ('J', 'K', 'L'):
-                    cell.number_format = '0' if divisor == 1 else '0.0'
+                    if divisor == 1:
+                        cell.number_format = '0'
+                    else:
+                        cell.number_format = '0.0'
+                        if col == 'J' and bank_id not in ('DBPe', 'DBPL'):
+                            a_cell = ws[f'A{r}']
+                            a_cell.value = a_cell.value + ' bi-weekly'
                 elif col == 'B':
                     cell.number_format = '@'
                 elif col in ('H', 'I', 'N'):
@@ -296,3 +310,434 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
             row += 1
 
     return row + 2
+
+
+# --- Reference data ported verbatim from ltv_stocks2.py's LTV_Stocks.__init__ / position() ---
+
+PRIMARY_BANK_ACCOUNT = 'DBPe'
+PRIMARY_SHEET_NAME = f'{PRIMARY_BANK_ACCOUNT}-HKD'
+
+_CCYS = ('HKD', 'SGD')
+
+_BANK_NAME = {
+    "CB1": "CITIBANK",
+    "CB2": "CITIBANK",
+    "CB3": "CITIBANK",
+    "CBBH": "CITIBANK",
+    "CBBH2": "CITIBANK",
+    "CBSG": "CITIBANK",
+    "BOS": "Bank of Singapore",
+    "DBPe": "DEUTSCHE BANK",
+    "DBPL": "DEUTSCHE BANK",
+    "SC": "STANDARD CHARTERED",
+    "SHK": "SUN HUNG KAI Account No. 1",
+    "SHK2": "SUN HUNG KAI Account No. 2",
+    "MST1": "MORGAN STANLEY",
+    "MST2": "MORGAN STANLEY",
+    "MSPL": "MORGAN STANLEY",
+    "NSG": "NOMURA SINGAPORE",
+}
+
+_SUB_TITLE = {
+    'CB2': {'title': 'ACCOUNT # 2 (REALGOLD)', 'color': 'FF7030A0'},
+    'CB3': {'title': 'ACCOUNT # 3', 'color': 'FF0070C0'},
+    'CBBH': {'title': 'BERRY HILL Account', 'color': '00FF6600'},
+    'CBBH2': {'title': 'BERRY HILL Account 2', 'color': '00FF6600'},
+    'CBSG': {'title': 'Singapore Account No. 1', 'color': 'FF7030A0'},
+    'DBPL': {'title': 'PERFECT LEGEND HOLDINGS w/ Lucio Yan', 'color': '00000000'},
+    'MST1': {'title': 'Titan Account No. 1', 'color': '00000000'},
+    'MST2': {'title': 'ACCOUNT NO. 2 (Titan) - PERSONAL', 'color': '00000000'},
+    'MSPL': {'title': '(Perfect Legend)', 'color': '00000000'},
+}
+
+# Per-bank font colors used on the positions-table account label (position() ~716-733).
+_POSITION_COLOR = {
+    'CB1': 'FF7030A0', 'CB2': 'FF7030A0', 'CB3': 'FF0070C0',
+    'CBBH': '00FF6600', 'CBBH2': '00FF6600', 'CBSG': 'FF7030A0',
+    'BOS': '00000000', 'DBPe': '00000000', 'DBPL': '00000000',
+    'SC': '00000000', 'SHK': '00000000', 'SHK2': '00000000',
+    'MST1': '00000000', 'MST2': '00000000', 'MSPL': '00000000', 'NSG': '00000000',
+}
+
+# Positions-table account label (position() ~735-758); values are either a
+# plain string or a dict keyed by ccy.
+_ACCOUNT_LABEL = {
+    "CB1": {
+        "HKD": "Citibank Account No. 1 Stocks",
+        "JPY": "Citibank Account No. 1 Stocks",
+        "AUD": "Citibank Account No. 1 Stocks",
+        "USD": "Citibank Account No. 1 Stocks",
+        "SGD": "Citibank Account No. 1 Stocks",
+    },
+    "CB2": "Citibank Account No. 2 Stocks",
+    "CB3": "Citibank Account No. 3 Stocks",
+    "CBBH": "Citibank Berry Hill  Stocks",
+    "CBBH2": "Citibank Berry Hill No. 2 Stocks",
+    "CBSG": "Citibank Singapore Account No. 1 Stocks",
+    "BOS": "Bank of Singapore Stocks",
+    "DBPe": "DEUTSCHE PERSONAL Stocks",
+    "DBPL": "DEUTSCHE PERFECT LEGEND Stocks",
+    "SC": "Standard Chartered Stocks",
+    "SHK": "Sun Hung Kai Account No. 1 Stocks",
+    "SHK2": "Sun Hung Kai Account No. 2 Stocks",
+    "MST1": "MORGAN TITAN No. 1 Stocks",
+    "MST2": "MORGAN TITAN No. 2 Stocks",
+    "MSPL": "MORGAN PERFECT LEGEND Stocks",
+    "NSG": "NOMURA SINGAPORE",
+}
+
+# column_width() (298-339). Z-AJ intentionally omitted — those are widths for
+# the out-of-scope reconciliation helper columns.
+_COLUMN_WIDTHS = {
+    'A': 27.57 + 0.71, 'B': 4.86 + 0.71, 'D': 11.71 + 0.71, 'E': 7.57 + 0.71,
+    'F': 7.57 + 0.71, 'G': 7.57 + 0.71, 'H': 9.14 + 0.71, 'I': 9.14 + 0.71,
+    'J': 5 + 0.71, 'K': 5 + 0.71, 'L': 5 + 0.71, 'N': 9.14 + 0.71,
+    'O': 5.71 + 0.71, 'P': 5.71 + 0.71, 'Q': 5.71 + 0.71, 'R': 5.71 + 0.71,
+    'S': 5.71 + 0.71, 'T': 5.71 + 0.71, 'U': 5.71 + 0.71, 'V': 5.71 + 0.71,
+    'W': 5.71 + 0.71, 'X': 5.71 + 0.71,
+}
+
+
+def _set_column_widths(ws):
+    """Port of column_width() (298-339), minus the Z-AJ helper-column widths."""
+    for col, width in _COLUMN_WIDTHS.items():
+        ws.column_dimensions[col].width = width
+    for col in ('C', 'M'):
+        ws.column_dimensions[col].hidden = True
+
+
+def _position_start_date(report_date, wd):
+    """Port of the LTV_Stocks.__init__ self.start_date computation (~121-123):
+    walk back via previous working day until landing on a Monday."""
+    d = wd.previous_day(report_date)
+    while d.isoweekday() != 1:
+        d = wd.previous_day(d)
+    return d
+
+
+def report_header(ws, bank_id, ccy, report_date, row, date_range):
+    """Port of report_header() (342-407)."""
+    cell = ws[f'A{row}']
+    cell.value = f'{_BANK_NAME.get(bank_id, bank_id)} as of {report_date.strftime("%B %d, %Y")}'
+    cell.font = xl_font(16, True)
+
+    cell = ws[f'H{row}']
+    cell.value = 'updated'
+    cell.font = xl_font(16, True)
+    cell.alignment = xl_align(False, 'right')
+
+    cell = ws[f'I{row}']
+    cell.value = date_range[5]
+    cell.font = xl_font(16, True)
+    cell.number_format = 'd-mmm-yyyy'
+    ws.merge_cells(f'I{row}:K{row}')
+
+    if bank_id in _SUB_TITLE:
+        row += 1
+        cell = ws[f'A{row}']
+        cell.value = _SUB_TITLE[bank_id]['title']
+        cell.font = xl_font_color(14, _SUB_TITLE[bank_id]['color'])
+
+        if bank_id == 'DBPL':
+            for col in ('A', 'B', 'C', 'D', 'E'):
+                cell = ws[f'{col}{row}']
+                cell.fill = xl_fill('00FFFF00')
+                cell.font = xl_font_color(12, _SUB_TITLE[bank_id]['color'])
+        elif bank_id == 'MST1':
+            ws[f'A{row}'].fill = xl_fill('FFF6DDC2')
+        elif bank_id == 'MST2':
+            for col in ('A', 'B', 'C', 'D', 'E'):
+                ws[f'{col}{row}'].fill = xl_fill('00666699')
+        elif bank_id == 'MSPL':
+            ws[f'A{row}'].fill = xl_fill('00FFFF00')
+
+    if ccy == 'JPY':
+        row += 1
+        cell = ws[f'A{row}']
+        cell.value = 'JAPAN STOCKS'
+        cell.font = xl_font_color(14, 'FF008000')
+    elif ccy == 'AUD':
+        row += 1
+        cell = ws[f'A{row}']
+        cell.value = 'AUSTRALIAN STOCKS'
+        cell.font = xl_font_color(14, 'FF008000')
+    elif ccy in ('USD', 'SGD'):
+        row += 1
+        cell = ws[f'A{row}']
+        cell.value = f'{ccy} STOCKS'
+        cell.font = xl_font_color(18, '00000000')
+
+    row += 2
+    return row
+
+
+def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=None, ccy='HKD'):
+    """Write the positions table starting at `row`. Returns the next free row.
+
+    Port of position() (712-914), excluding the Y-AC reconciliation helper
+    columns (out of scope for this port). `bank_id`/`ccy` drive the account-name
+    header label and per-bank font color (position() ~716-758); both default so
+    the function still degrades gracefully if the caller omits them.
+    """
+    ws.column_dimensions['C'].hidden = True
+
+    account_label = _ACCOUNT_LABEL.get(bank_id)
+    if isinstance(account_label, dict):
+        account_label = account_label.get(ccy)
+    if account_label is None:
+        account_label = bank_id or ''
+
+    color = _POSITION_COLOR.get(bank_id, '00000000')
+
+    start_date = _position_start_date(report_date, wd)
+    end_date = report_date
+
+    # Head Line 1
+    row1 = row
+    labels = {
+        'A': account_label,
+        'B': 'CODE',
+        'D': 'AS OF',
+        'F': wd.previous_day(start_date),
+        'I': end_date,
+        'J': '% Inc. / Dec.',
+        'L': report_date if ccy != 'USD' else wd.previous_day(report_date),
+    }
+
+    for col, value in labels.items():
+        cell = ws[f'{col}{row1}']
+        cell.value = value
+
+        if col == 'A':
+            if bank_id in ('CB2', 'CB3', 'CBBH', 'CBBH2'):
+                cell.font = xl_font_color(9, color)
+            elif ccy == 'HKD':
+                cell.font = xl_font(8, True) if bank_id == 'DBPL' else xl_font(9, True)
+            else:
+                cell.font = xl_font_color(9, color)
+        else:
+            cell.font = xl_font(9, True)
+
+        if col == 'D':
+            cell.alignment = xl_align(True, 'right')
+        elif col == 'F':
+            cell.alignment = xl_align(True, 'left')
+        else:
+            cell.alignment = xl_align()
+        cell.border = xl_box()
+
+        if col == 'F':
+            cell.number_format = 'd-mmm-yyyy'
+        if col in ('I', 'L'):
+            cell.number_format = 'd-mmm'
+        if col == 'I':
+            cell.fill = xl_fill('00FFFF00')
+
+    for col in ('A', 'B'):
+        ws.merge_cells(f'{col}{row1}:{col}{row1 + 1}')
+    ws.merge_cells(f'D{row1}:E{row1}')
+    ws.merge_cells(f'F{row1}:H{row1}')
+    ws.merge_cells(f'J{row1}:K{row1 + 1}')
+    ws.merge_cells(f'L{row1}:N{row1 + 1}')
+
+    ws.row_dimensions[row1].height = 16
+
+    # Head Line 2
+    row2 = row1 + 1
+    labels2 = {
+        'D': 'UNBLOCKED',
+        'E': 'BLOCKED',
+        'G': 'TOTAL SHARES',
+        'I': 'Ave. Price',
+    }
+    for col, value in labels2.items():
+        cell = ws[f'{col}{row2}']
+        cell.value = value
+        cell.font = xl_font(9, True)
+        cell.alignment = xl_align(True)
+        cell.border = xl_box()
+
+    ws.merge_cells(f'E{row2}:F{row2}')
+    ws.merge_cells(f'G{row2}:H{row2}')
+    ws.row_dimensions[row2].height = 16
+
+    # Stock Positions
+    r = row2 + 1
+    for code, pos in positions.items():
+        if ccy == 'USD':
+            trade_date = wd.previous_day(report_date)
+            closing_price = price_lookup(pos['code_ref'], trade_date)
+        else:
+            closing_price = f'=INDEX(closing_price!A:C,MATCH(C{r},closing_price!A:A,),3)'
+
+        cols = {
+            'A': pos['stock_name'],
+            'B': code,
+            'C': pos['yahoo_ticker'],
+            'D': pos['unblocked'],
+            'E': pos['blocked'],
+            'G': f'=D{r}+E{r}',
+            'I': pos['average'],
+            'J': f'=(L{r}/I{r})-1',
+            'L': closing_price,
+            'O': pos.get('transactions'),
+        }
+
+        for col, value in cols.items():
+            cell = ws[f'{col}{r}']
+            if col in ('D', 'E', 'G'):
+                if value:
+                    cell.value = value
+            else:
+                cell.value = value
+
+            cell.font = xl_font(10)
+
+            if col == 'A':
+                cell.alignment = xl_align(True, 'left')
+            elif col == 'O':
+                cell.alignment = xl_align(True, 'left', 'top')
+            else:
+                cell.alignment = xl_align(True)
+
+            if col != 'O':
+                cell.border = xl_box()
+
+            if col in ('D', 'E', 'G'):
+                cell.number_format = '#,##0'
+            elif col == 'I':
+                cell.number_format = '#,##0.0000'
+            elif col == 'L':
+                cell.number_format = '#,##0.00'
+            elif col == 'J':
+                cell.number_format = '0.00%'
+
+        ws.merge_cells(f'E{r}:F{r}')
+        ws.merge_cells(f'G{r}:H{r}')
+        ws.merge_cells(f'J{r}:K{r}')
+        ws.merge_cells(f'L{r}:N{r}')
+        ws.merge_cells(f'O{r}:X{r}')
+
+        ws.row_dimensions[r].height = 50
+
+        r += 1
+
+    r += 2
+    return r
+
+
+def build_workbook(db, report_date, bank_ids):
+    """Port of create() (211-295). Returns the workbook as an `io.BytesIO`.
+
+    For each ccy in ('HKD', 'SGD') x bank in `bank_ids`: resolves the bank_ref,
+    gathers ACCU/DECU contracts (filtered to `ccy`) and positions; skips the
+    sheet unless it has an ACCU, a DECU, or a position. Writes report_header,
+    ACCU then DECU contract tables, then the positions table. After all sheets,
+    assembles the cross-sheet ACCU/DECU total formulas into the primary
+    `DBPe-HKD` sheet (skipped if that sheet wasn't built — see Escalate note).
+    """
+    wb = openpyxl.Workbook()
+    del wb['Sheet']
+    wb.create_sheet('closing_price')
+    wb.create_sheet('record')
+
+    date_range = week_dates(report_date)
+    hkd_count = {'total_row': {}}
+
+    for ccy in _CCYS:
+        for bank_id in bank_ids:
+            bank_row = db.execute(
+                "SELECT ref_num FROM tbl_bank_account WHERE bank_id = ?", (bank_id,)
+            ).fetchone()
+            if bank_row is None:
+                continue
+            bank_ref = bank_row[0]
+
+            accu = [r for r in contract_records(db, bank_ref, 'ACCU') if r['ccy_id'] == ccy]
+            decu = [r for r in contract_records(db, bank_ref, 'DECU') if r['ccy_id'] == ccy]
+            positions = position_records(db, bank_ref, bank_id, ccy, report_date)
+
+            if not (accu or decu or positions):
+                continue
+
+            sheet_name = f'{bank_id}-{ccy}'
+            ws = wb.create_sheet(sheet_name)
+
+            openpyxl.worksheet.worksheet.Worksheet.set_printer_settings(
+                ws, paper_size=4, orientation='landscape'
+            )
+            ws.page_margins.left = 0.1
+            ws.page_margins.right = 0.1
+            ws.page_margins.top = 0.15
+            ws.page_margins.bottom = 0.1
+            ws.page_margins.header = 0.0
+            ws.page_margins.footer = 0.0
+
+            _set_column_widths(ws)
+
+            wd = WorkingDay(db, ccy)
+            price_lookup = lambda code_ref, d: get_stock_price(db, code_ref, d)
+
+            r = 1
+            r = report_header(ws, bank_id, ccy, report_date, r, date_range)
+
+            accu_count_row = r
+            r = _write_contracts(ws, accu, 'ACCU', r, report_date, date_range, wd,
+                                  price_lookup=price_lookup, bank_id=bank_id)
+
+            decu_count_row = r
+            r = _write_contracts(ws, decu, 'DECU', r, report_date, date_range, wd,
+                                  price_lookup=price_lookup, bank_id=bank_id)
+
+            r = _write_positions(ws, positions, report_date, r, wd, price_lookup,
+                                  bank_id=bank_id, ccy=ccy)
+
+            ws.print_area = f'A1:X{r}'
+
+            if ccy == 'HKD':
+                hkd_count.setdefault(bank_id, {})
+                hkd_count[bank_id]['ACCU'] = f'A{accu_count_row}'
+                hkd_count[bank_id]['DECU'] = f'A{decu_count_row}'
+                if bank_id == PRIMARY_BANK_ACCOUNT:
+                    hkd_count['total_row']['ACCU'] = accu_count_row
+                    hkd_count['total_row']['DECU'] = decu_count_row
+
+    # Cross-sheet ACCU/DECU totals (create() 251-289).
+    accu_formula = ''
+    decu_formula = ''
+    first = True
+    for bank_account in hkd_count:
+        if bank_account == 'total_row':
+            accu_formula = '=SUM('
+            decu_formula = '=SUM('
+        else:
+            accu_cell = hkd_count[bank_account]['ACCU']
+            decu_cell = hkd_count[bank_account]['DECU']
+            sep = '' if first else ', '
+            accu_formula += f"{sep}'{bank_account}-HKD'!{accu_cell}"
+            decu_formula += f"{sep}'{bank_account}-HKD'!{decu_cell}"
+            first = False
+    accu_formula += ')'
+    decu_formula += ')'
+
+    if PRIMARY_SHEET_NAME in wb.sheetnames and 'ACCU' in hkd_count.get('total_row', {}):
+        ws_primary = wb[PRIMARY_SHEET_NAME]
+        accu_row = hkd_count['total_row']['ACCU']
+        decu_row = hkd_count['total_row']['DECU']
+
+        cell_accu_total = ws_primary[f'B{accu_row}']
+        cell_accu_total.value = accu_formula
+
+        cell_decu_total = ws_primary[f'B{decu_row}']
+        cell_decu_total.value = decu_formula
+
+        for cell in (cell_accu_total, cell_decu_total):
+            cell.font = xl_font(9, True)
+            cell.alignment = xl_align()
+    # else: no DBPe-HKD sheet was built (e.g. tests seeding only other banks) —
+    # cross-sheet totals cannot be recorded; see Escalate note in the task report.
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf

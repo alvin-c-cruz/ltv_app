@@ -1,9 +1,11 @@
+import sqlite3
 from datetime import date
 
 import openpyxl
 
 from ltv_app.blueprints.ltv_stocks.legacy_port.excel_writer import (
     _write_contracts,
+    build_workbook,
     week_dates,
 )
 
@@ -133,3 +135,124 @@ def test_write_contracts_zero_records_excludes_hidden_columns_from_border():
     cell_n = ws.cell(blank_row, 14)  # Column N
     assert cell_b.border.left.style is not None, "Column B should have border in zero-contracts row"
     assert cell_n.border.left.style is not None, "Column N should have border in zero-contracts row"
+
+
+# --- build_workbook: full workbook assembly (positions + contracts + cross-sheet totals) ---
+
+BANK_REF = 1       # seeded 'CB1', indicative=NULL, transaction_basis='value_date'
+BANK_ID = 'CB1'
+CODE_REF = 1       # seeded '700'
+
+
+def _txn(conn, ref, bank_ref, code_ref, trade_date, quantity, price=100.0, ttype='Buy (Spot)'):
+    conn.execute(
+        "INSERT INTO tbl_transaction "
+        "(ref_num, trade_date, value_date, bank_ref, code_ref, transaction_type, quantity, price, "
+        " brokerage, commission, foreign_charge, stamp_duty, misc) "
+        "VALUES (?,?,?,?,?,?,?,?,0,0,0,0,0)",
+        (ref, trade_date, trade_date, bank_ref, code_ref, ttype, quantity, price)
+    )
+
+
+def _contract(conn, ref, ttype, *, bank_ref=BANK_REF, code_ref=CODE_REF, leveraged='No',
+              daily=1000, spot=100.0, strike_rate=95.0, ko_rate=110.0, status='active',
+              frequency='monthly', start='2026-01-01'):
+    conn.execute(
+        "INSERT INTO tbl_stock_contract (ref_num, reference, bank_ref, code_ref, trade_date, "
+        " start_date, transaction_type, daily_shares, leveraged, spot, strike_rate, ko_rate, "
+        " tenor, frequency, gtd, bank_doc, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, '12m',?,'1m', 'DOC',?)",
+        (ref, f'REF{ref}', bank_ref, code_ref, start, start, ttype, daily, leveraged, spot,
+         strike_rate, ko_rate, frequency, status))
+
+
+def _period(conn, ref, end_date, received='', days='20'):
+    conn.execute("INSERT INTO tbl_stock_contract_period "
+                 "(contract_ref, start_date, end_date, days, received, gtd) "
+                 "VALUES (?, '2026-01-01', ?, ?, ?, '1m')", (ref, end_date, days, received))
+
+
+def test_build_workbook_assembles_sheets_and_positions_block(app):
+    conn = sqlite3.connect(app.config['DATABASE'])
+    conn.row_factory = sqlite3.Row
+
+    # A position: a spot balance in code '700'.
+    _txn(conn, 1, BANK_REF, CODE_REF, '2026-01-01', 50000)
+
+    # An active DECU contract (with a period) so the ACCU/DECU tables aren't empty.
+    _contract(conn, 200, 'DECU')
+    _period(conn, 200, '2026-07-31')
+    conn.commit()
+
+    report_date = date(2026, 7, 6)
+    buf = build_workbook(conn, report_date, [BANK_ID])
+    conn.close()
+
+    wb = openpyxl.load_workbook(buf)
+
+    assert 'closing_price' in wb.sheetnames
+    assert 'record' in wb.sheetnames
+    assert 'CB1-HKD' in wb.sheetnames
+
+    # closing_price/record are manual-paste targets and stay empty.
+    assert wb['closing_price'].max_row == 1
+    assert wb['closing_price']['A1'].value is None
+    assert wb['record'].max_row == 1
+    assert wb['record']['A1'].value is None
+
+    ws = wb['CB1-HKD']
+    assert ws.column_dimensions['C'].hidden is True
+
+    # Locate the positions row: the row where column G holds the
+    # `=D{r}+E{r}` total-shares formula (distinct from the contracts table,
+    # where G holds the literal K/O price).
+    position_row = None
+    for row_cells in ws.iter_rows(min_col=7, max_col=7):
+        cell = row_cells[0]
+        if isinstance(cell.value, str) and cell.value.startswith('=D') and '+E' in cell.value:
+            position_row = cell.row
+            break
+
+    assert position_row is not None, "expected a positions row with the G=D+E formula"
+    r = position_row
+    assert ws[f'B{r}'].value == '700'
+
+    assert ws[f'G{r}'].value == f'=D{r}+E{r}'
+    assert ws[f'J{r}'].value == f'=(L{r}/I{r})-1'
+    l_value = ws[f'L{r}'].value
+    assert isinstance(l_value, str)
+    assert l_value.startswith('=INDEX(closing_price!A:C,MATCH(')
+    assert 'MATCH(' in l_value and ',3)' in l_value
+
+
+def test_build_workbook_skips_bank_with_no_data(app):
+    """A bank with no transactions, no ACCU, no DECU produces no sheet at all."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    conn.row_factory = sqlite3.Row
+    conn.commit()
+
+    report_date = date(2026, 7, 6)
+    buf = build_workbook(conn, report_date, [BANK_ID])
+    conn.close()
+
+    wb = openpyxl.load_workbook(buf)
+    assert 'CB1-HKD' not in wb.sheetnames
+    assert 'closing_price' in wb.sheetnames
+    assert 'record' in wb.sheetnames
+
+
+def test_build_workbook_unknown_bank_id_is_skipped():
+    """A bank_id not present in tbl_bank_account is silently skipped, not an error."""
+    import sqlite3 as _sqlite3
+    from tests.functional.conftest import _SCHEMA, _seed
+
+    conn = _sqlite3.connect(':memory:')
+    conn.row_factory = _sqlite3.Row
+    conn.executescript(_SCHEMA)
+    _seed(conn)
+
+    report_date = date(2026, 7, 6)
+    buf = build_workbook(conn, report_date, ['NOPE'])
+    conn.close()
+
+    wb = openpyxl.load_workbook(buf)
+    assert wb.sheetnames == ['closing_price', 'record']
