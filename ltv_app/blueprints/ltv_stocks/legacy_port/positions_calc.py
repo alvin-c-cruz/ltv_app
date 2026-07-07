@@ -86,6 +86,11 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
     `transactions` narrative column is computed as of the literal `report_date`
     (`get_ranged_transactions`). `hkd_wd` lets the caller reuse one HKD
     `WorkingDay` across sheets; defaults to a fresh one scoped to this call.
+
+    NOTE (ltv_stocks2.py:927-938, analyze_position): the `average` snapshotted
+    at `start_date` is only recomputed as of `report_date` for codes that have
+    a report-date trade (non-empty `transactions` narrative); codes that did
+    not trade today keep the `start_date`-derived average.
     """
     bank_row = db.execute(
         "SELECT indicative FROM tbl_bank_account WHERE ref_num = ?", (bank_ref,)
@@ -122,6 +127,22 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
         else:
             blocked_v, unblocked_v = blocked, balance - blocked
 
+        transactions = _transactions_narrative(db, bank_ref, code_ref, report_date, balance)
+        # Port of ltv_stocks2.py:analyze_position -- in principle the average
+        # snapshotted at start_date is re-derived as of report_date when the
+        # code has a report-date trade ('transactions' non-empty). In the
+        # legacy production code this branch is actually unreachable: Gather_Info
+        # calls get_ranged_transactions(self.report_date) with report_date as a
+        # datetime object, so its "trade_date == '{report_date}'" filter compares
+        # against a str(datetime) like '2026-07-06 00:00:00' that never matches
+        # the plain-date-string trade_date column ('2026-07-06') -- confirmed by
+        # the golden file's 'transactions'/column-O cells being blank throughout.
+        # So 'average' always uses start_date; only the narrative column here
+        # differs (it is computed from a live route, not the buggy Gather_Info
+        # path), which is why _transactions_narrative may be non-empty while
+        # 'average' must still use start_date to match the golden output.
+        average_date = start_date
+
         result[code] = {
             'stock_name': r['stock_name'],
             'code': code,
@@ -130,8 +151,8 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
             'balance': balance,
             'blocked': blocked_v,
             'unblocked': unblocked_v,
-            'average': _average(db, bank_id, code, start_date),
-            'transactions': _transactions_narrative(db, bank_ref, code_ref, report_date, balance),
+            'average': _average(db, bank_id, code, average_date),
+            'transactions': transactions,
         }
 
     return dict(sorted(result.items()))
