@@ -450,6 +450,10 @@ class CreateNotebook:
         row_num += 1
 
         counter = 1
+        # Running balances per (account, code): each transfer's opening carries
+        # from the prior same-day transfer of that stock in that account, rather
+        # than re-reading the day-opening balance every time.
+        running = {}
         for pair in self.transfers:
             out_bank   = pair['out_bank']
             in_bank    = pair['in_bank']
@@ -458,8 +462,12 @@ class CreateNotebook:
             code       = pair['code']
             qty        = int(pair['quantity'])
 
-            opening_out = self._opening_balance(out_bank, code)
-            opening_in  = self._opening_balance(in_bank,  code)
+            if (out_bank, code) not in running:
+                running[(out_bank, code)] = self._opening_balance(out_bank, code)
+            if (in_bank, code) not in running:
+                running[(in_bank, code)] = self._opening_balance(in_bank, code)
+            opening_out = running[(out_bank, code)]
+            opening_in  = running[(in_bank, code)]
 
             # Row 1: counter + title
             border_line(ws, row_num)
@@ -599,6 +607,10 @@ class CreateNotebook:
             border_line(ws, row_num)
             ws.row_dimensions[row_num].height = ROW_HEIGHT
             row_num += 1
+
+            # Carry balances forward for the next same-day transfer of this stock.
+            running[(out_bank, code)] = opening_out - qty
+            running[(in_bank, code)]  = opening_in + qty
 
             counter += 1
 
