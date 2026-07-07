@@ -154,3 +154,26 @@ def test_get_transfers_includes_pair_with_mismatched_partner(db_conn):
     assert len(result) == 1
     assert result[0]['out_bank'] == 'Citibank No. 1'
     assert result[0]['in_bank']  == 'Citibank No. 2'
+
+
+def test_borrow_return_carries_running_balance():
+    """write_borrow_return takes the threaded running long/short balances and
+    returns the post-transaction balances, so a Return that follows a Sell begins
+    from the post-Sell balance (950), not the day open. Regression for the
+    beginning-balance-follow-through bug."""
+    from openpyxl import Workbook
+    from ltv_app.blueprints.notebook.extensions.create_notebook import CreateNotebook
+
+    ws = Workbook().active
+    nb = CreateNotebook.__new__(CreateNotebook)  # bypass __init__ (no template/DB)
+    nb.trade_date = '2026-07-07'
+    row = {'ccy_id': 'HKD', 'transaction_type': 'Return Shares',
+           'stock_name': 'Baidu Inc A', 'code': '9888', 'quantity': -950, 'price': 122.3008}
+
+    next_row, counter, new_long, new_short = nb.write_borrow_return(
+        ws, 1, 1, row, 'Sun Hung Kai Account No. 2', 1, prior_long=950, prior_short=-950)
+
+    assert ws['D4'].value == 950     # prior Long written from the threaded balance, not a re-query
+    assert ws['L4'].value == -950    # prior Short
+    assert new_long == 0             # 950 - 950, carried forward
+    assert new_short == 0            # -950 + 950
