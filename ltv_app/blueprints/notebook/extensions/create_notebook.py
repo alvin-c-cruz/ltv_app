@@ -98,6 +98,12 @@ class CreateNotebook:
                 for code, trades in codes.items():
                     stock_trade_count = sum([len(trades) for _type, trades in trades.items() if _type in STOCK_TRANSACTIONS])
 
+                    # Running long/short balances for this (bank, stock), started
+                    # from the day-opening balance and carried forward across every
+                    # transaction below so multiple same-stock trades follow through.
+                    running_long = self._opening_balance(bank_name, code)
+                    running_short = self._opening_short_balance(bank_name, code)
+
                     transaction_reference = []
                     for transaction_type in STOCK_TRANSACTIONS:
                         if transaction_type in trades:
@@ -230,11 +236,16 @@ class CreateNotebook:
                         ws.row_dimensions[row_num].height = ROW_HEIGHT
                         border_line(ws, row_num)
 
+                        # Carry the post-stock-trade long balance into the running
+                        # total so a following Borrow/Return begins from it.
+                        running_long = shares_remaining
+
                     for transaction_type in BORROW_RETURN:
                         if transaction_type in trades:
                             for row in trades[transaction_type]:
-                                row_num, counter = self.write_borrow_return(
-                                    ws, row_num, counter, row, bank_name, bank_id)
+                                row_num, counter, running_long, running_short = self.write_borrow_return(
+                                    ws, row_num, counter, row, bank_name, bank_id,
+                                    running_long, running_short)
 
                     for transaction_type in DERIVATIVES:
                         if transaction_type in trades:
@@ -267,7 +278,29 @@ class CreateNotebook:
         except (TypeError, IndexError):
             return 0
 
-    def write_borrow_return(self, ws, row_num, counter, row, bank_name, bank_id):
+    def _opening_short_balance(self, bank_name, code):
+        row = self.db.execute(
+            "SELECT SUM(tbl_transaction_short.quantity) AS balance "
+            "FROM tbl_transaction_short "
+            "INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_transaction_short.bank_ref "
+            "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_transaction_short.code_ref "
+            "WHERE tbl_bank_account.bank_name = ? "
+            "  AND tbl_code.code = ? "
+            "  AND tbl_transaction_short.trade_date < ?",
+            (bank_name, code, self.trade_date)
+        ).fetchone()
+        try:
+            return int(row[0]) if row and row[0] is not None else 0
+        except (TypeError, IndexError):
+            return 0
+
+    def write_borrow_return(self, ws, row_num, counter, row, bank_name, bank_id,
+                            prior_long, prior_short):
+        # prior_long / prior_short are the RUNNING long/short balances threaded in
+        # by write_transactions -- the balance after every earlier same-day
+        # transaction of this (bank, stock), not a fresh start-of-day re-query.
+        # This makes multiple same-stock transactions follow through (e.g. a Sell
+        # then a Return: Long beginning = the post-Sell balance, not the day open).
         ccy = row["ccy_id"]
         transaction_type = row["transaction_type"]
         stock_name = row["stock_name"]
@@ -278,22 +311,6 @@ class CreateNotebook:
         is_return = transaction_type == "Return Shares"
         long_sign = "-" if is_return else "+"
         short_sign = "+" if is_return else "-"
-
-        prior_long = self.db.execute(
-            "SELECT SUM(t.quantity) FROM tbl_transaction t "
-            "INNER JOIN tbl_bank_account b ON b.ref_num = t.bank_ref "
-            "INNER JOIN tbl_code c ON c.ref_num = t.code_ref "
-            "WHERE b.bank_name = ? AND c.code = ? AND t.trade_date < ?",
-            (bank_name, code, self.trade_date)
-        ).fetchone()[0] or 0
-
-        prior_short = self.db.execute(
-            "SELECT SUM(t.quantity) FROM tbl_transaction_short t "
-            "INNER JOIN tbl_bank_account b ON b.ref_num = t.bank_ref "
-            "INNER JOIN tbl_code c ON c.ref_num = t.code_ref "
-            "WHERE b.bank_name = ? AND c.code = ? AND t.trade_date < ?",
-            (bank_name, code, self.trade_date)
-        ).fetchone()[0] or 0
 
         price_str = str(price)
         dec_len = len(price_str) - price_str.find(".") - 1
@@ -413,7 +430,10 @@ class CreateNotebook:
         ws.row_dimensions[r7].height = ROW_HEIGHT
 
         counter += 1
-        return r7 + 1, counter
+        # Carry the running balances forward for the next same-stock transaction.
+        new_long = prior_long - quantity if is_return else prior_long + quantity
+        new_short = prior_short + quantity if is_return else prior_short - quantity
+        return r7 + 1, counter, new_long, new_short
 
     def write_transfers(self, ws, row_num):
         if not self.transfers:
