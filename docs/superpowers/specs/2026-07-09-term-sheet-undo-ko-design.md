@@ -40,10 +40,17 @@ status flag. It is not touched by this feature.
 
 A new context-menu item that reverts `status='KO'` to `status='active'`.
 
-The item appears **only** on rows whose status is `KO`. The existing **Set Inactive**
-item is offered on both `KO` rows and `DONE` rows (a `DONE` row is one whose periods
-are all complete; it is still `status='active'` underneath). Showing the new item on a
-`DONE` row would offer a no-op, so it is hidden there.
+The item appears **only** on rows whose raw `status` is `KO`. The existing **Set
+Inactive** item is offered on both `KO` rows and `DONE` rows. Showing the new item on
+a non-KO `DONE` row would offer a no-op, so it is hidden there.
+
+Note that `DONE` is a *display* value, not a status. `models.py:163` tests
+`next_date == "DONE"` before `status == "KO"`, so a contract that is `status='KO'`
+**and** has all periods received renders as `DONE`. Such a row must still offer
+"Set Active". Keying visibility off the raw `data-status` (which carries `self.status`
+verbatim, `models.py:187`) rather than off the displayed `data-next-date` handles this
+correctly. No such row exists in the live database today — all 6 KO contracts have zero
+periods received — but the rule must not depend on that.
 
 Out of scope: reviving `inactive` contracts. The home page filters `inactive` rows out
 of the listing entirely, so the context menu cannot reach them. Doing so would require
@@ -135,16 +142,47 @@ One column write, `status = 'active'`, on one row of `tbl_stock_contract`. Nothi
 written to `tbl_stock_contract_period`. `locked` and `reviewed` are untouched, so a
 locked contract remains locked after the revert.
 
+### What `status='active'` re-enables
+
+`active` is not a lifecycle stage; it is the "include this contract" flag read by the
+listing and by several reports. A `KO` contract still appears on the term-sheet page
+(which filters on `status != 'inactive'`) but is excluded from every consumer below.
+Reverting KO→active **puts the contract back into all of them**:
+
+| Consumer | Filter |
+|---|---|
+| `fixings/extensions/generate_fixings.py:83` | `status='active'` |
+| `hkd_margin/views.py:21` | `status='active'` |
+| `block_unblock/views.py:26` | `status='active'` |
+| `ltv_stocks/legacy_port/positions_calc.py:19` | `status='active'` (DECU only) |
+| term-sheet listing (`term_sheet/views.py:28,40`) | `status != 'inactive'` |
+
+This is the intended effect when undoing a mis-entered KO: the contract resumes
+generating fixings and counting toward HKD margin and DECU positions. It is called out
+because a one-click menu item quietly changing four reports is worth knowing about.
+
 ## Testing
 
 New file `tests/functional/test_term_sheet_set_active.py`, using the isolated temp
-SQLite fixtures from `tests/functional/conftest.py`, seeded with a KO contract:
+SQLite fixtures from `tests/functional/conftest.py`.
+
+That conftest creates `tbl_stock_contract` (line 110; it has both `status` and `locked`)
+and `tbl_stock_contract_period` (line 132), but **seeds no contract rows** — its seed
+data is 1 currency, 2 banks, 1 stock code, 7 transaction types. Each test must therefore
+`INSERT` the contract it needs, using the seeded `bank_ref` and `code_ref`. Fixtures
+available: `auth_client` (`staff_user`, role `staff`), `superuser_client` (`super_user`,
+role `superuser`), and `db_conn` for read-back assertions.
+
+Cases:
 
 1. Superuser reverts a KO contract — 200, and `status` is `'active'` when read back
    through `db_conn`.
 2. Non-superuser POSTs at a locked KO contract — 403, **and `status` is still `'KO'`**.
-3. Contract with `status='active'` (a DONE row) — 400, status unchanged.
+3. Contract with `status='active'` — 400, status unchanged.
 4. Unknown `ref_num` — 404.
+5. Contract with `status='KO'` whose periods are **all received** (the KO-and-DONE row
+   described under Scope) — 200, reverts to `'active'`. This guards the precedence trap
+   in `models.py:163`: the route must key off `status`, not off the displayed `DONE`.
 
 The status-unchanged assertions in cases 2 and 3 carry the weight: a route that returns
 the right code but writes anyway would pass without them.
