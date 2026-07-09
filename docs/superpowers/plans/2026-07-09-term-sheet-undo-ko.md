@@ -14,7 +14,10 @@
 
 - **Live production database.** `instance/LTV Stocks.db` holds real financial data. No task in this plan may write to it. Tests use the isolated temp SQLite from `tests/functional/conftest.py`; browser verification uses a separate seeded temp database (Task 3).
 - **Blueprint path is `applications/ltv_app/blueprints/term_sheet/`** — note the `applications/` prefix. There is no top-level `ltv_app/` in the working tree.
-- **The working tree has a large staged, uncommitted rename** (`ltv_app/` → `applications/ltv_app/`). Every `git commit` in this plan MUST pass explicit pathspecs after `--` so that rename is not swept into a commit.
+- **The Python import name is still top-level `ltv_app`, not `applications.ltv_app`.** `pytest.ini` sets `pythonpath = applications`, and `flask_app.py` / `conftest.py` insert `applications/` on `sys.path`. Import as `from ltv_app... import ...`.
+- **Work happens on branch `term-sheet-undo-ko`.** The `applications/` rename and its import/instance/`.gitignore` fixups are already committed (`531fd8a`, `08013f7`) on `main`; the tree is clean with respect to them.
+- **Do not commit `tests/functional/test_notebook_transfers.py`.** The working tree holds a pre-existing, uncommitted deletion of `test_transfer_opening_follows_prior_same_day_transfer` that belongs to the user, not to this feature. Leave it exactly as found; pass explicit pathspecs after `--` on every commit so it is never swept in.
+- **Known-failing baseline** (pre-existing, not caused by this work): 11 tests in `tests/functional/test_download_trades_done.py::OldTradesDoneTests` and `tests/functional/test_gmail.py::test_inbox_superuser_shows_threads`. `tests/ltv2/` does not collect (`ModuleNotFoundError: argon2`). Baseline for `pytest tests/functional tests/unit` is **12 failed, 227 passed, 2 skipped**. A regression means a test outside that set starts failing.
 - **Permission rule, copied from `set_inactive`:** `@login_required`; a `locked` contract returns 403 unless `current_user.role == 'superuser'`.
 - **Precondition:** only `status == 'KO'` may be set active. `DONE` is a *display* value and must never be used as the gate.
 - **Guard order:** existence (404) → lock/permission (403) → precondition (400) → write.
@@ -179,9 +182,11 @@ Expected: `5 passed`.
 
 - [ ] **Step 5: Run the full suite to check for regressions**
 
-Run: `pytest -q`
+Run: `python -m pytest -q tests/functional tests/unit`
 
-Expected: no test that passed before this task now fails. The new route adds a URL rule; confirm no existing test asserts on the total route count.
+Expected: **12 failed, 227 passed + 5 new = 232 passed, 2 skipped.** The 12 failures are the known-failing baseline listed in Global Constraints and must be exactly that set — 11 in `test_download_trades_done.py::OldTradesDoneTests` plus `test_gmail.py::test_inbox_superuser_shows_threads`. Any *other* test failing is a regression you introduced; fix it before committing.
+
+Do not run bare `pytest` — it collects `tests/ltv2/`, which errors out on a missing `argon2` module unrelated to this work.
 
 - [ ] **Step 6: Commit**
 
@@ -324,10 +329,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, r"C:\envs\LTV\server")
+_SERVER = r"C:\envs\LTV\server"
+sys.path.insert(0, _SERVER)                       # for tests.functional.conftest
+sys.path.insert(0, _SERVER + r"\applications")    # ltv_app is imported top-level
 
 from tests.functional.conftest import _SCHEMA, _seed
-from applications.ltv_app import create_app
+from ltv_app import create_app
 
 db_path = Path(tempfile.mkdtemp()) / "seeded.db"
 conn = sqlite3.connect(str(db_path))
@@ -368,11 +375,54 @@ Expected: prints `seeded db: ...` then `Running on http://127.0.0.1:5002`.
 
 - [ ] **Step 3: Drive the menu with Playwright**
 
-Navigate to `http://127.0.0.1:5002`, log in as `super_user` / `superpass`, then go to `http://127.0.0.1:5002/term-sheet/CB1`.
+Playwright's Python package is installed. If `playwright._impl._errors.Error: Executable doesn't exist` appears, run `python -m playwright install chromium` once.
 
-Right-click the `Tencent - KO test` row. **Screenshot the open menu and look at it.** Expected: two items, `Set Inactive` and `Set Active (undo KO)`. A menu with only one item means the visibility toggle never ran; a blank screenshot means the page failed to render.
+The page uses `confirm()`. A dialog handler MUST be registered **before** the click, or the click blocks forever. Create `<scratchpad>/drive_menu.py`:
 
-Click `Set Active (undo KO)`, accept the confirm dialog, and wait for the reload.
+```python
+from playwright.sync_api import sync_playwright
+
+BASE = "http://127.0.0.1:5002"
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page()
+    page.on("dialog", lambda d: d.accept())   # register BEFORE any click
+
+    page.goto(f"{BASE}/login")
+    page.fill("input[name=username]", "super_user")
+    page.fill("input[name=password]", "superpass")
+    page.click("button[type=submit]")
+    page.wait_for_load_state()
+
+    page.goto(f"{BASE}/term-sheet/CB1")
+    row = page.locator("tr.clickable-row[data-status='KO']")
+    assert row.count() == 1, f"expected 1 KO row, found {row.count()}"
+
+    row.click(button="right")
+    page.wait_for_selector("#contextMenu", state="visible")
+    page.screenshot(path="menu-open.png")
+
+    inactive = page.locator("#setInactiveOption")
+    active = page.locator("#setActiveOption")
+    assert inactive.is_visible(), "Set Inactive should be visible on a KO row"
+    assert active.is_visible(), "Set Active should be visible on a KO row"
+    print("menu OK: both items visible")
+
+    active.click()                     # confirm() auto-accepted by the handler
+    page.wait_for_load_state("load")
+    page.screenshot(path="after-revert.png")
+
+    assert page.locator("tr.clickable-row[data-status='KO']").count() == 0, \
+        "row should no longer be KO after revert"
+    print("revert OK: no KO row remains")
+    browser.close()
+```
+
+Run: `python <scratchpad>/drive_menu.py`
+Expected: `menu OK: both items visible` then `revert OK: no KO row remains`.
+
+**Read `menu-open.png` with the Read tool and look at it.** Expected: a two-item menu reading `Set Inactive` and `Set Active (undo KO)`. One item means the visibility toggle never ran. A blank image means the page failed to render — the assertions above would not catch that.
 
 - [ ] **Step 4: Confirm the row is gone from KO styling and the DB changed**
 
