@@ -7,7 +7,8 @@ import os
 def _get_version():
     try:
         base = os.path.dirname(os.path.abspath(__file__))
-        version_file = os.path.normpath(os.path.join(base, '..', 'VERSION'))
+        # VERSION lives in the server/ root, two levels up from applications/ltv_app/
+        version_file = os.path.normpath(os.path.join(base, '..', '..', 'VERSION'))
         with open(version_file) as f:
             return f.read().strip()
     except Exception:
@@ -18,7 +19,13 @@ VERSION = _get_version()
 
 
 def create_app(test_config=None):
-    app = Flask(__name__, instance_relative_config=True)
+    # instance/ (live DB, excel_templates, temp) stays in server/ even though the
+    # package now lives under applications/ltv_app/. Pin instance_path so Flask does
+    # not auto-discover applications/instance and run against an empty database.
+    _server_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+    app = Flask(__name__, instance_path=os.path.join(_server_dir, 'instance'),
+                instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY="acda5284c0cc9a93e828516b701ab77907cd9bfe5f4f00c5026059b2d7f58419",
         DATABASE=os.path.join(app.instance_path, "LTV Stocks.db"),

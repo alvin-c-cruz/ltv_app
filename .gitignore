@@ -14,7 +14,10 @@
 !flask_test.cfg
 
 # Keep source code and tests
-!/ltv_app/
+# ltv_app moved under applications/; localhost/ moved with it and stays ignored.
+!/applications/
+/applications/*
+!/applications/ltv_app/
 !/ltv2/
 !/tests/
 !/migrations/

@@ -1,3 +1,9 @@
+import os
+import sys
+
+# ltv_app now lives under applications/ — make it importable before it is imported below.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'applications'))
+
 from pytest import fixture
 from ltv_app import create_app
 
