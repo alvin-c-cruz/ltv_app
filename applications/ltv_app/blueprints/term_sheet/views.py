@@ -421,6 +421,32 @@ def set_inactive(contract_ref):
     return jsonify({"success": True, "message": "Contract status updated to inactive"})
 
 
+@bp.route("/<contract_ref>/set-active", methods=["POST"])
+@login_required
+def set_active(contract_ref):
+    db = get_db()
+
+    # Check if contract exists and get its current status
+    row = db.execute("SELECT status, locked FROM tbl_stock_contract WHERE ref_num=?", (contract_ref,)).fetchone()
+
+    if not row:
+        return jsonify({"success": False, "message": "Contract not found"}), 404
+
+    if row['locked'] and current_user.role != 'superuser':
+        return jsonify({"success": False, "message": "Contract is locked and cannot be modified"}), 403
+
+    # Gate on the stored status, never on the displayed "DONE" value: a KO
+    # contract with all periods received renders as DONE (models.py:163).
+    if row['status'] != 'KO':
+        return jsonify({"success": False, "message": "Only contracts with KO status can be set back to active"}), 400
+
+    # Update status to active
+    db.execute("UPDATE tbl_stock_contract SET status='active' WHERE ref_num=?", (contract_ref,))
+    db.commit()
+
+    return jsonify({"success": True, "message": "Contract status updated to active"})
+
+
 @bp.route("/<bank_id>/<transaction_type>/<code>", methods=["GET", "POST"])
 @login_required
 def term_sheet_summary(bank_id, transaction_type, code):
