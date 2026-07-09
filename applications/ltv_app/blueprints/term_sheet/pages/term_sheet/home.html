@@ -42,7 +42,7 @@
         </thead>
         <tbody>
         {% for accu in accus %}
-        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}" data-next-date="{{ accu.next_date }}"
+        <tr class="clickable-row" data-href="{{ url_for('term_sheet.edit', contract_ref=accu.ref_num) }}" data-contract-ref="{{ accu.ref_num }}" data-status="{{ accu.status }}" data-next-date="{{ accu.next_date }}" data-set-active-url="{{ url_for('term_sheet.set_active', contract_ref=accu.ref_num) }}"
             {% if accu.next_date == 'KO' %}style="background:rgba(254,202,202,0.6);"{% elif accu.locked %}style="background:rgba(253,230,138,0.45);"{% endif %}>
             <td>{{ accu.stock_name }}</td>
             <td class="text-center">{{ accu.code }}</td>
@@ -110,13 +110,18 @@
     <div id="setInactiveOption" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee;">
         Set Inactive
     </div>
+    <div id="setActiveOption" style="display: none; padding: 10px 15px; cursor: pointer;">
+        Set Active (undo KO)
+    </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const contextMenu = document.getElementById('contextMenu');
     const setInactiveOption = document.getElementById('setInactiveOption');
+    const setActiveOption = document.getElementById('setActiveOption');
     let currentContractRef = null;
+    let currentSetActiveUrl = null;
 
     // Handle right-click on table rows
     document.querySelectorAll('tr.clickable-row').forEach(function(row) {
@@ -128,6 +133,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (status === 'KO' || nextDate === 'DONE') {
                 e.preventDefault();
                 currentContractRef = this.getAttribute('data-contract-ref');
+                currentSetActiveUrl = this.getAttribute('data-set-active-url');
+
+                // Undoing a KO only means something for a stored status of KO.
+                // A DONE row is already active, so hide the item there.
+                setActiveOption.style.display = (status === 'KO') ? 'block' : 'none';
 
                 // Position and show context menu
                 contextMenu.style.left = e.pageX + 'px';
@@ -142,6 +152,32 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentContractRef) {
             if (confirm('Are you sure you want to set this contract to inactive?')) {
                 fetch(`{{ url_for('term_sheet.home', bank_id='') }}/../${currentContractRef}/set-inactive`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('An error occurred: ' + error);
+                });
+            }
+        }
+        contextMenu.style.display = 'none';
+    });
+
+    // Handle clicking "Set Active (undo KO)"
+    setActiveOption.addEventListener('click', function() {
+        if (currentSetActiveUrl) {
+            if (confirm('Undo the KO on this contract? It will become active again and will resume appearing in fixings, HKD margin, block/unblock and DECU positions.')) {
+                fetch(currentSetActiveUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
