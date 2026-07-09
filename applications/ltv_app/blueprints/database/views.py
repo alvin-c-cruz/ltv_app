@@ -2,7 +2,7 @@ import datetime
 from flask import Blueprint, current_app, g, request
 import sqlite3
 import os
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from .. auth import login_required
 from ..bank import BankAccount
@@ -42,9 +42,18 @@ def log_request():
                 save_log(request_url, request_data)
 
 
+def _open_log_workbook(filename):
+    """data_logs.xlsx is gitignored, so a fresh clone does not have it."""
+    if os.path.exists(filename):
+        return load_workbook(filename)
+    wb = Workbook()
+    wb.active.title = "LOGS"
+    return wb
+
+
 def save_log(request_url, request_data):
     filename = os.path.join(current_app.instance_path, "data_logs.xlsx")
-    wb = load_workbook(filename)
+    wb = _open_log_workbook(filename)
     ws = wb["LOGS"]
 
     #  Go to next empty row

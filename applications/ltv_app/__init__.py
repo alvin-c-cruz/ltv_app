@@ -18,6 +18,19 @@ def _get_version():
 VERSION = _get_version()
 
 
+def _ensure_instance_dirs(instance_path):
+    """Create the instance subdirectories the app writes into but never creates.
+
+    `instance/` is gitignored wholesale, so a fresh clone has none of these.
+    `temp/` in particular is written to by the fixings, gain_loss, forecasts,
+    block_unblock, notebook and trades_done exports.
+    """
+    for path in (instance_path,
+                 os.path.join(instance_path, "test_database"),
+                 os.path.join(instance_path, "temp")):
+        os.makedirs(path, exist_ok=True)
+
+
 def create_app(test_config=None):
     # instance/ (live DB, excel_templates, temp) stays in server/ even though the
     # package now lives under applications/ltv_app/. Pin instance_path so Flask does
@@ -36,11 +49,7 @@ def create_app(test_config=None):
     else:
         app.config.from_mapping(test_config)
 
-    try:
-        os.makedirs(app.instance_path)
-        os.makedirs(os.path.join(app.instance_path, "test_database"))
-    except OSError:
-        pass
+    _ensure_instance_dirs(app.instance_path)
 
     app.jinja_env.globals['app_version'] = VERSION
 
