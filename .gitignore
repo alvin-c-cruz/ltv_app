@@ -14,23 +14,18 @@
 !flask_test.cfg
 
 # Keep source code and tests
-# ltv_app moved under applications/; localhost/ moved with it and stays ignored.
-!/applications/
-/applications/*
-!/applications/ltv_app/
-!/ltv2/
-!/tests/
+# localhost/ has its own separate git repo/history and stays ignored here.
+!/ltv_app/
 !/migrations/
-
-# Keep documentation
-!/docs/
 
 # Keep Claude Code skills only (not worktrees, venvs, or local settings)
 !/.claude/
 /.claude/*
 !/.claude/skills/
 
-# Keep Excel templates needed by the application
+# Keep Excel templates needed by the application.
+# Order matters: re-include the instance/ directory, exclude everything inside
+# it, then whitelist only what the app needs.
 !/instance/
 /instance/*
 !/instance/excel_templates/
@@ -43,6 +38,16 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Databases — never commit these. THIS REPO IS PUBLIC.
+# Previously the live 8.9 MB "LTV Stocks.db" was kept out by the /instance/*
+# rule alone. These rules are belt and braces: they hold wherever it is moved.
+*.db
+*.db.bak-*
+*.sqlite
+*.sqlite3
+
 # Gmail OAuth credentials — never commit these
 instance/gmail_token.json
 instance/gmail_client_secret.json
+gmail_token.json
+gmail_client_secret.json
