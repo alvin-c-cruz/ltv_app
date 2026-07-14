@@ -337,12 +337,14 @@ function shiftDate(fieldId, days) {
                                 onclick='openChargesModal({{ row.source|tojson }}, {{ row.ref_num|tojson }})'>
                             Edit Charges
                         </button>
-                        <form method="post"
+                        <form method="post" id="no-charges-form-{{ row.source }}-{{ row.ref_num }}"
                               action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
                               style="display:inline">
-                            <button type="submit" class="btn btn-sm"
+                            <button type="button" class="btn btn-sm"
                                     style="background:var(--accent-muted);color:var(--text-primary)"
-                                    onclick="return confirm('Mark this transaction as having no charges?')">
+                                    onclick="showConfirmModal('Mark this transaction as having no charges?', function(){
+                                        document.getElementById('no-charges-form-{{ row.source }}-{{ row.ref_num }}').submit();
+                                    }, {variant: 'primary'})">
                                 No Charges
                             </button>
                         </form>
@@ -370,12 +372,14 @@ function shiftDate(fieldId, days) {
                                 onclick='openChargesModal({{ row.source|tojson }}, {{ row.ref_num|tojson }})'>
                             Edit Charges
                         </button>
-                        <form method="post"
+                        <form method="post" id="no-charges-fixing-form-{{ row.source }}-{{ row.ref_num }}"
                               action="{{ url_for('workflow.mark_no_charges', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
                               style="display:inline">
-                            <button type="submit" class="btn btn-sm"
+                            <button type="button" class="btn btn-sm"
                                     style="background:var(--accent-muted);color:var(--text-primary)"
-                                    onclick="return confirm('Mark this fixing as having no charges?')">
+                                    onclick="showConfirmModal('Mark this fixing as having no charges?', function(){
+                                        document.getElementById('no-charges-fixing-form-{{ row.source }}-{{ row.ref_num }}').submit();
+                                    }, {variant: 'primary'})">
                                 No Charges
                             </button>
                         </form>
