@@ -65,11 +65,12 @@ Call sites: `ltv_app/blueprints/transactions/pages/transactions/home.html:89-90`
 
 ## 2. Fixings redirect
 
-**Root cause:** the `fixings.record/<date>` view redirects to
-`url_for('fixings.index')` with no `date` param, so the index defaults to
-today instead of the date just recorded.
+**Root cause:** `fixings.record(trade_date)` (`ltv_app/blueprints/fixings/views.py:209-216`)
+redirects to `url_for('fixings.home')` with no `trade_date` param, so `home()`
+falls through to its `DateForm` default (today) instead of the date just
+recorded.
 
-**Fix:** `redirect(url_for('fixings.index', date=date))`.
+**Fix:** `redirect(url_for('fixings.home', trade_date=trade_date))`.
 
 ## 3. Bank Reference No. indicator
 
