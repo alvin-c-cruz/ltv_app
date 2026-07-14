@@ -44,12 +44,14 @@
             <td class="text-center" style="white-space:nowrap">
                 <a href="{{ url_for('bank_accounts.edit', ref_num=acc.ref_num) }}"
                    class="btn btn-outline btn-sm">Edit Label</a>
-                <form method="post"
+                <form method="post" id="toggle-active-form-{{ acc.ref_num }}"
                       action="{{ url_for('bank_accounts.toggle_active', ref_num=acc.ref_num, show=show) }}"
                       style="display:inline">
-                    <button type="submit" class="btn btn-sm"
+                    <button type="button" class="btn btn-sm"
                             style="background:var(--accent-muted); color:var(--text-primary)"
-                            onclick="return confirm('{% if acc.is_active %}Deactivate{% else %}Activate{% endif %} {{ acc.bank_name }}?')">
+                            onclick="showConfirmModal('{% if acc.is_active %}Deactivate{% else %}Activate{% endif %} {{ acc.bank_name }}?', function(){
+                                document.getElementById('toggle-active-form-{{ acc.ref_num }}').submit();
+                            }, {variant: 'primary'})">
                         {% if acc.is_active %}Deactivate{% else %}Activate{% endif %}
                     </button>
                 </form>
