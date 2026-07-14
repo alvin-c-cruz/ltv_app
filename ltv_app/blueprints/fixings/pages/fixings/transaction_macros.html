@@ -28,8 +28,10 @@
             <td class="text-right">{{ '{:,.2f}'.format(transaction.amount) }}</td>
             <td class="text-center">
                 <a href="{{ url_for('fixings.edit', ref_num=transaction.id) }}" class="btn btn-outline btn-sm">Edit</a>
-                <a href="{{ url_for('fixings.delete', ref_num=transaction.id) }}" class="btn btn-danger btn-sm"
-                   onclick="return confirm('Delete this fixing?')">Delete</a>
+                <button type="button" class="btn btn-danger btn-sm"
+                        onclick="showConfirmModal('Delete this fixing?', function(){
+                            window.location.href = '{{ url_for('fixings.delete', ref_num=transaction.id) }}';
+                        })">Delete</button>
             </td>
         </tr>
         {% endfor %}

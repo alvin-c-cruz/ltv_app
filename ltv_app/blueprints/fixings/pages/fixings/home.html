@@ -33,8 +33,10 @@
         <button type="button" class="btn btn-primary" onclick="openAddModal('{{ trade_date }}')">Add Fixing</button>
         <a href="{{ url_for('fixings.generate', trade_date=trade_date) }}" class="btn btn-success">Generate</a>
         {% if not has_fixings %}
-        <a href="{{ url_for('fixings.record', trade_date=trade_date) }}" class="btn btn-outline"
-           onclick="return confirm('Record fixings for {{ trade_date }}?')">Record Fixings</a>
+        <button type="button" class="btn btn-outline"
+                onclick="showConfirmModal('Record fixings for {{ trade_date }}?', function(){
+                    window.location.href = '{{ url_for('fixings.record', trade_date=trade_date) }}';
+                }, {variant: 'primary'})">Record Fixings</button>
         {% endif %}
     </div>
 </div>
@@ -93,8 +95,10 @@
                                 locked: true
                             })">View</button>
                         {% if current_user.role == 'superuser' %}
-                        <a href="{{ url_for('fixings.unlock', ref_num=t.id) }}" class="btn btn-outline btn-sm"
-                           onclick="return confirm('Unlock this transaction?')">Unlock</a>
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="showConfirmModal('Unlock this transaction?', function(){
+                                    window.location.href = '{{ url_for('fixings.unlock', ref_num=t.id) }}';
+                                })">Unlock</button>
                         {% endif %}
                     {% else %}
                         {# Unlocked transactions: Edit and Delete #}
@@ -115,8 +119,10 @@
                                 misc: {{ t.misc }},
                                 locked: false
                             })">Edit</button>
-                        <a href="{{ url_for('fixings.delete', ref_num=t.id) }}" class="btn btn-danger btn-sm"
-                           onclick="return confirm('Delete this fixing?')">Delete</a>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirmModal('Delete this fixing?', function(){
+                                    window.location.href = '{{ url_for('fixings.delete', ref_num=t.id) }}';
+                                })">Delete</button>
                     {% endif %}
                 </td>
             </tr>
