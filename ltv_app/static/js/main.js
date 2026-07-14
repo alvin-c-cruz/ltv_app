@@ -47,3 +47,24 @@ document.addEventListener('click', function (e) {
 function confirmation_message() {
     return prompt("Type YES to proceed.", "") === 'YES';
 }
+
+/* ── Shared confirm modal (replaces native confirm()) ───────────── */
+function showConfirmModal(message, onConfirm) {
+    var modal = document.getElementById('confirmModal');
+    if (!modal) { if (onConfirm) onConfirm(); return; }
+    document.getElementById('confirmModalMessage').textContent = message;
+    var okBtn = document.getElementById('confirmModalOk');
+    var newOkBtn = okBtn.cloneNode(true);
+    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+    newOkBtn.addEventListener('click', function () {
+        closeConfirmModal();
+        onConfirm();
+    });
+    modal.classList.add('active');
+}
+function closeConfirmModal() {
+    document.getElementById('confirmModal').classList.remove('active');
+}
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeConfirmModal();
+});

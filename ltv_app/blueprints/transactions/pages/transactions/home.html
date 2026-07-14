@@ -86,8 +86,11 @@
                     {# Locked: View for all, Unlock for admin only #}
                     <a href="{{ url_for('term_sheet.view', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">View</a>
                     {% if current_user.role == 'superuser' %}
-                    <a href="{{ url_for('term_sheet.unlock', contract_ref=ts.id) }}" class="btn btn-outline btn-sm"
-                       onclick="return confirm('Unlock this contract?')">Unlock</a>
+                    <form method="post" action="{{ url_for('term_sheet.unlock', contract_ref=ts.id) }}"
+                          style="display:inline" id="unlock-form-{{ ts.id }}">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="showConfirmModal('Unlock this contract?', function(){ document.getElementById('unlock-form-{{ ts.id }}').submit(); })">Unlock</button>
+                    </form>
                     {% endif %}
                 {% else %}
                     {# Unlocked: Edit and Delete #}
@@ -141,8 +144,11 @@
                     {# Locked: View for all, Unlock for admin only #}
                     <a href="{{ url_for('term_sheet.view', contract_ref=ts.id) }}" class="btn btn-outline btn-sm">View</a>
                     {% if current_user.role == 'superuser' %}
-                    <a href="{{ url_for('term_sheet.unlock', contract_ref=ts.id) }}" class="btn btn-outline btn-sm"
-                       onclick="return confirm('Unlock this contract?')">Unlock</a>
+                    <form method="post" action="{{ url_for('term_sheet.unlock', contract_ref=ts.id) }}"
+                          style="display:inline" id="unlock-form-{{ ts.id }}">
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="showConfirmModal('Unlock this contract?', function(){ document.getElementById('unlock-form-{{ ts.id }}').submit(); })">Unlock</button>
+                    </form>
                     {% endif %}
                 {% else %}
                     {# Unlocked: Edit and Delete #}
