@@ -23,6 +23,12 @@
 /.claude/*
 !/.claude/skills/
 
+# Keep design specs (no client data belongs here — see BUGS.md for that,
+# which stays out of this public repo on purpose)
+!/docs/
+/docs/*
+!/docs/superpowers/
+
 # Keep Excel templates needed by the application.
 # Order matters: re-include the instance/ directory, exclude everything inside
 # it, then whitelist only what the app needs.
