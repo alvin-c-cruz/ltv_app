@@ -213,4 +213,4 @@ def record(trade_date):
     fixing_data = GenerateFixings(trade_date).fixings
     RecordFixings(db, fixing_data, trade_date)
     flash(f"Recorded fixings for {trade_date}.")
-    return redirect(url_for('fixings.home'))
+    return redirect(url_for('fixings.home', trade_date=trade_date))
