@@ -63,8 +63,17 @@ function showConfirmModal(message, onConfirm) {
     modal.classList.add('active');
 }
 function closeConfirmModal() {
-    document.getElementById('confirmModal').classList.remove('active');
+    var modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.remove('active');
 }
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeConfirmModal();
+});
+document.addEventListener('DOMContentLoaded', function () {
+    var modal = document.getElementById('confirmModal');
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeConfirmModal();
+        });
+    }
 });

@@ -12,17 +12,17 @@
 {% if current_user.is_authenticated %}
     {% include 'navbar.html' %}
     <div class="modal-overlay" id="confirmModal">
-    <div class="modal" style="max-width:420px;">
-        <div class="modal-header">
-            <span class="modal-title">Confirm</span>
-            <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+        <div class="modal" style="max-width:420px;">
+            <div class="modal-header">
+                <span class="modal-title">Confirm</span>
+                <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+            </div>
+            <p id="confirmModalMessage" style="margin:0 0 20px;"></p>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="btn btn-outline" onclick="closeConfirmModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmModalOk">Confirm</button>
+            </div>
         </div>
-        <p id="confirmModalMessage" style="margin:0 0 20px;"></p>
-        <div style="display:flex;justify-content:flex-end;gap:10px;">
-            <button type="button" class="btn btn-outline" onclick="closeConfirmModal()">Cancel</button>
-            <button type="button" class="btn btn-danger" id="confirmModalOk">Confirm</button>
-        </div>
-    </div>
     </div>
 {% endif %}
 
