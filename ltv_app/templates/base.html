@@ -18,6 +18,8 @@
                 <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
             </div>
             <p id="confirmModalMessage" style="margin:0 0 20px;"></p>
+            <input type="text" id="confirmModalTypedInput" style="display:none;width:100%;
+                   margin:0 0 16px;padding:8px 10px;box-sizing:border-box;" placeholder="Type to confirm" autocomplete="off">
             <div style="display:flex;justify-content:flex-end;gap:10px;">
                 <button type="button" class="btn btn-outline" onclick="closeConfirmModal()">Cancel</button>
                 <button type="button" class="btn btn-danger" id="confirmModalOk">Confirm</button>

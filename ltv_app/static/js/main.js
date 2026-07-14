@@ -49,14 +49,35 @@ function confirmation_message() {
 }
 
 /* ── Shared confirm modal (replaces native confirm()) ───────────── */
-function showConfirmModal(message, onConfirm) {
+function showConfirmModal(message, onConfirm, options) {
+    options = options || {};
     var modal = document.getElementById('confirmModal');
     if (!modal) { if (onConfirm) onConfirm(); return; }
+
     document.getElementById('confirmModalMessage').textContent = message;
+
     var okBtn = document.getElementById('confirmModalOk');
     var newOkBtn = okBtn.cloneNode(true);
     okBtn.parentNode.replaceChild(newOkBtn, okBtn);
-    newOkBtn.addEventListener('click', function () {
+    okBtn = newOkBtn;
+
+    okBtn.className = 'btn ' + (options.variant === 'primary' ? 'btn-primary' : 'btn-danger');
+
+    var typedInput = document.getElementById('confirmModalTypedInput');
+    if (options.requireTyped) {
+        typedInput.style.display = 'block';
+        typedInput.value = '';
+        okBtn.disabled = true;
+        typedInput.oninput = function () {
+            okBtn.disabled = typedInput.value !== options.requireTyped;
+        };
+    } else {
+        typedInput.style.display = 'none';
+        typedInput.oninput = null;
+        okBtn.disabled = false;
+    }
+
+    okBtn.addEventListener('click', function () {
         closeConfirmModal();
         onConfirm();
     });
@@ -65,6 +86,8 @@ function showConfirmModal(message, onConfirm) {
 function closeConfirmModal() {
     var modal = document.getElementById('confirmModal');
     if (modal) modal.classList.remove('active');
+    var typedInput = document.getElementById('confirmModalTypedInput');
+    if (typedInput) { typedInput.value = ''; typedInput.style.display = 'none'; typedInput.oninput = null; }
 }
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeConfirmModal();
