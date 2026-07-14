@@ -92,20 +92,29 @@ blocking save would be worse than a silent gap.
 
 ## 4. Print Trades Done modal
 
-**Root cause:** the button on `/trades/` has no handler wired to it at all —
-confirmed live (click produces zero effect: no navigation, no new tab). The
-target report (`/trades/print_with_gain_loss/<date>`) already works correctly
-when navigated to directly.
+**Root cause (corrected during plan-writing — see below):** the button is not
+actually inert. `transactions/pages/transactions/home.html:39-41` already has
+`onclick="window.open(this.href,'printTrades',...); return false;"`. Live
+testing during the reproduction session showed zero effect (no navigation, no
+new tab) — consistent with the `window.open()` call being silently blocked by
+a popup blocker, which is exactly what "the button doesn't do anything" looks
+like from a user's perspective (no error, nothing visible happens). The
+original BUGS.md entry's premise ("no handler wired") was an incorrect
+inference from the symptom; the actual defect is reliance on a blockable
+`window.open()` popup rather than an in-page UI element. The target report
+(`/trades/print_with_gain_loss/<date>`) itself works correctly when navigated
+to directly — only the popup delivery mechanism is unreliable.
 
 **Decision:** show the report in a modal (not a new tab or same-tab nav), reusing
 the app's existing `modal-overlay` pattern already used for `+Spot`/`+Contract`/etc.
 
 **Fix:** add a `printModal` block to `transactions/pages/transactions/home.html`
-containing a large `<iframe>`. Wire the button to
-`onclick="openTxnModal('printModal')"`, and on open, set the iframe `src` to
-`/trades/print_with_gain_loss/{current_trade_date}` (the Portrait/Landscape
-toggle and all existing report behavior work unmodified inside the iframe). No
-backend route changes.
+containing a large `<iframe>`. Replace the button's `window.open(...)` handler
+with `onclick="openTxnModal('printModal')"`, and on open, set the iframe `src`
+to `/trades/print_with_gain_loss/{current_trade_date}` (the Portrait/Landscape
+toggle and all existing report behavior work unmodified inside the iframe).
+This also structurally fixes the popup-blocker exposure, since nothing calls
+`window.open()` anymore. No backend route changes.
 
 ## 5. Per-row "To Decu" live update
 
