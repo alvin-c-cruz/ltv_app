@@ -33,11 +33,12 @@
             {% if grand_total %}{{ grand_total }} unreviewed{% else %}All up to date{% endif %}
         </span>
         {% if total %}
-        <form method="post" action="{{ url_for('review.mark_all') }}"
-              onsubmit="return confirm('Mark all {{ total }} transaction(s) as reviewed?')">
+        <form method="post" action="{{ url_for('review.mark_all') }}" id="mark-all-form" onsubmit="return false">
             {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}">{% endif %}
             {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}">{% endif %}
-            <button type="submit" class="btn btn-success">Mark All Transactions</button>
+            <button type="button" class="btn btn-success" onclick="showConfirmModal('Mark all {{ total }} transaction(s) as reviewed?', function(){
+                document.getElementById('mark-all-form').submit();
+            }, {variant: 'primary'})">Mark All Transactions</button>
         </form>
         {% endif %}
     </div>
@@ -107,11 +108,12 @@
 {% if grouped_short %}
 <h2 style="margin-top:1.5rem;margin-bottom:0.5rem">Short Transactions</h2>
 <div style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;">
-    <form method="post" action="{{ url_for('review.mark_all_short') }}"
-          onsubmit="return confirm('Mark all {{ total_short }} short transaction(s) as reviewed?')">
+    <form method="post" action="{{ url_for('review.mark_all_short') }}" id="mark-all-short-form" onsubmit="return false">
         {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}">{% endif %}
         {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}">{% endif %}
-        <button type="submit" class="btn btn-success btn-sm">Mark All Short Reviewed</button>
+        <button type="button" class="btn btn-success btn-sm" onclick="showConfirmModal('Mark all {{ total_short }} short transaction(s) as reviewed?', function(){
+            document.getElementById('mark-all-short-form').submit();
+        }, {variant: 'primary'})">Mark All Short Reviewed</button>
     </form>
 </div>
 {% for bank_name, data in grouped_short.items() %}
@@ -166,11 +168,12 @@
 {% if grouped_contracts %}
 <h2 style="margin-top:1.5rem;margin-bottom:0.5rem">Term Sheets (Contracts)</h2>
 <div style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;">
-    <form method="post" action="{{ url_for('review.mark_all_contracts') }}"
-          onsubmit="return confirm('Mark all {{ total_contracts }} contract(s) as reviewed?')">
+    <form method="post" action="{{ url_for('review.mark_all_contracts') }}" id="mark-all-contracts-form" onsubmit="return false">
         {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}">{% endif %}
         {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}">{% endif %}
-        <button type="submit" class="btn btn-success btn-sm">Mark All Contracts Reviewed</button>
+        <button type="button" class="btn btn-success btn-sm" onclick="showConfirmModal('Mark all {{ total_contracts }} contract(s) as reviewed?', function(){
+            document.getElementById('mark-all-contracts-form').submit();
+        }, {variant: 'primary'})">Mark All Contracts Reviewed</button>
     </form>
 </div>
 {% for bank_name, data in grouped_contracts.items() %}
