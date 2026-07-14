@@ -33,18 +33,22 @@
             <td class="text-center">{{ file.size_kb }}</td>
             <td class="text-center">{{ file.modified }}</td>
             <td class="text-center">
-                <form method="post" action="{{ url_for('upload.inspect_delete', filename=file.name) }}" style="margin:0">
-                    <button type="submit" class="btn btn-outline btn-sm"
-                            onclick="return confirm('Delete ' + {{ file.name|tojson }} + '?');">Delete</button>
+                <form method="post" id="inspect-delete-form-{{ loop.index }}" action="{{ url_for('upload.inspect_delete', filename=file.name) }}" style="margin:0">
+                    <button type="button" class="btn btn-outline btn-sm"
+                            onclick="showConfirmModal('Delete ' + {{ file.name|tojson }} + '?', function(){
+                                document.getElementById('inspect-delete-form-{{ loop.index }}').submit();
+                            })">Delete</button>
                 </form>
             </td>
         </tr>
         {% endfor %}
         </tbody>
     </table>
-    <form method="post" action="{{ url_for('upload.inspect_clear') }}" style="margin-top:1rem">
-        <input type="submit" value="Clear all" class="btn btn-outline"
-               onclick="return confirm('Delete all uploaded files?');">
+    <form method="post" action="{{ url_for('upload.inspect_clear') }}" style="margin-top:1rem" id="inspect-clear-form">
+        <input type="button" value="Clear all" class="btn btn-outline"
+               onclick="showConfirmModal('Delete all uploaded files?', function(){
+                   document.getElementById('inspect-clear-form').submit();
+               })">
     </form>
     {% else %}
     <p style="color:var(--text-muted)">No files uploaded yet.</p>
