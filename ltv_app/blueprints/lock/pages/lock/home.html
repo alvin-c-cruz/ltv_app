@@ -102,11 +102,13 @@
                     {% elif row.source == 'contract' %}
                     <a href="{{ url_for('term_sheet.edit', contract_ref=row.ref_num) }}" class="btn btn-outline btn-sm">Edit</a>
                     {% endif %}
-                    <form method="post"
+                    <form method="post" id="lock-form-{{ row.source }}-{{ row.ref_num }}"
                           action="{{ url_for('lock.lock_txn', source=row.source, ref_num=row.ref_num) }}"
                           style="display:inline">
-                        <button type="submit" class="btn btn-danger btn-sm"
-                                onclick="return confirm('Lock this transaction?')">Lock</button>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirmModal('Lock this transaction?', function(){
+                                    document.getElementById('lock-form-{{ row.source }}-{{ row.ref_num }}').submit();
+                                }, {variant: 'primary'})">Lock</button>
                     </form>
                 </td>
             </tr>
@@ -166,32 +168,30 @@ function lockSelected() {
     }
 
     const count = checkboxes.length;
-    if (!confirm('Lock ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?')) {
-        return;
-    }
-
-    // Build array of transactions to lock
-    const transactions = [];
-    checkboxes.forEach(function(cb) {
-        transactions.push({
-            source: cb.dataset.source,
-            ref_num: cb.dataset.ref
+    showConfirmModal('Lock ' + count + ' selected transaction' + (count > 1 ? 's' : '') + '?', function () {
+        // Build array of transactions to lock
+        const transactions = [];
+        checkboxes.forEach(function(cb) {
+            transactions.push({
+                source: cb.dataset.source,
+                ref_num: cb.dataset.ref
+            });
         });
-    });
 
-    // Create form and submit
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ url_for("lock.lock_multiple") }}';
+        // Create form and submit
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("lock.lock_multiple") }}';
 
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'transactions';
-    input.value = JSON.stringify(transactions);
-    form.appendChild(input);
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'transactions';
+        input.value = JSON.stringify(transactions);
+        form.appendChild(input);
 
-    document.body.appendChild(form);
-    form.submit();
+        document.body.appendChild(form);
+        form.submit();
+    }, {variant: 'primary'});
 }
 </script>
 
