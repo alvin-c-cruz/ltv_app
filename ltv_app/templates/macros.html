@@ -93,15 +93,16 @@
 
 {# Danger button with confirmation #}
 {% macro btn_danger(text, url, confirm_message) %}
-<a href="{{ url }}" class="btn btn-danger btn-sm"
-   onclick="return confirm('{{ confirm_message }}')">{{ text }}</a>
+<button type="button" class="btn btn-danger btn-sm"
+        onclick="showConfirmModal('{{ confirm_message }}', function(){ window.location.href = '{{ url }}'; })">{{ text }}</button>
 {% endmacro %}
 
 {# Delete button form (POST request) #}
 {% macro btn_delete(url, confirm_message='Are you sure you want to delete this item?', text='Delete') %}
-<form method="post" action="{{ url }}" style="display:inline">
-    <button type="submit" class="btn btn-danger btn-sm"
-            onclick="return confirm('{{ confirm_message }}')">{{ text }}</button>
+{% set form_id = 'btn-delete-' ~ (url | replace('/', '-') | replace('?', '-') | replace('=', '-') | replace('&', '-')) %}
+<form method="post" action="{{ url }}" style="display:inline" id="{{ form_id }}">
+    <button type="button" class="btn btn-danger btn-sm"
+            onclick="showConfirmModal('{{ confirm_message }}', function(){ document.getElementById('{{ form_id }}').submit(); })">{{ text }}</button>
 </form>
 {% endmacro %}
 
