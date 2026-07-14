@@ -166,7 +166,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="bank_doc">Bank Reference No.</label>
+                <label for="bank_doc"{% if not ts.bank_doc %} class="text-danger"{% endif %}>Bank Reference No.{% if not ts.bank_doc %} (missing){% endif %}</label>
                 <input type="text" name="bank_doc" id="bank_doc" value="{{ ts.bank_doc }}" autocomplete="off">
             </div>
         </div>

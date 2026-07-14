@@ -67,7 +67,7 @@
             <tr>
                 <th>Account</th><th>Stock</th><th class="text-right">Shares</th><th class="text-right">Spot</th>
                 <th class="text-right">Strike</th><th class="text-right">KO</th>
-                <th>Tenor</th><th>GTD</th><th class="text-center">Action</th>
+                <th>Tenor</th><th>GTD</th><th>Bank Ref</th><th class="text-center">Action</th>
             </tr>
         </thead>
         <tbody>
@@ -81,6 +81,7 @@
             <td class="text-right">{{ ts.ko }}</td>
             <td>{{ ts.tenor }}</td>
             <td>{{ ts.gtd }}</td>
+            <td>{% if ts.bank_doc %}{{ ts.bank_doc }}{% else %}<span class="text-danger">missing</span>{% endif %}</td>
             <td class="text-center" style="white-space:nowrap;">
                 {% if ts.locked %}
                     {# Locked: View for all, Unlock for admin only #}
@@ -125,7 +126,7 @@
             <tr>
                 <th>Account</th><th>Stock</th><th class="text-right">Shares</th><th class="text-right">Spot</th>
                 <th class="text-right">Strike</th><th class="text-right">KO</th>
-                <th>Tenor</th><th>GTD</th><th class="text-center">Action</th>
+                <th>Tenor</th><th>GTD</th><th>Bank Ref</th><th class="text-center">Action</th>
             </tr>
         </thead>
         <tbody>
@@ -139,6 +140,7 @@
             <td class="text-right">{{ ts.ko }}</td>
             <td>{{ ts.tenor }}</td>
             <td>{{ ts.gtd }}</td>
+            <td>{% if ts.bank_doc %}{{ ts.bank_doc }}{% else %}<span class="text-danger">missing</span>{% endif %}</td>
             <td class="text-center" style="white-space:nowrap;">
                 {% if ts.locked %}
                     {# Locked: View for all, Unlock for admin only #}

@@ -56,7 +56,7 @@
             <td class="text-center" title="{{ accu.remaining[1] }}">{{ accu.remaining[0] }}</td>
             <td class="text-center" title="{{ accu.total[1] }}">{{ accu.total[0] }}</td>
             <td class="text-center">{{ accu.next_date }}</td>
-            <td>{{ accu.bank_doc }}</td>
+            <td>{% if accu.bank_doc %}{{ accu.bank_doc }}{% else %}<span class="text-danger">missing</span>{% endif %}</td>
             <td>{{ accu.reference }}</td>
         </tr>
         {% endfor %}
@@ -96,7 +96,7 @@
             <td class="text-center" title="{{ decu.remaining[1] }}">{{ decu.remaining[0] }}</td>
             <td class="text-center" title="{{ decu.total[1] }}">{{ decu.total[0] }}</td>
             <td class="text-center">{{ decu.next_date }}</td>
-            <td>{{ decu.bank_doc }}</td>
+            <td>{% if decu.bank_doc %}{{ decu.bank_doc }}{% else %}<span class="text-danger">missing</span>{% endif %}</td>
             <td>{{ decu.reference }}</td>
         </tr>
         {% endfor %}

@@ -207,6 +207,7 @@ class TransactionSummary:
               " c.tenor, " \
               " c.gtd, " \
               " c.locked, " \
+              " c.bank_doc, " \
               " tbl_currency.ccy_id " \
               "FROM tbl_stock_contract as c " \
               "INNER JOIN tbl_bank_account as a ON a.ref_num = c.bank_ref " \
@@ -239,6 +240,7 @@ class TransactionSummary:
                tenor=row["tenor"],
                gtd=row["gtd"],
                locked=row["locked"],
+               bank_doc=row["bank_doc"],
             )
             term_sheets[ccy].append(ts)
 
@@ -260,3 +262,4 @@ class term_sheet:
     tenor: str
     gtd: str
     locked: int = 0
+    bank_doc: str = ""
