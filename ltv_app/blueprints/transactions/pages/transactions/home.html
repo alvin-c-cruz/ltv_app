@@ -36,9 +36,7 @@
     </script>
     <div class="toolbar-actions">
         <a href="{{ url_for('transactions.download_with_gain_loss', trade_date=trade_date) }}" class="btn btn-outline">Trades Done</a>
-        <a href="{{ url_for('transactions.print_with_gain_loss', trade_date=trade_date) }}"
-           onclick="window.open(this.href,'printTrades','width=1200,height=900,scrollbars=yes,resizable=yes'); return false;"
-           class="btn btn-outline">Print Trades Done</a>
+        <button type="button" class="btn btn-outline" onclick="openPrintModal()">Print Trades Done</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('spotModal')">+ Spot</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('shortModal')">+ Short</button>
         <button type="button" class="btn btn-success" onclick="openTxnModal('transferModal')">+ Transfer</button>
@@ -610,6 +608,17 @@
 </div>
 </div>
 
+<div class="modal-overlay" id="printModal">
+<div class="modal" style="max-width:1100px;width:95vw;padding:0;">
+    <div class="modal-header" style="margin:0;padding:16px 20px 12px;border-bottom:2px solid var(--accent);">
+        <span class="modal-title">Trades Done — Print Preview</span>
+        <button class="modal-close" onclick="closeTxnModal('printModal')">&times;</button>
+    </div>
+    <iframe id="print-modal-frame" src="about:blank"
+            style="width:100%;height:80vh;border:none;display:block;"></iframe>
+</div>
+</div>
+
 {# ── EDIT CONTRACT MODAL ──────────────────────────────────────── #}
 <div class="modal-overlay" id="editContractModal">
 <div class="modal" style="max-width:720px;padding:0;">
@@ -822,6 +831,12 @@ document.addEventListener('keydown', function(e){
 document.querySelectorAll('.modal-overlay').forEach(function(m){
     m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('active'); });
 });
+function openPrintModal() {
+    var tradeDate = document.getElementById('trade_date').value;
+    document.getElementById('print-modal-frame').src =
+        '/trades/print_with_gain_loss/' + tradeDate;
+    openTxnModal('printModal');
+}
 
 function wireComputedPrices(spotId, strikeRateId, koRateId, strikePxId, koPxId) {
     var spotEl       = document.getElementById(spotId);
