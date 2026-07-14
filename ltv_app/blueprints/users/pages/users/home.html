@@ -37,9 +37,11 @@
             <td class="text-center" style="white-space:nowrap">
                 <a href="{{ url_for('users.edit', user_id=user.id) }}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{{ url_for('users.change_password', user_id=user.id) }}" class="btn btn-outline btn-sm">Password</a>
-                <a href="{{ url_for('users.delete', user_id=user.id) }}" class="btn btn-sm"
-                   style="background:var(--accent-muted);color:var(--text-primary)"
-                   onclick="return confirm('Delete {{ user.username }}? This cannot be undone.')">Delete</a>
+                <button type="button" class="btn btn-sm"
+                        style="background:var(--accent-muted);color:var(--text-primary)"
+                        onclick="showConfirmModal('Delete {{ user.username }}? This cannot be undone.', function(){
+                            window.location.href = '{{ url_for('users.delete', user_id=user.id) }}';
+                        })">Delete</button>
             </td>
         </tr>
         {% endfor %}
