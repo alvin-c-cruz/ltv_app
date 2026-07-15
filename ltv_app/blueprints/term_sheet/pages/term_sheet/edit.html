@@ -21,11 +21,15 @@
             {% endif %}
             {% if current_user.role == 'superuser' %}
             {% if locked %}
-            <button type="submit" form="form-unlock" class="btn" style="background:#d97706;color:#fff;min-width:80px;"
-                    onclick="return confirm('Unlock this contract?')">Unlock</button>
+            <button type="button" class="btn" style="background:#d97706;color:#fff;min-width:80px;"
+                    onclick="showConfirmModal('Unlock this contract?', function(){
+                        document.getElementById('form-unlock').requestSubmit();
+                    })">Unlock</button>
             {% else %}
-            <button type="submit" form="form-lock" class="btn btn-secondary" style="min-width:80px;"
-                    onclick="return confirm('Lock this contract?')">Lock</button>
+            <button type="button" class="btn btn-secondary" style="min-width:80px;"
+                    onclick="showConfirmModal('Lock this contract?', function(){
+                        document.getElementById('form-lock').requestSubmit();
+                    }, {variant: 'primary'})">Lock</button>
             {% endif %}
             {% endif %}
         </div>
@@ -260,10 +264,12 @@
                         </td>
                         <td style="padding: 0.18rem 0.3rem; text-align: center;">
                             {% if not locked %}
-                            <a href="{{ url_for('term_sheet.delete_period', contract_ref=contract_ref, period_ref=sched.ref_num) }}"
-                               class="btn btn-danger"
-                               style="font-size: 0.7rem; padding: 0.15rem 0.45rem;"
-                               onclick="return confirm('Delete this period?')">Del</a>
+                            <button type="button"
+                                    class="btn btn-danger"
+                                    style="font-size: 0.7rem; padding: 0.15rem 0.45rem;"
+                                    onclick="showConfirmModal('Delete this period?', function(){
+                                        window.location.href = '{{ url_for('term_sheet.delete_period', contract_ref=contract_ref, period_ref=sched.ref_num) }}';
+                                    })">Del</button>
                             {% endif %}
                         </td>
                     </tr>
@@ -341,11 +347,15 @@
         {% endif %}
         {% if current_user.role == 'superuser' %}
         {% if locked %}
-        <button type="submit" form="form-unlock" class="btn" style="background:#d97706;color:#fff;min-width:80px;"
-                onclick="return confirm('Unlock this contract?')">Unlock</button>
+        <button type="button" class="btn" style="background:#d97706;color:#fff;min-width:80px;"
+                onclick="showConfirmModal('Unlock this contract?', function(){
+                    document.getElementById('form-unlock').requestSubmit();
+                })">Unlock</button>
         {% else %}
-        <button type="submit" form="form-lock" class="btn btn-secondary" style="min-width:80px;"
-                onclick="return confirm('Lock this contract?')">Lock</button>
+        <button type="button" class="btn btn-secondary" style="min-width:80px;"
+                onclick="showConfirmModal('Lock this contract?', function(){
+                    document.getElementById('form-lock').requestSubmit();
+                }, {variant: 'primary'})">Lock</button>
         {% endif %}
         {% endif %}
     </div>

@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle clicking "Set Inactive"
     setInactiveOption.addEventListener('click', function() {
         if (currentContractRef) {
-            if (confirm('Are you sure you want to set this contract to inactive?')) {
+            showConfirmModal('Are you sure you want to set this contract to inactive?', function () {
                 fetch(`{{ url_for('term_sheet.home', bank_id='') }}/../${currentContractRef}/set-inactive`, {
                     method: 'POST',
                     headers: {
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(error => {
                     alert('An error occurred: ' + error);
                 });
-            }
+            }, {variant: 'primary'});
         }
         contextMenu.style.display = 'none';
     });
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle clicking "Set Active (undo KO)"
     setActiveOption.addEventListener('click', function() {
         if (currentSetActiveUrl) {
-            if (confirm('Undo the KO on this contract? It will become active again and will resume appearing in fixings, HKD margin, block/unblock and DECU positions.')) {
+            showConfirmModal('Undo the KO on this contract? It will become active again and will resume appearing in fixings, HKD margin, block/unblock and DECU positions.', function () {
                 fetch(currentSetActiveUrl, {
                     method: 'POST',
                     headers: {
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(error => {
                     alert('An error occurred: ' + error);
                 });
-            }
+            }, {variant: 'primary'});
         }
         contextMenu.style.display = 'none';
     });
