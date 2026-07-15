@@ -43,7 +43,9 @@
       <td>{{ dividend.status }}</td>
       <td>
         <a href="{{ url_for('dividends.edit', ref_num=dividend.ref_num) }}" class="btn btn-success">Edit</a>
-        <a href="{{ url_for('dividends.delete', ref_num=dividend.ref_num) }}" class="btn btn-danger"  onclick="return confirmation_message()">Delete</a>
+        <button type="button" class="btn btn-danger" onclick="showConfirmModal('Delete this dividend?', function(){
+            window.location.href = '{{ url_for('dividends.delete', ref_num=dividend.ref_num) }}';
+        }, {requireTyped: 'YES'})">Delete</button>
       </td>
     </tr>
     {% endfor %}

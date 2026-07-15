@@ -43,11 +43,6 @@ document.addEventListener('click', function (e) {
     }
 });
 
-/* ── Confirmation dialog ──────────────────────────────────────── */
-function confirmation_message() {
-    return prompt("Type YES to proceed.", "") === 'YES';
-}
-
 /* ── Shared confirm modal (replaces native confirm()) ───────────── */
 function showConfirmModal(message, onConfirm, options) {
     options = options || {};
