@@ -95,8 +95,10 @@
                 {% else %}
                     {# Unlocked: Edit and Delete #}
                     <button type="button" class="btn btn-outline btn-sm" onclick="openEditContractModal({{ ts.id }})">Edit</button>
-                    <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this contract?')">Delete</a>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            onclick="showConfirmModal('Delete this contract?', function(){
+                                window.location.href = '{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}';
+                            })">Delete</button>
                 {% endif %}
             </td>
         </tr>
@@ -155,8 +157,10 @@
                 {% else %}
                     {# Unlocked: Edit and Delete #}
                     <button type="button" class="btn btn-outline btn-sm" onclick="openEditContractModal({{ ts.id }})">Edit</button>
-                    <a href="{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this contract?')">Delete</a>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            onclick="showConfirmModal('Delete this contract?', function(){
+                                window.location.href = '{{ url_for('term_sheet.delete_contract', contract_ref=ts.id) }}';
+                            })">Delete</button>
                 {% endif %}
             </td>
         </tr>
@@ -201,23 +205,31 @@
                         {% endif %}
                         {% if current_user.role == 'superuser' %}
                         {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
-                        <a href="{{ url_for('transactions.unlock_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm"
-                           onclick="return confirm('Unlock this transaction?')">Unlock</a>
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="showConfirmModal('Unlock this transaction?', function(){
+                                    window.location.href = '{{ url_for('transactions.unlock_short', ref_num=row['ref_num']) }}';
+                                })">Unlock</button>
                         {% else %}
-                        <a href="{{ url_for('transactions.unlock', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm"
-                           onclick="return confirm('Unlock this transaction?')">Unlock</a>
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="showConfirmModal('Unlock this transaction?', function(){
+                                    window.location.href = '{{ url_for('transactions.unlock', ref_num=row['ref_num']) }}';
+                                })">Unlock</button>
                         {% endif %}
                         {% endif %}
                     {% else %}
                         {# Unlocked: Edit and Delete #}
                         {% if transaction_type in ('Buy (Pay Short)', 'Sell (Short)') %}
                         <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                        <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                           onclick="return confirm('Delete this transaction?')">Delete</a>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirmModal('Delete this transaction?', function(){
+                                    window.location.href = '{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}';
+                                })">Delete</button>
                         {% else %}
                         <a href="{{ url_for('transactions.edit', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                        <a href="{{ url_for('transactions.delete', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                           onclick="return confirm('Delete this transaction?')">Delete</a>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                onclick="showConfirmModal('Delete this transaction?', function(){
+                                    window.location.href = '{{ url_for('transactions.delete', ref_num=row['ref_num']) }}';
+                                })">Delete</button>
                         {% endif %}
                     {% endif %}
                 </td>
@@ -261,13 +273,17 @@
                     <span style="font-size:0.75rem;color:var(--text-muted)">&#128274; Locked</span>
                     {% if current_user.role == 'superuser' %}
                     <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            onclick="showConfirmModal('Delete this transaction?', function(){
+                                window.location.href = '{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}';
+                            })">Delete</button>
                     {% endif %}
                     {% else %}
                     <a href="{{ url_for('transactions.edit_short', ref_num=row['ref_num']) }}" class="btn btn-outline btn-sm">Edit</a>
-                    <a href="{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}" class="btn btn-danger btn-sm"
-                       onclick="return confirm('Delete this transaction?')">Delete</a>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            onclick="showConfirmModal('Delete this transaction?', function(){
+                                window.location.href = '{{ url_for('transactions.delete_short', ref_num=row['ref_num']) }}';
+                            })">Delete</button>
                     {% endif %}
                 </td>
             </tr>
