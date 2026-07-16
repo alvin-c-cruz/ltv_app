@@ -17,6 +17,7 @@
 # localhost/ has its own separate git repo/history and stays ignored here.
 !/ltv_app/
 !/migrations/
+!/scripts/
 
 # Keep Claude Code skills only (not worktrees, venvs, or local settings)
 !/.claude/
