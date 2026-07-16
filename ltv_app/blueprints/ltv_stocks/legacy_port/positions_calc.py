@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from ltv_app.blueprints.transactions.extensions.trades_done_average import get_transactions
 
@@ -38,29 +38,51 @@ def _format_price(price):
 
 
 def _transactions_narrative(db, bank_ref, code_ref, report_date, balance):
-    """Port of get_ranged_transactions: the report-date trade narrative for one (bank, code)."""
+    """Current-week trade narrative for one (bank, code): every trade from the
+    calendar Monday of report_date's own week through report_date, grouped by day.
+
+    Enhancement over the legacy get_ranged_transactions and the original port, both
+    of which showed only report_date's trades (`WHERE trade_date == report_date`).
+    The window starts at the *calendar* Monday of report_date's week -- deliberately
+    NOT position_start_date(), which walks back a working day first and so returns
+    the *prior* week's Monday when report_date is itself a Monday (that would wrongly
+    fold the previous week into a Monday report). When the week's only trades fall on
+    report_date, output is identical to the old single-date narrative.
+
+    Format: the first trade is `(m/d) Type qty @ price`; every later trade is
+    prefixed with `+ ` / `- ` (add- vs subtract-type) and, when the trade day
+    changes, its own `(m/d)` comes right after that sign -- e.g.
+    `(7/6) Buy (Spot) 5,000 @ 112.20 - (7/8) Sell 2,000 @ 118.00 + (7/10) Buy (Spot)
+    5,000 @ 112.20  = 70,960`."""
+    week_monday = report_date - timedelta(days=report_date.isoweekday() - 1)
     rows = db.execute(
-        "SELECT t.transaction_type, t.quantity, t.price "
+        "SELECT t.trade_date, t.transaction_type, t.quantity, t.price "
         "FROM tbl_transaction t "
         "INNER JOIN tbl_transaction_type tt ON tt.transaction_type = t.transaction_type "
-        "WHERE t.bank_ref = ? AND t.code_ref = ? AND t.trade_date = ? "
-        "ORDER BY tt.priority, t.ref_num",
-        (bank_ref, code_ref, report_date.isoformat())
+        "WHERE t.bank_ref = ? AND t.code_ref = ? "
+        "AND t.trade_date >= ? AND t.trade_date <= ? "
+        "ORDER BY t.trade_date, tt.priority, t.ref_num",
+        (bank_ref, code_ref, week_monday.isoformat(), report_date.isoformat())
     ).fetchall()
     if not rows:
         return ''
 
-    entry = f"({report_date.month}/{report_date.day}) "
+    entry = ""
+    current_day = None
     for i, r in enumerate(rows):
+        day = str(r['trade_date'])[:10]
         ttype = r['transaction_type']
         qty_str = "{:,.0f}".format(abs(r['quantity']))
         price_str = _format_price(r['price'])
-        if i == 0:
-            entry += f"{ttype} {qty_str} @ {price_str} "
+        sign = "" if i == 0 else ("+ " if ttype in _ADD_TYPES else "- ")
+        if day != current_day:
+            d = date.fromisoformat(day)
+            date_part = f"({d.month}/{d.day}) "
+            current_day = day
         else:
-            sign = "+ " if ttype in _ADD_TYPES else "- "
-            entry += f"{sign}{ttype} {qty_str} @ {price_str} "
-    entry += " = " + "{:,.0f}".format(balance)
+            date_part = ""
+        entry += f"{sign}{date_part}{ttype} {qty_str} @ {price_str} "
+    entry = entry.rstrip() + " = " + "{:,.0f}".format(balance)
     return entry
 
 
