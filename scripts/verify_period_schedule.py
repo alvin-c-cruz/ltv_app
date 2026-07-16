@@ -16,7 +16,11 @@ from ltv_app import create_app
 from ltv_app.blueprints.database.views import get_db
 from ltv_app.blueprints.term_sheet.models import CreateSchedules
 
-GOLDEN = [1449, 1444, 1441]
+# ref -> pinned period count. The count is hardcoded (not just read from the DB)
+# so that a *corrupted golden* — e.g. someone regenerating a contract's stored
+# schedule with buggy code, dropping it to 25 — can't silently make actual==expected
+# and false-pass. All current goldens are 12m bi-weekly/bi-monthly => 26 periods.
+GOLDEN = {1449: 26, 1444: 26, 1441: 26}
 SRC = os.path.join(SERVER, "instance", "LTV Stocks.db")
 
 
@@ -49,7 +53,7 @@ def _open(path):
 
 def main():
     failures = 0
-    for ref in GOLDEN:
+    for ref, pinned_count in GOLDEN.items():
         ctx0, db0 = _open(SRC)
         ts = _contract(db0, ref)
         expected = _periods(db0, ref) if ts else []
@@ -57,6 +61,14 @@ def main():
         ctx0.pop()
         if not ts or not expected:
             print(f"  #{ref}: SKIP (contract or stored schedule not found)")
+            failures += 1
+            continue
+        # Guard the golden itself: if the stored schedule no longer has its pinned
+        # count, the golden is corrupted and any actual==expected match below would
+        # be meaningless. Fail loudly instead of trusting a moved goalpost.
+        if len(expected) != pinned_count:
+            print(f"  #{ref}: FAIL  stored golden has {len(expected)} periods, "
+                  f"pinned at {pinned_count} — golden may be corrupted, not a code result")
             failures += 1
             continue
 

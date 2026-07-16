@@ -93,6 +93,28 @@ Single file: **`ltv_app/blueprints/term_sheet/models.py`**, class `CreateSchedul
   A missing HK holiday would make a generated end differ from the bank's by a day. The
   regression harness catches this for the three known contracts; a broader holiday-data
   audit is out of scope here.
-- `N = round(tenor_days / step)` should be validated for non-12m tenors and month-end
-  start dates during implementation (add those as harness cases if any such contract
-  exists).
+- **Period-count numerator — known deviation from the formula above (accepted 2026-07-16).**
+  The spec formula is `N = round(tenor_days / step)` with `tenor_days = (start_date + tenor
+  months) − start_date`. The implementation (`CreateSchedules.__init__`) instead computes
+  `N = max(1, round((maturity − start_date).days / step))`, where `maturity` is the
+  contract's existing `self.end_date` — i.e. `check_date(trade_date + tenor months)`, anchored
+  on the **trade date** and **rolled forward** off weekends/holidays, not on `start_date`
+  un-rolled. This reuses the app's single existing notion of maturity rather than introducing a
+  second one. For every current contract (all 12-month) both numerators yield **26**, verified
+  zero-diff against #1449/#1444/#1441 and end-to-end via the UI "Refresh Periods" action.
+  - **Latent risk (forward-looking only — no such contract exists today):** because Python's
+    `round()` is banker's rounding, a value sitting near an `x.5` boundary — reachable via a
+    maturity that rolls a few days across a holiday run, or a **non-12m tenor / month-end start /
+    weekly (step=7)** contract — could tip `N` off by one, reintroducing the one-period-short/long
+    class of bug for a shape no golden covers. Weekly (`step = 7`) is likewise unvalidated (no
+    weekly golden exists).
+  - **Mitigations in place:** the harness now pins each golden's period count to a hardcoded 26
+    (a corrupted golden can't false-pass); the fix is forward-only, on-demand, and the regenerated
+    schedule is visible in the UI per contract. **Action for the first non-12m / month-end / weekly
+    contract that ever occurs:** spot-check its regenerated schedule against the bank termsheet and,
+    if correct, add it as a golden (extend `GOLDEN` in `scripts/verify_period_schedule.py`); if the
+    count is off by one, revisit the numerator then, with a real example to disambiguate.
+- **Stale doc pointer:** the comment in `CreateSchedules.__next_end_date` referencing
+  `tests/unit/test_term_sheet_schedule.py` is left as-is; that path was pruned from this copy and
+  the live test is now `scripts/verify_period_schedule.py`. Cosmetic; update if that comment is
+  ever touched.
