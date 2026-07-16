@@ -165,21 +165,32 @@ def _average(db, bank_id, code, as_of_date):
 
     beginning = None   # last row with basis < 1st-of-month
     footer = None      # last processed current-window row (basis >= 1st-of-month)
+    last_nonzero = None  # most recent (bal, cost) with bal != 0, as of each candidate row
     for r, (bal, cost) in zip(rows, eng):
+        if bal:
+            last_nonzero = (bal, cost)
         basis_val = str(r[basis])[:10]
         if basis_val < date_from:
-            beginning = (bal, cost)
+            beginning = (bal, cost, last_nonzero)
         else:
             if basis == 'value_date' and str(r['value_date'])[:7] > to_month:
                 break
-            footer = (bal, cost)
+            footer = (bal, cost, last_nonzero)
 
     sel = footer if footer is not None else beginning
     if sel is None:
         return 0
-    bal, cost = sel
+    bal, cost, last_nz = sel
     if bal:
         return f"={cost}/{bal}"
+    # BUG FIX: a position that sold/transferred out to exactly zero has no
+    # meaningful cost/balance ratio (0/0) -- showing a bare 0 there reads as "no
+    # cost basis" rather than "fully closed out". Show the last average on record
+    # (the cost/balance ratio from the last row where balance was still nonzero)
+    # instead, so the figure still reflects what the position was carried at.
+    if last_nz:
+        lbal, lcost = last_nz
+        return f"={lcost}/{lbal}"
     return 0
 
 
