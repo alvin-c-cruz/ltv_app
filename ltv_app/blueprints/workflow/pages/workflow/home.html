@@ -706,18 +706,18 @@ function switchWorkflowTab(tabName) {
 let _confirmCallback = null;
 
 function showConfirm(message, onConfirm) {
-    document.getElementById('confirmMessage').textContent = message;
+    document.getElementById('wfConfirmMessage').textContent = message;
     _confirmCallback = onConfirm;
-    document.getElementById('confirmModal').classList.add('active');
+    document.getElementById('wfConfirmModal').classList.add('active');
 }
 
 function confirmOk() {
-    document.getElementById('confirmModal').classList.remove('active');
+    document.getElementById('wfConfirmModal').classList.remove('active');
     if (_confirmCallback) { _confirmCallback(); _confirmCallback = null; }
 }
 
 function confirmCancel() {
-    document.getElementById('confirmModal').classList.remove('active');
+    document.getElementById('wfConfirmModal').classList.remove('active');
     _confirmCallback = null;
 }
 
@@ -1581,14 +1581,14 @@ function updateFwAmount() {
 </div>
 
 {# ── Shared Confirmation Modal ───────────────────────────────────────── #}
-<div class="modal-overlay" id="confirmModal" onclick="if(event.target===this)confirmCancel()">
+<div class="modal-overlay" id="wfConfirmModal" onclick="if(event.target===this)confirmCancel()">
     <div class="modal" style="max-width:400px;">
         <div class="modal-header">
             <span class="modal-title">Confirm</span>
             <button type="button" class="modal-close" onclick="confirmCancel()">&times;</button>
         </div>
         <div style="padding:1.5rem;">
-            <p id="confirmMessage" style="margin:0 0 1.5rem; font-size:1rem;"></p>
+            <p id="wfConfirmMessage" style="margin:0 0 1.5rem; font-size:1rem;"></p>
             <div class="form-actions">
                 <button type="button" class="btn btn-danger" onclick="confirmOk()">Confirm</button>
                 <button type="button" class="btn btn-outline" onclick="confirmCancel()">Cancel</button>
