@@ -306,29 +306,43 @@ class CreateSchedules:
         elif self.frequency == "weekly":
             self.gtd *= 4
 
-        start_date = self.start_date
-        end_date = self.trade_date
-        i = 0
-        while end_date < self.end_date:
-            i += 1
-            end_date = self.__next_end_date(end_date, i)
-
-            if end_date < self.end_date or self.frequency == "monthly":
+        if self.frequency == "monthly":
+            # UNCHANGED behaviour: month-anchored while-loop. Saves each period
+            # including the final one (the old `or self.frequency == "monthly"`
+            # guard was always true here).
+            start_date = self.start_date
+            end_date = self.trade_date
+            i = 0
+            while end_date < self.end_date:
+                i += 1
+                end_date = self.__next_end_date(end_date, i)
                 end_date_on_record = self.check_date(end_date)
-
                 days = Counter(self.db, start_date, end_date, self.code_ref).count
-
-                sched = FixingSchedule(
-                    db=db,
-                    contract_ref=contract_ref,
-                    start_date=start_date,
-                    end_date=end_date,
-                    days=days,
-                    gtd="Yes" if i <= self.gtd else "No"
-                    )
-                sched.save()
-
+                FixingSchedule(
+                    db=self.db, contract_ref=contract_ref, start_date=start_date,
+                    end_date=end_date, days=days,
+                    gtd="Yes" if i <= self.gtd else "No",
+                ).save()
                 start_date = self.__next_start_date(end_date_on_record)
+        else:
+            # bi-weekly / bi-monthly / weekly: fixed grid anchored at start_date,
+            # each end rolled forward independently (no cascade), N periods to
+            # span the tenor including the final period.
+            step = 7 if self.frequency == "weekly" else 14
+            anchor = datetime.strptime(str(self.start_date)[:10], "%Y-%m-%d")
+            maturity = datetime.strptime(str(self.end_date)[:10], "%Y-%m-%d")
+            num_periods = max(1, round((maturity - anchor).days / step))
+            start_date = self.start_date
+            for i in range(1, num_periods + 1):
+                grid_end = str((anchor + timedelta(days=step * i - 1)).date())
+                end_date = self.check_date(grid_end)
+                days = Counter(self.db, start_date, end_date, self.code_ref).count
+                FixingSchedule(
+                    db=self.db, contract_ref=contract_ref, start_date=start_date,
+                    end_date=end_date, days=days,
+                    gtd="Yes" if i <= self.gtd else "No",
+                ).save()
+                start_date = self.__next_start_date(end_date)
 
     def __end_date(self):
         year = int(self.trade_date[:4])
@@ -347,37 +361,27 @@ class CreateSchedules:
         return end_day, end_date
 
     def __next_end_date(self, previous_end_date, i):
-        year = int(previous_end_date[:4])
-        month = int(previous_end_date[5:7])
+        # monthly only — bi-weekly/weekly is generated inline in __init__ from a
+        # fixed start_date grid.
+        # Anchor the period-end on the trade month + i, NOT on the previous
+        # end date. Deriving the month from previous_end_date skips a whole
+        # month whenever an earlier end was pushed forward across a month
+        # boundary by check_date (e.g. Feb 29->28 on a Sunday -> Mar 1),
+        # producing a single ~40-day period. End-of-month trades hit this
+        # routinely. See tests/unit/test_term_sheet_schedule.py.
+        trade_year = int(self.trade_date[:4])
+        trade_month = int(self.trade_date[5:7])
+        total = (trade_month - 1) + i
+        end_year = trade_year + total // 12
+        end_month = total % 12 + 1
 
-        if self.frequency == "monthly":
-            # Anchor the period-end on the trade month + i, NOT on the previous
-            # end date. Deriving the month from previous_end_date skips a whole
-            # month whenever an earlier end was pushed forward across a month
-            # boundary by check_date (e.g. Feb 29->28 on a Sunday -> Mar 1),
-            # producing a single ~40-day period. End-of-month trades hit this
-            # routinely. See tests/unit/test_term_sheet_schedule.py.
-            trade_year = int(self.trade_date[:4])
-            trade_month = int(self.trade_date[5:7])
-            total = (trade_month - 1) + i
-            end_year = trade_year + total // 12
-            end_month = total % 12 + 1
-
-            end_date = None
-            day = self.end_day
-            while end_date is None:
-                try:
-                    end_date = str(date(end_year, end_month, day))
-                except ValueError:
-                    day -= 1
-
-        elif self.frequency in ("bi-weekly", "bi-monthly"):
-            day = int(previous_end_date[-2:])
-            end_date = str(date(year, month, day) + timedelta(days=14))
-
-        elif self.frequency == "weekly":
-            day = int(previous_end_date[-2:])
-            end_date = str(date(year, month, day) + timedelta(days=7))
+        end_date = None
+        day = self.end_day
+        while end_date is None:
+            try:
+                end_date = str(date(end_year, end_month, day))
+            except ValueError:
+                day -= 1
 
         return self.check_date(end_date)
 
