@@ -64,15 +64,18 @@ def main():
         shutil.copy(SRC, tmp)
         try:
             ctx, db = _open(tmp)
-            db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?", (ref,))
-            db.commit()
-            CreateSchedules(ts, db)
-            actual = _periods(db, ref)
-            # get_db() never registers a teardown_appcontext/close_db, so g.db
-            # would otherwise stay open; close explicitly or os.unlink(tmp)
-            # below fails with WinError 32 (file still locked) on Windows.
-            db.close()
-            ctx.pop()
+            try:
+                db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?", (ref,))
+                db.commit()
+                CreateSchedules(ts, db)
+                actual = _periods(db, ref)
+            finally:
+                # get_db() never registers a teardown_appcontext/close_db, so
+                # g.db would otherwise stay open; close explicitly (even if
+                # the body above raised) or os.unlink(tmp) below fails with
+                # WinError 32 (file still locked) on Windows.
+                db.close()
+                ctx.pop()
         finally:
             os.unlink(tmp)
 
