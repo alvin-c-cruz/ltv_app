@@ -37,7 +37,7 @@ def _format_price(price):
     return "{:,.{}f}".format(price, decimals)
 
 
-def _transactions_narrative(db, bank_ref, code_ref, report_date, balance):
+def _transactions_narrative(db, bank_ref, code_ref, report_date):
     """Current-week trade narrative for one (bank, code): every trade from the
     calendar Monday of report_date's own week through report_date, grouped by day.
 
@@ -53,12 +53,17 @@ def _transactions_narrative(db, bank_ref, code_ref, report_date, balance):
     prefixed with `+ ` / `- ` (add- vs subtract-type) and, when the trade day
     changes, its own `(m/d)` comes right after that sign -- e.g.
     `(7/6) Buy (Spot) 5,000 @ 112.20 - (7/8) Sell 2,000 @ 118.00 + (7/10) Buy (Spot)
-    5,000 @ 112.20  = 70,960`."""
+    5,000 @ 112.20  = 70,960`. The trailing total is the TRUE ending balance as of
+    report_date (self-computed here, not the caller's beginning-of-week snapshot --
+    that snapshot is the wrong figure to show as the running total after these
+    trades)."""
     week_monday = report_date - timedelta(days=report_date.isoweekday() - 1)
     rows = db.execute(
-        "SELECT t.trade_date, t.transaction_type, t.quantity, t.price "
+        "SELECT t.trade_date, t.transaction_type, t.quantity, t.price, "
+        "ba.bank_name AS counter_name "
         "FROM tbl_transaction t "
         "INNER JOIN tbl_transaction_type tt ON tt.transaction_type = t.transaction_type "
+        "LEFT JOIN tbl_bank_account ba ON ba.ref_num = t.counter_bank_ref "
         "WHERE t.bank_ref = ? AND t.code_ref = ? "
         "AND t.trade_date >= ? AND t.trade_date <= ? "
         "ORDER BY t.trade_date, tt.priority, t.ref_num",
@@ -75,14 +80,26 @@ def _transactions_narrative(db, bank_ref, code_ref, report_date, balance):
         qty_str = "{:,.0f}".format(abs(r['quantity']))
         price_str = _format_price(r['price'])
         sign = "" if i == 0 else ("+ " if ttype in _ADD_TYPES else "- ")
+        # A Transfer-Out names its destination account inline, e.g.
+        # "Transfer-Out (to Sun Hung Kai Account No. 2)", using the counterparty
+        # bank on the transaction (tbl_transaction.counter_bank_ref).
+        type_part = ttype
+        if ttype == 'Transfer-Out' and r['counter_name']:
+            type_part = f"{ttype} (to {r['counter_name']})"
         if day != current_day:
             d = date.fromisoformat(day)
             date_part = f"({d.month}/{d.day}) "
             current_day = day
         else:
             date_part = ""
-        entry += f"{sign}{date_part}{ttype} {qty_str} @ {price_str} "
-    entry = entry.rstrip() + " = " + "{:,.0f}".format(balance)
+        entry += f"{sign}{date_part}{type_part} {qty_str} @ {price_str} "
+
+    ending_balance = db.execute(
+        "SELECT COALESCE(SUM(quantity), 0) FROM tbl_transaction "
+        "WHERE bank_ref = ? AND code_ref = ? AND trade_date <= ?",
+        (bank_ref, code_ref, report_date.isoformat())
+    ).fetchone()[0]
+    entry = entry.rstrip() + " = " + "{:,.0f}".format(ending_balance)
     return entry
 
 
@@ -229,7 +246,7 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
         else:
             blocked_v, unblocked_v = blocked, balance - blocked
 
-        transactions = _transactions_narrative(db, bank_ref, code_ref, report_date, balance)
+        transactions = _transactions_narrative(db, bank_ref, code_ref, report_date)
         # BUG FIX (diverges from legacy): the Ave. Price column is priced as of
         # the REPORT date (its header reads the report date, e.g. "06-Jul"), so
         # the average cost basis is computed as of report_date -- not the

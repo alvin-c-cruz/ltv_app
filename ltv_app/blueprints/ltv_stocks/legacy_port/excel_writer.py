@@ -20,7 +20,7 @@ from openpyxl.styles.borders import Border, Side
 from openpyxl.styles.fills import PatternFill
 
 from .term_sheet_calc import _FREQ_DIV, contract_records
-from .positions_calc import position_records
+from .positions_calc import position_records, _average, _transactions_narrative
 from .working_day import WorkingDay, position_start_date
 from .stock_price import get_stock_price
 
@@ -625,29 +625,55 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
     return r
 
 
-def _inject_accu_only_positions(positions, accu):
+def _inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date):
     """Port of `contract()`'s side-effect on `self.stock_position` (ltv_stocks2.py
-    ~561-563): any ACCU contract whose code has no balance-derived position gets a
-    synthetic zero-share row (`unblocked=0, blocked=0, average=strike`, `average`
-    as a literal number rather than a formula, no `transactions` narrative). DECU
-    contracts get no such synthetic row (legacy sets them to `None`, which
-    `position()` skips entirely). Returns a fresh dict re-sorted by code.
+    ~561-563): any ACCU contract whose code has no balance-derived position (zero
+    net shares as of the report's AS-OF snapshot date) gets a placeholder row
+    (`unblocked=0, blocked=0`). DECU contracts get no such placeholder (legacy sets
+    them to `None`, which `position()` skips entirely).
+
+    BUG FIX (diverges from legacy): the placeholder's `average` used to always be
+    the contract's strike price. But `position_records()` gates solely on the
+    AS-OF-snapshot-date balance (deliberately -- that's what Unblocked/Blocked/Total
+    Shares show); a code that accumulated real shares THIS WEEK (trades landed after
+    the snapshot but on/before report_date) has a real, charge-inclusive cost basis
+    via `_average()` that was being discarded in favor of the strike. Every other
+    position row already prices Ave. Price fresh as of report_date rather than the
+    walked-back AS-OF date (see position_records()'s own comment on this) -- apply
+    that same principle here: use the real average (and attach the week's
+    transactions narrative) whenever one exists; fall back to the strike only when
+    the code truly has no computable average as of report_date either (no trades
+    ever, or still net zero). Returns a fresh dict re-sorted by code.
     """
     positions = dict(positions)
     for rec in accu:
         code = rec['code']
         if code not in positions:
-            positions[code] = {
-                'stock_name': rec['stock_name_plain'],
-                'code': code,
-                'code_ref': rec['code_ref'],
-                'yahoo_ticker': rec['yahoo_ticker'],
-                'balance': 0,
-                'blocked': 0,
-                'unblocked': 0,
-                'average': rec['strike'],
-                'transactions': None,
-            }
+            real_average = _average(db, bank_id, code, report_date)
+            if real_average:
+                positions[code] = {
+                    'stock_name': rec['stock_name_plain'],
+                    'code': code,
+                    'code_ref': rec['code_ref'],
+                    'yahoo_ticker': rec['yahoo_ticker'],
+                    'balance': 0,
+                    'blocked': 0,
+                    'unblocked': 0,
+                    'average': real_average,
+                    'transactions': _transactions_narrative(db, bank_ref, rec['code_ref'], report_date),
+                }
+            else:
+                positions[code] = {
+                    'stock_name': rec['stock_name_plain'],
+                    'code': code,
+                    'code_ref': rec['code_ref'],
+                    'yahoo_ticker': rec['yahoo_ticker'],
+                    'balance': 0,
+                    'blocked': 0,
+                    'unblocked': 0,
+                    'average': rec['strike'],
+                    'transactions': None,
+                }
     return dict(sorted(positions.items()))
 
 
@@ -682,7 +708,7 @@ def build_workbook(db, report_date, bank_ids):
             accu = [r for r in contract_records(db, bank_ref, 'ACCU') if r['ccy_id'] == ccy]
             decu = [r for r in contract_records(db, bank_ref, 'DECU') if r['ccy_id'] == ccy]
             positions = position_records(db, bank_ref, bank_id, ccy, report_date, hkd_wd=hkd_wd)
-            positions = _inject_accu_only_positions(positions, accu)
+            positions = _inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date)
 
             if not (accu or decu or positions):
                 continue
