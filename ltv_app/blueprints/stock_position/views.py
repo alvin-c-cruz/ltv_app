@@ -1,11 +1,11 @@
 from flask import Blueprint, send_file, render_template
 from flask_login import login_required
-import datetime
 import openpyxl
 import os
 import tempfile
 
 from ..database import get_db
+from ...tz import ph_today
 
 bp = Blueprint("stock_position", __name__, template_folder="pages", url_prefix="/stock-position")
 
@@ -32,7 +32,7 @@ def download():
     return send_file(
         excel_file,
         as_attachment=True,
-        download_name=f'stock_balance_{datetime.datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'stock_balance_{ph_today().strftime("%Y%m%d")}.xlsx'
     )
 
 
@@ -99,7 +99,7 @@ def create_excel_report(positions, db):
     wb = openpyxl.load_workbook(template_path)
 
     # Update date in ALL sheet
-    wb["ALL"]["A1"].value = f'As of {datetime.datetime.now().strftime("%B %d, %Y")}'
+    wb["ALL"]["A1"].value = f'As of {ph_today().strftime("%B %d, %Y")}'
 
     # Populate Download sheet with data
     ws_download = wb['Download']

@@ -1,5 +1,3 @@
-import datetime
-
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g
 from flask_login import current_user
 
@@ -7,6 +5,7 @@ from .models import TermSheet, StockContract, FixingSchedule, CreateSchedules, n
 
 from .. database import get_db
 from .. auth import login_required
+from ... tz import ph_today
 
 bp = Blueprint("term_sheet", __name__, template_folder="pages", url_prefix="/term-sheet")
 
@@ -162,7 +161,7 @@ def add():
         return redirect(url_for('transactions.home', trade_date=trade_date))
     else:
         ts = {}
-        trade_date = str(datetime.datetime.now())[:10]
+        trade_date = str(ph_today())
         start_date = next_day(db, trade_date)
 
 

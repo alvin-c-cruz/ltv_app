@@ -1,10 +1,10 @@
 from collections import defaultdict
-from datetime import datetime
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, g
 
 from .. auth import login_required
 from .. database import get_db
+from ... tz import ph_today
 
 bp = Blueprint('charges', __name__, template_folder='pages', url_prefix='/charges')
 
@@ -48,7 +48,7 @@ def home():
     db = get_db()
 
     # Get date range from query params, default to today
-    today = datetime.today().strftime('%Y-%m-%d')
+    today = str(ph_today())
     date_from = request.args.get('date_from') or today
     date_to = request.args.get('date_to') or today
 

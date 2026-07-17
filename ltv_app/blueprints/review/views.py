@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from datetime import datetime
 from .. auth import login_required
 from .. database import get_db
+from ... tz import ph_today
 
 bp = Blueprint('review', __name__, template_folder='pages', url_prefix='/review')
 
@@ -65,7 +66,7 @@ def _fmt_date(s):
 def home():
     db = get_db()
     # Default to today if no date provided
-    today = datetime.today().strftime('%Y-%m-%d')
+    today = str(ph_today())
     date_from = request.args.get('date_from') or today
     date_to = request.args.get('date_to') or today
 

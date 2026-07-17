@@ -6,6 +6,7 @@ from pandas.errors import EmptyDataError
 
 from .. auth import login_required
 from .. database import get_db
+from ... tz import ph_today
 
 from .forms import DateForm
 
@@ -39,7 +40,7 @@ def view():
     if request.method == "POST":
         trade_date = request.form.get("trade_date")
     else:
-        trade_date = datetime.now().strftime("%Y-%m-%d")
+        trade_date = str(ph_today())
 
     # Get last 10 trading days to show last week and this week
     available_dates = db.execute(

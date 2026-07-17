@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, render_template, request, redirect, url_for
 
 from .. database import get_db

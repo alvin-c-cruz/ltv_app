@@ -8,6 +8,7 @@ import os
 
 from .forecast import forecast as futures
 from .stock_price import Stock_Price
+from ...tz import ph_today
 
 class transaction_and_forecast:
   def __init__(self, db = None, code = None, template_path = None, save_path = None, trade_date = None):
@@ -22,7 +23,7 @@ class transaction_and_forecast:
     self.save_path = save_path    # Folder where to save the generated excel file
 
     # trade_date is now() if not explicitly given
-    if trade_date is None: trade_date = str(datetime.now().date()) 
+    if trade_date is None: trade_date = str(ph_today())
     print(f'Reporting date is: {trade_date}')
     self.beginning_date = trade_date[:7] + '-01'
 
