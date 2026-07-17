@@ -15,12 +15,16 @@ see docs/superpowers/specs/2026-07-06-ltv-stocks-legacy-exact-replica-design.md,
 """
 
 import io
+import re
+import zipfile
 from datetime import date, timedelta
+from xml.etree import ElementTree as ET
 
 import openpyxl
 from openpyxl.styles import Alignment, Font
 from openpyxl.styles.borders import Border, Side
 from openpyxl.styles.fills import PatternFill
+from openpyxl.utils import column_index_from_string
 
 from .term_sheet_calc import _FREQ_DIV, contract_records
 from .positions_calc import position_records, _average, _transactions_narrative
@@ -374,6 +378,48 @@ def _write_status_grid(ws, count_row, n, date_range):
             cell.font = xl_font(10)
             cell.alignment = xl_align(True)
             cell.border = xl_box()
+
+
+def _compute_circle_cells(records, first_row, date_range, report_date, wd, price_lookup):
+    """Returns [(col_letter, row), ...] for every O:X cell that will show a "D"
+    status (strike breached without knocking out) once opened in Excel.
+
+    openpyxl never evaluates the AA:AJ status formulas _write_status_grid writes,
+    so this recomputes the same test in Python from the same source data, in
+    order to know where to draw circles (openpyxl can't draw shapes at all --
+    see _inject_circles). Mirrors _write_contracts' own O:X gating (start/end
+    window, holiday, report_date) so a cell is only proposed for circling if it
+    will actually display a numeric price there:
+    - before start_date / after end_date / a holiday: the cell is blank or a
+      "Done" placeholder, never a price -- skipped.
+    - report_date itself: for non-USD codes _write_contracts writes a live
+      formula against the never-populated `closing_price` sheet (see that
+      function's `d == report_date` branch); there is no literal price to
+      classify at export time, so this date is always skipped, same as the
+      spec's own "px is None" skip rule.
+    - otherwise: px = price_lookup(code_ref, d); skipped unless it's a real,
+      nonzero number (rules out None, 0, and the "Done" *string* placeholder,
+      which the bare `px in (0, None, "")` check wouldn't catch since it's
+      neither of those three values).
+    """
+    cells = []
+    for i, rec in enumerate(records):
+        r = first_row + i
+        e, f, g = rec['spot'], rec['strike'], rec['ko']
+        above = e > f
+        for col, d in zip(_OX_COLS, date_range):
+            if d < rec['start_date'] or d > rec['end_date'] or wd.is_holiday(d) or d == report_date:
+                continue
+            px = price_lookup(rec['code_ref'], d)
+            if not isinstance(px, (int, float)) or px == 0:
+                continue
+            if above:
+                status = 'KO' if g <= px else ('D' if f >= px else '.')
+            else:
+                status = 'KO' if g >= px else ('D' if f <= px else '.')
+            if status == 'D':
+                cells.append((col, r))
+    return cells
 
 
 # --- Reference data ported verbatim from ltv_stocks2.py's LTV_Stocks.__init__ / position() ---
@@ -741,6 +787,175 @@ def _inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_d
     return dict(sorted(positions.items()))
 
 
+_NS_CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
+_NS_PKGREL = 'http://schemas.openxmlformats.org/package/2006/relationships'
+_NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+_DRAWING_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.drawing+xml'
+_DRAWING_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing'
+_RELS_REL_TYPE = 'http://schemas.openxmlformats.org/package/2006/relationships'
+
+ET.register_namespace('', _NS_CT)
+
+
+def _drawing_xml(cells):
+    """One <xdr:twoCellAnchor> ellipse (transparent fill, 2pt solid red outline)
+    per (col_letter, row) cell, anchored just inside that cell."""
+    anchors = []
+    for i, (col, row) in enumerate(cells, start=1):
+        col_idx = column_index_from_string(col) - 1
+        row_idx = row - 1
+        anchors.append(
+            f'<xdr:twoCellAnchor editAs="oneCell">'
+            f'<xdr:from><xdr:col>{col_idx}</xdr:col><xdr:colOff>30000</xdr:colOff>'
+            f'<xdr:row>{row_idx}</xdr:row><xdr:rowOff>15000</xdr:rowOff></xdr:from>'
+            f'<xdr:to><xdr:col>{col_idx + 1}</xdr:col><xdr:colOff>-30000</xdr:colOff>'
+            f'<xdr:row>{row_idx + 1}</xdr:row><xdr:rowOff>-15000</xdr:rowOff></xdr:to>'
+            f'<xdr:sp macro="" textlink="">'
+            f'<xdr:nvSpPr><xdr:cNvPr id="{i}" name="D-Circle {i}"/><xdr:cNvSpPr/></xdr:nvSpPr>'
+            f'<xdr:spPr>'
+            f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>'
+            f'<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>'
+            f'<a:noFill/>'
+            f'<a:ln w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>'
+            f'</xdr:spPr>'
+            f'</xdr:sp>'
+            f'<xdr:clientData/>'
+            f'</xdr:twoCellAnchor>'
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<xdr:wsDr '
+        'xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        + ''.join(anchors) +
+        '</xdr:wsDr>'
+    ).encode('utf-8')
+
+
+def _inject_circles(buf, circle_cells):
+    """Post-processes a saved workbook's zip to draw a circle over every O:X
+    cell in `circle_cells` (``{sheet_name: [(col_letter, row), ...]}``).
+
+    openpyxl can only create images/charts, never freeform drawing shapes, so
+    the ellipses are injected as raw DrawingML: one `xl/drawings/drawingN.xml`
+    part per affected sheet, wired to that sheet via a `<drawing r:id="..."/>`
+    element and a worksheet-level `_rels` relationship, with the corresponding
+    `[Content_Types].xml` override added. Every other part in the original zip
+    is copied through unchanged -- existing values, formulas, formatting, and
+    merged cells (and any drawing a sheet already had) are untouched.
+    """
+    circle_cells = {name: cells for name, cells in circle_cells.items() if cells}
+    if not circle_cells:
+        return buf
+
+    buf.seek(0)
+    zin = zipfile.ZipFile(buf, 'r')
+    originals = {info.filename: zin.read(info.filename) for info in zin.infolist()}
+
+    # sheet name -> worksheet part path, via workbook.xml + workbook.xml.rels
+    # (never assume sheetN.xml ordering matches sheet creation order).
+    wb_root = ET.fromstring(originals['xl/workbook.xml'])
+    ns_main = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    rels_root = ET.fromstring(originals['xl/_rels/workbook.xml.rels'])
+    rid_to_target = {
+        rel.get('Id'): rel.get('Target')
+        for rel in rels_root
+    }
+    sheet_name_to_part = {}
+    for sheet_el in wb_root.find('m:sheets', ns_main):
+        rid = sheet_el.get(f'{{{_NS_R}}}id')
+        target = rid_to_target[rid]
+        if target.startswith('/'):
+            part = target[1:]  # package-root-absolute, e.g. "/xl/worksheets/sheet3.xml"
+        elif target.startswith('xl/'):
+            part = target
+        else:
+            part = f'xl/{target}'  # relative to xl/_rels/, e.g. "worksheets/sheet3.xml"
+        sheet_name_to_part[sheet_el.get('name')] = part
+
+    existing_drawing_nums = [
+        int(m.group(1)) for name in originals
+        for m in [re.match(r'xl/drawings/drawing(\d+)\.xml$', name)]
+        if m
+    ]
+    next_drawing_num = max(existing_drawing_nums, default=0) + 1
+
+    new_or_changed = {}
+    ct_xml = originals['[Content_Types].xml'].decode('utf-8')
+    ct_overrides = []
+
+    for sheet_name, cells in circle_cells.items():
+        ws_part = sheet_name_to_part[sheet_name]
+        drawing_num = next_drawing_num
+        next_drawing_num += 1
+        drawing_part = f'xl/drawings/drawing{drawing_num}.xml'
+        drawing_rels_part = f'xl/drawings/_rels/drawing{drawing_num}.xml.rels'
+
+        new_or_changed[drawing_part] = _drawing_xml(cells)
+        new_or_changed[drawing_rels_part] = (
+            f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            f'<Relationships xmlns="{_RELS_REL_TYPE}"></Relationships>'
+        ).encode('utf-8')
+        ct_overrides.append(
+            f'<Override PartName="/{drawing_part}" ContentType="{_DRAWING_CONTENT_TYPE}"/>'
+        )
+
+        ws_dir, ws_file = ws_part.rsplit('/', 1)
+        ws_rels_part = f'{ws_dir}/_rels/{ws_file}.rels'
+        ws_rels_xml = originals.get(ws_rels_part) or new_or_changed.get(ws_rels_part)
+        if ws_rels_xml:
+            rels_root = ET.fromstring(ws_rels_xml)
+            existing_rids = [rel.get('Id') for rel in rels_root]
+            next_num = 1
+            while f'rId{next_num}' in existing_rids:
+                next_num += 1
+            new_rid = f'rId{next_num}'
+            rel_xml = (
+                f'<Relationship Id="{new_rid}" Type="{_DRAWING_REL_TYPE}" '
+                f'Target="../drawings/drawing{drawing_num}.xml"/>'
+            )
+            ws_rels_xml = ws_rels_xml.decode('utf-8').replace(
+                '</Relationships>', rel_xml + '</Relationships>'
+            ).encode('utf-8')
+        else:
+            new_rid = 'rId1'
+            ws_rels_xml = (
+                f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<Relationships xmlns="{_RELS_REL_TYPE}">'
+                f'<Relationship Id="{new_rid}" Type="{_DRAWING_REL_TYPE}" '
+                f'Target="../drawings/drawing{drawing_num}.xml"/>'
+                f'</Relationships>'
+            ).encode('utf-8')
+        new_or_changed[ws_rels_part] = ws_rels_xml
+
+        ws_xml = (originals.get(ws_part) or new_or_changed.get(ws_part)).decode('utf-8')
+        # The worksheet root openpyxl writes declares no "r" namespace prefix
+        # (only xl/workbook.xml does) -- declare it locally on this element
+        # rather than assuming an ancestor already bound it.
+        drawing_el = f'<drawing xmlns:r="{_NS_R}" r:id="{new_rid}"/>'
+        if '</worksheet>' in ws_xml:
+            ws_xml = ws_xml.replace('</worksheet>', drawing_el + '</worksheet>')
+        new_or_changed[ws_part] = ws_xml.encode('utf-8')
+
+    ct_xml = ct_xml.replace('</Types>', ''.join(ct_overrides) + '</Types>')
+    new_or_changed['[Content_Types].xml'] = ct_xml.encode('utf-8')
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zout:
+        written = set()
+        for info in zin.infolist():
+            content = new_or_changed.get(info.filename, originals[info.filename])
+            zout.writestr(info, content)
+            written.add(info.filename)
+        for name, content in new_or_changed.items():
+            if name not in written:
+                zout.writestr(name, content)
+
+    zin.close()
+    out.seek(0)
+    return out
+
+
 def build_workbook(db, report_date, bank_ids):
     """Port of create() (211-295). Returns the workbook as an `io.BytesIO`.
 
@@ -759,6 +974,7 @@ def build_workbook(db, report_date, bank_ids):
     date_range = week_dates(report_date)
     hkd_count = {'total_row': {}}
     hkd_wd = WorkingDay(db, 'HKD')
+    circle_cells = {}
 
     for ccy in _CCYS:
         for bank_id in bank_ids:
@@ -807,6 +1023,13 @@ def build_workbook(db, report_date, bank_ids):
             r = _write_contracts(ws, decu, 'DECU', r, report_date, date_range, wd,
                                   price_lookup=price_lookup, bank_id=bank_id)
             _write_status_grid(ws, decu_count_row, len(decu), date_range)
+
+            sheet_circles = (
+                _compute_circle_cells(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
+                + _compute_circle_cells(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
+            )
+            if sheet_circles:
+                circle_cells[sheet_name] = sheet_circles
 
             r = _write_positions(ws, positions, report_date, r, wd, price_lookup,
                                   bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
@@ -859,4 +1082,5 @@ def build_workbook(db, report_date, bank_ids):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
+    buf = _inject_circles(buf, circle_cells)
     return buf
