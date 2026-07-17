@@ -798,7 +798,7 @@ ET.register_namespace('', _NS_CT)
 
 
 def _drawing_xml(cells):
-    """One <xdr:twoCellAnchor> ellipse (transparent fill, 2pt solid red outline)
+    """One <xdr:twoCellAnchor> ellipse (transparent fill, 2pt solid black outline)
     per (col_letter, row) cell, anchored just inside that cell."""
     anchors = []
     for i, (col, row) in enumerate(cells, start=1):
@@ -816,7 +816,7 @@ def _drawing_xml(cells):
             f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>'
             f'<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>'
             f'<a:noFill/>'
-            f'<a:ln w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>'
+            f'<a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>'
             f'</xdr:spPr>'
             f'</xdr:sp>'
             f'<xdr:clientData/>'
