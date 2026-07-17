@@ -12,7 +12,7 @@ Run: server/.venv/Scripts/python.exe scripts/verify_circle_injection.py
 import os
 import sys
 import zipfile
-from datetime import date
+from datetime import date, timedelta
 from xml.etree import ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +27,7 @@ from ltv_app.blueprints.ltv_stocks.legacy_port.excel_writer import (
     _compute_circle_cells, build_workbook,
 )
 from ltv_app.blueprints.ltv_stocks.legacy_port.working_day import WorkingDay
+from ltv_app.tz import ph_today
 
 ok = True
 
@@ -74,8 +75,62 @@ def isolated_checks():
     # 07/09 px=None -> skip.
     # 07/10 px="Done" (string) -> skip (not int/float).
     # 07/13 px=150: KO? 180<=150 no. D? 150>=150 yes -> D at T10.
-    # 07/14 == report_date -> skip entirely regardless of price_lookup.
-    check("above-branch D cells", sorted(cells), sorted([('O', 10), ('P', 10), ('T', 10)]))
+    # 07/14 == report_date, has a recorded price (100.0) -> classified like any
+    # other day: KO? 180<=100 no. D? 150>=100 yes -> D at U10.
+    check("above-branch D cells", sorted(cells), sorted([('O', 10), ('P', 10), ('T', 10), ('U', 10)]))
+
+    # report_date with NO recorded price, AND report_date IS the actual current
+    # day -> inherits the last classified real trading day's status instead of
+    # being skipped. Must use the real ph_today() as report_date here, since
+    # the inheritance path is gated on `report_date == ph_today()` (there is
+    # no live closing_price formula, and therefore nothing to inherit toward,
+    # for any date other than today).
+    today = ph_today()
+    today_date_range = [today - timedelta(days=n) for n in (8, 7, 6, 5, 4, 1, 0)]
+    price_lookup_today_no_price = lambda code_ref, d: {
+        today_date_range[0]: 100.0,
+        today_date_range[1]: 120.0,
+        today_date_range[2]: 0,
+        today_date_range[3]: None,
+        today_date_range[4]: "Done",
+        today_date_range[5]: 150.0,
+        today_date_range[6]: None,  # report_date == today -- no data yet
+    }[d]
+    rec_above_today = _Rec(code_ref=1, spot=200.0, strike=150.0, ko=180.0,
+                            start_date=today_date_range[0], end_date=today_date_range[0] + timedelta(days=30))
+    cells = _compute_circle_cells(
+        [rec_above_today], 10, today_date_range, today, wd, price_lookup_today_no_price
+    )
+    check("report_date (== today) inherits previous day's D status", sorted(cells),
+          sorted([('O', 10), ('P', 10), ('T', 10), ('U', 10)]))
+
+    # Same setup, but report_date is NOT today (a hypothetical/other-date run
+    # -- report_date still matches the grid's last column, it just isn't the
+    # real current day) -> no live formula exists for that date, so nothing to
+    # inherit toward; a missing price there must be skipped like any other
+    # gap, not circled.
+    not_today = date(2020, 1, 10)  # deterministic, clearly never "today"
+    not_today_date_range = [not_today - timedelta(days=n) for n in (8, 7, 6, 5, 4, 1, 0)]
+    price_lookup_not_today_no_price = lambda code_ref, d: {
+        not_today_date_range[0]: 100.0,
+        not_today_date_range[1]: 120.0,
+        not_today_date_range[2]: 0,
+        not_today_date_range[3]: None,
+        not_today_date_range[4]: "Done",
+        not_today_date_range[5]: 150.0,
+        not_today_date_range[6]: None,  # report_date == not_today_date_range[-1] -- no data
+    }[d]
+    rec_above_not_today = _Rec(code_ref=1, spot=200.0, strike=150.0, ko=180.0,
+                                start_date=not_today_date_range[0], end_date=not_today_date_range[0] + timedelta(days=30))
+    cells = _compute_circle_cells(
+        [rec_above_not_today], 10, not_today_date_range, not_today, wd, price_lookup_not_today_no_price
+    )
+    # Earlier real-priced days still classify normally (O/P/T, same pattern as
+    # "above-branch D cells") -- only the last column (report_date, no price,
+    # not today) must be excluded, proving specifically that it doesn't
+    # inherit when report_date isn't the real current day.
+    check("report_date != today -> no inheritance, missing price skipped", sorted(cells),
+          sorted([('O', 10), ('P', 10), ('T', 10)]))
 
     # Row: spot=100 <= strike=150 (else branch), ko=90.
     rec_below = _Rec(code_ref=1, spot=100.0, strike=150.0, ko=90.0,
@@ -114,9 +169,17 @@ def live_check():
         wd = WorkingDay(db, 'HKD')
         price_lookup = lambda code_ref, d: get_stock_price(db, code_ref, d)
 
+        # DBPe-HKD's own report_header() shape (no subtitle, ccy == 'HKD') always
+        # returns 3 for accu_count_row; decu_count_row is accu_count_row + 6 + n_accu,
+        # matching _write_contracts' own return-value arithmetic (first_data_row + n + 2).
+        accu_count_row = 3
+        decu_count_row = accu_count_row + 6 + len(accu)
+
         expected = set(
-            _compute_circle_cells(accu, 7, date_range, report_date, wd, price_lookup)
-            + _compute_circle_cells(decu, 20, date_range, report_date, wd, price_lookup)
+            _compute_circle_cells(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
+            + _compute_circle_cells(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
+            # Cells (col B) above "CODE", circled on DBPe-HKD only.
+            + [('B', accu_count_row), ('B', decu_count_row)]
         )
 
         buf = build_workbook(db, report_date, ['DBPe'])

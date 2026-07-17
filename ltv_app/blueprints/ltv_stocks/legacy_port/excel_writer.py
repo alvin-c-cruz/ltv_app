@@ -30,6 +30,7 @@ from .term_sheet_calc import _FREQ_DIV, contract_records
 from .positions_calc import position_records, _average, _transactions_narrative
 from .working_day import WorkingDay, position_start_date
 from .stock_price import get_stock_price
+from ....tz import ph_today
 
 
 # --- Style constants (port of ltv_stocks2's xl_font/xl_fill/xl_box/xl_align lambdas) ---
@@ -295,7 +296,7 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
                     elif wd.is_holiday(d):
                         cell.fill = xl_fill(_GREY_FILL)
                     else:
-                        if d == report_date:
+                        if d == report_date and d == ph_today() and not cols[col]:
                             if rec['ccy_id'] != 'USD':
                                 cell.value = (
                                     f'=INDEX(closing_price!A:C,MATCH(M{r},'
@@ -388,35 +389,50 @@ def _compute_circle_cells(records, first_row, date_range, report_date, wd, price
     so this recomputes the same test in Python from the same source data, in
     order to know where to draw circles (openpyxl can't draw shapes at all --
     see _inject_circles). Mirrors _write_contracts' own O:X gating (start/end
-    window, holiday, report_date) so a cell is only proposed for circling if it
-    will actually display a numeric price there:
+    window, holiday) so a cell is only proposed for circling if it will
+    actually display a numeric price there:
     - before start_date / after end_date / a holiday: the cell is blank or a
       "Done" placeholder, never a price -- skipped.
-    - report_date itself: for non-USD codes _write_contracts writes a live
-      formula against the never-populated `closing_price` sheet (see that
-      function's `d == report_date` branch); there is no literal price to
-      classify at export time, so this date is always skipped, same as the
-      spec's own "px is None" skip rule.
-    - otherwise: px = price_lookup(code_ref, d); skipped unless it's a real,
-      nonzero number (rules out None, 0, and the "Done" *string* placeholder,
-      which the bare `px in (0, None, "")` check wouldn't catch since it's
-      neither of those three values).
+    - report_date itself gets a two-part rule, matching _write_contracts'
+      own `d == report_date and d == ph_today() and not cols[col]` gating: if
+      a price is already recorded (price_lookup returns a real number),
+      classify it exactly like any other day. If not, AND report_date is the
+      actual current day (still showing the live
+      `=INDEX(closing_price!...)` formula against the never-populated
+      `closing_price` sheet) -- don't skip outright, inherit the most
+      recently classified real trading day's status for that row instead, so
+      report_date still gets circled when the position was already "D" as of
+      the last known close. If report_date is NOT today (a past or future
+      date the report happens to be generated for), there is no live formula
+      to inherit toward, so a missing price there is skipped like any other
+      gap -- same as every other date.
+    - every other date: px = price_lookup(code_ref, d); skipped unless it's a
+      real, nonzero number (rules out None, 0, and the "Done" *string*
+      placeholder, which the bare `px in (0, None, "")` check wouldn't catch
+      since it's neither of those three values).
     """
+    today = ph_today()
     cells = []
     for i, rec in enumerate(records):
         r = first_row + i
         e, f, g = rec['spot'], rec['strike'], rec['ko']
         above = e > f
+        last_status = None  # most recent real-priced day's status for this row
         for col, d in zip(_OX_COLS, date_range):
-            if d < rec['start_date'] or d > rec['end_date'] or wd.is_holiday(d) or d == report_date:
+            if d < rec['start_date'] or d > rec['end_date'] or wd.is_holiday(d):
                 continue
             px = price_lookup(rec['code_ref'], d)
-            if not isinstance(px, (int, float)) or px == 0:
-                continue
-            if above:
-                status = 'KO' if g <= px else ('D' if f >= px else '.')
+            has_price = isinstance(px, (int, float)) and px != 0
+            if not has_price:
+                if d != report_date or report_date != today or last_status is None:
+                    continue  # no data and nothing to inherit -- skip
+                status = last_status  # report_date inherits the last known day
             else:
-                status = 'KO' if g >= px else ('D' if f <= px else '.')
+                if above:
+                    status = 'KO' if g <= px else ('D' if f >= px else '.')
+                else:
+                    status = 'KO' if g >= px else ('D' if f <= px else '.')
+                last_status = status
             if status == 'D':
                 cells.append((col, r))
     return cells
@@ -760,7 +776,7 @@ def _inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_d
         code = rec['code']
         if code not in positions:
             real_average = _average(db, bank_id, code, report_date)
-            if real_average:
+            if real_average is not None:
                 positions[code] = {
                     'stock_name': rec['stock_name_plain'],
                     'code': code,
@@ -798,25 +814,27 @@ ET.register_namespace('', _NS_CT)
 
 
 def _drawing_xml(cells):
-    """One <xdr:twoCellAnchor> ellipse (transparent fill, 2pt solid black outline)
-    per (col_letter, row) cell, anchored just inside that cell."""
+    """One <xdr:twoCellAnchor> ellipse (transparent fill, 1pt solid black
+    outline) per (col_letter, row) cell, anchored to that cell's exact
+    bounding box so the ellipse touches all four sides of the cell (no
+    inset)."""
     anchors = []
     for i, (col, row) in enumerate(cells, start=1):
         col_idx = column_index_from_string(col) - 1
         row_idx = row - 1
         anchors.append(
             f'<xdr:twoCellAnchor editAs="oneCell">'
-            f'<xdr:from><xdr:col>{col_idx}</xdr:col><xdr:colOff>30000</xdr:colOff>'
-            f'<xdr:row>{row_idx}</xdr:row><xdr:rowOff>15000</xdr:rowOff></xdr:from>'
-            f'<xdr:to><xdr:col>{col_idx + 1}</xdr:col><xdr:colOff>-30000</xdr:colOff>'
-            f'<xdr:row>{row_idx + 1}</xdr:row><xdr:rowOff>-15000</xdr:rowOff></xdr:to>'
+            f'<xdr:from><xdr:col>{col_idx}</xdr:col><xdr:colOff>0</xdr:colOff>'
+            f'<xdr:row>{row_idx}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+            f'<xdr:to><xdr:col>{col_idx + 1}</xdr:col><xdr:colOff>0</xdr:colOff>'
+            f'<xdr:row>{row_idx + 1}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>'
             f'<xdr:sp macro="" textlink="">'
             f'<xdr:nvSpPr><xdr:cNvPr id="{i}" name="D-Circle {i}"/><xdr:cNvSpPr/></xdr:nvSpPr>'
             f'<xdr:spPr>'
             f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>'
             f'<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>'
             f'<a:noFill/>'
-            f'<a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>'
+            f'<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>'
             f'</xdr:spPr>'
             f'</xdr:sp>'
             f'<xdr:clientData/>'
@@ -1028,6 +1046,12 @@ def build_workbook(db, report_date, bank_ids):
                 _compute_circle_cells(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
                 + _compute_circle_cells(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
             )
+            if sheet_name == PRIMARY_SHEET_NAME:
+                # The cell directly above each block's "CODE" column header
+                # (col B, at accu_count_row/decu_count_row). Circled on
+                # DBPe-HKD only, per request -- unrelated to the D-status
+                # circling above.
+                sheet_circles = sheet_circles + [('B', accu_count_row), ('B', decu_count_row)]
             if sheet_circles:
                 circle_cells[sheet_name] = sheet_circles
 

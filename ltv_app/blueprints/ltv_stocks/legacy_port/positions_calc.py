@@ -143,7 +143,7 @@ def _moving_average_engine(rows):
 
 def _average(db, bank_id, code, as_of_date):
     """Port of trades_done_average + ending_balance (my_routes/transaction_list.py
-    :249-432). The average is '=cost_to_date/balance', where cost/balance come from
+    :249-432). The average is cost_to_date/balance (a plain float), where cost/balance come from
     the moving-average engine selecting the current month's footer OR, when the
     footer is left unset, the prior-month-end beginning_balance.
 
@@ -158,7 +158,7 @@ def _average(db, bank_id, code, as_of_date):
     ).fetchone()[0]
     rows = list(get_transactions(db, as_of_date.isoformat(), code, bank_id))
     if not rows:
-        return 0
+        return None
     eng = _moving_average_engine(rows)
     date_from = _first_of_month(as_of_date)
     to_month = as_of_date.isoformat()[:7]
@@ -179,10 +179,10 @@ def _average(db, bank_id, code, as_of_date):
 
     sel = footer if footer is not None else beginning
     if sel is None:
-        return 0
+        return None
     bal, cost, last_nz = sel
     if bal:
-        return f"={cost}/{bal}"
+        return cost / bal
     # BUG FIX: a position that sold/transferred out to exactly zero has no
     # meaningful cost/balance ratio (0/0) -- showing a bare 0 there reads as "no
     # cost basis" rather than "fully closed out". Show the last average on record
@@ -190,8 +190,8 @@ def _average(db, bank_id, code, as_of_date):
     # instead, so the figure still reflects what the position was carried at.
     if last_nz:
         lbal, lcost = last_nz
-        return f"={lcost}/{lbal}"
-    return 0
+        return lcost / lbal
+    return None
 
 
 def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=None) -> dict:

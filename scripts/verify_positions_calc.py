@@ -65,10 +65,11 @@ def main():
         )
 
         # Case B2: zero-balance -> last-average-on-record (was bare 0).
+        # _average() now returns a plain evaluated float, not a formula string.
         ok &= _case(
             "B2 _average 2196@DBPe (zero balance)",
             _average(db, "DBPe", "2196", REPORT_DATE),
-            "=669330.0/35000",
+            19.123714285714286,
         )
 
         # Case C: ACCU-only placeholder uses the real charge-inclusive average
@@ -79,10 +80,21 @@ def main():
         injected = _inject_accu_only_positions(positions, accu, db, 5, "DBPe", REPORT_DATE)
         rec = injected.get("3993")
         ok &= _case("C average 3993@DBPe (ACCU-only)",
-                    rec["average"] if rec else None, "=602993.6/39000")
+                    rec["average"] if rec else None, 15.461374358974359)
         ok &= _case("C transactions 3993@DBPe (ACCU-only)",
                     rec["transactions"] if rec else None,
                     "(7/7) Buy (Accu) 39,000 @ 15.4454 = 39,000")
+
+        # Case D: a genuine zero-cost average on a nonzero balance (reachable
+        # via _moving_average_engine's short-covering/short-flip branches)
+        # must stay a real average (float 0.0), not be reclassified as "no
+        # average" (None) -- which would wrongly fall back to a strike-price
+        # placeholder elsewhere (_inject_accu_only_positions).
+        ok &= _case(
+            "D _average CB1/9618 (genuine zero-cost, nonzero balance)",
+            _average(db, "CB1", "9618", date(2022, 3, 28)),
+            0.0,
+        )
     finally:
         ctx.pop()
 
