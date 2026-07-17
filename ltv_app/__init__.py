@@ -2,6 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 import os
+import secrets
 
 
 def _get_version():
@@ -42,7 +43,10 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_path=os.path.join(_apps_dir, 'instance'),
                 instance_relative_config=True)
     app.config.from_mapping(
-        SECRET_KEY="acda5284c0cc9a93e828516b701ab77907cd9bfe5f4f00c5026059b2d7f58419",
+        # Random per-process fallback so a fresh clone still boots without a
+        # committed secret. config.py (untracked) overrides this with a real,
+        # persisted key for actual use — see Step 2 of this task.
+        SECRET_KEY=secrets.token_hex(32),
         DATABASE=os.path.join(app.instance_path, "LTV Stocks.db"),
     )
 
