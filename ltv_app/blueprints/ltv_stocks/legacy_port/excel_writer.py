@@ -3,10 +3,13 @@
 Ports `localhost/modules/ltv_stocks2.py`'s `contract()` method (lines 410-709,
 `_write_contracts` here), `position()` (712-914, `_write_positions`), `create()`
 (211-295, `build_workbook`), `report_header()` (342-407, `report_header`) and
-`column_width()` (298-339, `_set_column_widths`) cell-for-cell, dropping the
-AA-AJ per-day status columns and the off-print-area helper columns `Y`-`AC`
-(the reconciliation helper columns) — see docs/superpowers/specs/
-2026-07-06-ltv-stocks-legacy-exact-replica-design.md, "The Excel writer".
+`column_width()` (298-339, `_set_column_widths`) cell-for-cell, plus a
+`_write_status_grid` knock-out/strike tracking grid (Z:AJ, see docs/
+superpowers/specs/2026-07-17-status-ko-tracking-grid-design.md) added on top
+of the port. The off-print-area helper columns `Y`-`AC` (the reconciliation
+helper columns, a separate concept from the status grid) remain dropped —
+see docs/superpowers/specs/2026-07-06-ltv-stocks-legacy-exact-replica-design.md,
+"The Excel writer".
 
 `build_workbook(db, report_date, bank_ids)` is the public entry point.
 """
@@ -72,6 +75,9 @@ _COL_DATE_OFFSET = {
     'T': 5, 'U': 6, 'V': 7, 'W': 8, 'X': 9,
 }
 _OX_COLS = ('O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
+# AA-AJ per-day status columns, paired 1:1 with _OX_COLS (AA reads the same
+# day as O, AB as P, ... AJ as X).
+_STATUS_COLS = ('AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ')
 _ALL_DATA_COLS = ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N') + _OX_COLS
 _ZERO_ROW_COLS = ('A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 
@@ -310,6 +316,64 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
             row += 1
 
     return row + 2
+
+
+def _write_status_grid(ws, count_row, n, date_range):
+    """Writes the Z:AJ knock-out/strike tracking grid for one contract block.
+
+    `count_row`/`n` match the same block's `_write_contracts` call (the row
+    passed in, and `len(records)`) -- this reproduces `_write_contracts`'
+    own row placement: the date-header row sits on `count_row+2` (the same
+    row `_write_contracts` uses for its own O:X date header), and the body
+    spans `count_row+4 .. count_row+4+n-1` (the same rows `_write_contracts`
+    used for its data rows). If n == 0 there is nothing to track -- no
+    header, no body.
+
+    Z is a literal per-row direction-flag input (always 2, not a formula).
+    AA:AJ are formulas, paired 1:1 with the existing O:X closing-price
+    columns via _STATUS_COLS/_OX_COLS, each referencing that row's own
+    spot/strike/KO price (E/F/G, already written by _write_contracts) and
+    the paired day's closing price -- so the grid recalculates live from
+    O:X. Ports the "AA-AJ per-day status columns" this module's docstring
+    previously said were dropped.
+    """
+    if n == 0:
+        return
+
+    header_row = count_row + 2
+    first_data_row = count_row + 4
+    last_data_row = first_data_row + n - 1
+
+    for col, offset in zip(_STATUS_COLS, range(10)):
+        cell = ws[f'{col}{header_row}']
+        cell.value = date_range[offset]
+        cell.font = xl_font(9, True)
+        cell.alignment = xl_align(True)
+        cell.number_format = 'm/d'
+        cell.border = xl_box()
+
+    for r in range(first_data_row, last_data_row + 1):
+        z_cell = ws[f'Z{r}']
+        z_cell.value = 2
+        z_cell.font = xl_font(10)
+        z_cell.alignment = xl_align(True)
+        z_cell.border = xl_box()
+
+        for col, price_col in zip(_STATUS_COLS, _OX_COLS):
+            formula = (
+                f'=IF($E{r}>$F{r},'
+                f'IF({price_col}{r}=0,"xxx",IF({price_col}{r}="","",'
+                f'IF($Z{r}=2,IF($G{r}<={price_col}{r},"KO",IF($F{r}>={price_col}{r},"D",".")),'
+                f'IF($G{r}<={price_col}{r},"KO",".")))),'
+                f'IF({price_col}{r}=0,"xxx",IF({price_col}{r}="","",'
+                f'IF($Z{r}=2,IF($G{r}>={price_col}{r},"KO",IF($F{r}<={price_col}{r},"D",".")),'
+                f'IF($G{r}>={price_col}{r},"KO",".")))))'
+            )
+            cell = ws[f'{col}{r}']
+            cell.value = formula
+            cell.font = xl_font(10)
+            cell.alignment = xl_align(True)
+            cell.border = xl_box()
 
 
 # --- Reference data ported verbatim from ltv_stocks2.py's LTV_Stocks.__init__ / position() ---
@@ -737,10 +801,12 @@ def build_workbook(db, report_date, bank_ids):
             accu_count_row = r
             r = _write_contracts(ws, accu, 'ACCU', r, report_date, date_range, wd,
                                   price_lookup=price_lookup, bank_id=bank_id)
+            _write_status_grid(ws, accu_count_row, len(accu), date_range)
 
             decu_count_row = r
             r = _write_contracts(ws, decu, 'DECU', r, report_date, date_range, wd,
                                   price_lookup=price_lookup, bank_id=bank_id)
+            _write_status_grid(ws, decu_count_row, len(decu), date_range)
 
             r = _write_positions(ws, positions, report_date, r, wd, price_lookup,
                                   bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
