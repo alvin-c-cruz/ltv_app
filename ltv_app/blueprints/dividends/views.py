@@ -64,7 +64,9 @@ def add():
             db=db,
             bank_id=int(form.bank_id.data),
             stock_id=int(form.stock_id.data),
+            declaration_date=_optional_date(form.declaration_date.data),
             ex_date=str(form.ex_date.data)[:10],
+            record_date=_optional_date(form.record_date.data),
             pay_out=str(form.pay_out.data)[:10],
             nominal=float(form.nominal.data),
             ccy_id=int(form.ccy_id.data),
@@ -95,7 +97,9 @@ def edit(ref_num):
     if request.method == "POST" or form.validate_on_submit():
         dividend.bank_id = int(form.bank_id.data)
         dividend.stock_id = int(form.stock_id.data)
+        dividend.declaration_date = _optional_date(form.declaration_date.data)
         dividend.ex_date = str(form.ex_date.data)[:10]
+        dividend.record_date = _optional_date(form.record_date.data)
         dividend.pay_out = str(form.pay_out.data)[:10]
         dividend.nominal = float(form.nominal.data)
         dividend.ccy_id = int(form.ccy_id.data)
@@ -110,7 +114,9 @@ def edit(ref_num):
     else:
         form.bank_id.data = str(dividend.bank_id)
         form.stock_id.data = str(dividend.stock_id)
+        form.declaration_date.data = _parse_date(dividend.declaration_date)
         form.ex_date.data = datetime(int(dividend.ex_date[:4]), int(dividend.ex_date[5:7]), int(dividend.ex_date[-2:]))
+        form.record_date.data = _parse_date(dividend.record_date)
         form.pay_out.data = datetime(int(dividend.pay_out[:4]), int(dividend.pay_out[5:7]), int(dividend.pay_out[-2:]))
         form.nominal.data = dividend.nominal
         form.ccy_id.data = str(dividend.ccy_id)
@@ -135,6 +141,18 @@ def delete(ref_num):
 
     flash("Dividend deleted.")
     return redirect(url_for('dividends.home'))
+
+
+def _optional_date(value):
+    """WTForms DateField -> 'YYYY-MM-DD' string for storage, or None if blank."""
+    return str(value)[:10] if value else None
+
+
+def _parse_date(value):
+    """Stored 'YYYY-MM-DD' string -> datetime for populating a DateField, or None."""
+    if not value:
+        return None
+    return datetime(int(value[:4]), int(value[5:7]), int(value[-2:]))
 
 
 def select_fields(db, form):

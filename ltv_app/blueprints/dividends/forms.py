@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, DateField, SelectField, DecimalField, FloatField
-from wtforms.validators import DataRequired, NumberRange
+from wtforms.validators import DataRequired, NumberRange, Optional
 
 
 class Form(FlaskForm):
@@ -21,9 +21,25 @@ class Form(FlaskForm):
         }
     )
 
+    declaration_date = DateField(
+        validators=[Optional()],
+        label="Declaration Date",
+        render_kw={
+            "class": "form-control"
+        }
+    )
+
     ex_date = DateField(
         validators=[DataRequired()],
         label="Ex-Date",
+        render_kw={
+            "class": "form-control"
+        }
+    )
+
+    record_date = DateField(
+        validators=[Optional()],
+        label="Record Date",
         render_kw={
             "class": "form-control"
         }
