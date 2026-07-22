@@ -157,19 +157,21 @@ def select_fields(db, form):
 def create_table():
     db = get_db()
     sql = """
-    CREATE TABLE tbl_cash_dividends 
+    CREATE TABLE tbl_cash_dividends
         (
-        ref_num INTEGER PRIMARY KEY AUTOINCREMENT, 
+        ref_num INTEGER PRIMARY KEY AUTOINCREMENT,
         bank_id INT,
         stock_id INT,
+        declaration_date TIMESTAMP,
         ex_date TIMESTAMP,
+        record_date TIMESTAMP,
         pay_out TIMESTAMP,
         nominal REAL,
         ccy_id INT,
         dividends_per_share REAL,
         tax REAL,
         charges REAL,
-        status TEXT        
+        status TEXT
         )
     ;"""
     db.execute(sql)

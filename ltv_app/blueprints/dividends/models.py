@@ -7,7 +7,9 @@ class CashDividends(Model):
     ref_num: int = None
     bank_id: int = None
     stock_id: int = None
+    declaration_date: str = None
     ex_date: str = None
+    record_date: str = None
     pay_out: str = None
     nominal: float = None
     ccy_id: int = None
