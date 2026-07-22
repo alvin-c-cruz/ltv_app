@@ -2,7 +2,7 @@
 
 {% block content %}
 <h1>Cash Dividends</h1>
-<form action="{{ url_for('dividends.home') }}" method="post">
+<form action="{{ url_for('dividends.home') }}" method="get">
   <label for="start_date">From</label>
   <input type="date" name="start_date" value="{{ start_date }}">
   <label for="end_date">To</label>
@@ -17,7 +17,9 @@
       <th> Stock Name</th>
       <th>Code</th>
       <th>Quantity</th>
+      <th>Declaration Date</th>
       <th>Ex Date</th>
+      <th>Record Date</th>
       <th>Pay-Out Date</th>
       <th>Ccy</th>
       <th>Div per Share</th>
@@ -33,14 +35,22 @@
       <td>{{ dividend.stock_name }}</td>
       <td>{{ dividend.stock_code }}</td>
       <td>{{ '{:,.0f}'.format(dividend.nominal) }}</td>
+      <td>{{ dividend.declaration_date or '' }}</td>
       <td>{{ dividend.ex_date }}</td>
+      <td>{{ dividend.record_date or '' }}</td>
       <td>{{ dividend.pay_out }}</td>
       <td>{{ dividend.ccy_code }}</td>
       <td>{{ '{:,.4f}'.format(dividend.dividends_per_share) }}</td>
       <td>{{ '{:,.2f}'.format(dividend.nominal * dividend.dividends_per_share) }}</td>
       <td>{{ '{:,.2f}'.format(dividend.tax + dividend.charges) }}</td>
       <td>{{ '{:,.2f}'.format(dividend.nominal * dividend.dividends_per_share - dividend.tax - dividend.charges) }}</td>
-      <td>{{ dividend.status }}</td>
+      <td>
+        {% if dividend.status == 'Estimate' and dividend.pay_out < today %}
+        <span style="background:rgba(217,119,6,0.18); color:#92400e; padding:2px 8px; border-radius:4px; font-weight:600;">Estimate (overdue)</span>
+        {% else %}
+        {{ dividend.status }}
+        {% endif %}
+      </td>
       <td>
         <a href="{{ url_for('dividends.edit', ref_num=dividend.ref_num) }}" class="btn btn-success">Edit</a>
         <button type="button" class="btn btn-danger" onclick="showConfirmModal('Delete this dividend?', function(){

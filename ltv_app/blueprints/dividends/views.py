@@ -3,6 +3,7 @@ from datetime import datetime
 
 from ..auth import login_required
 from ..database import get_db
+from ...tz import ph_today
 
 from .models import CashDividends
 from .forms import Form
@@ -10,7 +11,7 @@ from .forms import Form
 bp = Blueprint('dividends', __name__, template_folder="pages", url_prefix="/dividends")
 
 
-@bp.route("/", methods=["GET", "POST"])
+@bp.route("/", methods=["GET"])
 @login_required
 def home():
     try:
@@ -18,24 +19,26 @@ def home():
     except:
         pass
     db = get_db()
-    year = "2022"
-    start_date = f"{year}-01-01"
-    end_date = f"{year}-12-31"
+    today = ph_today()
+    start_date = request.args.get('start_date') or f"{today.year}-01-01"
+    end_date = request.args.get('end_date') or f"{today.year}-12-31"
     sql = """
-    SELECT 
+    SELECT
         tbl_cash_dividends.ref_num,
         tbl_bank_account.bank_name,
         tbl_code.stock_name,
         tbl_code.code AS stock_code,
         tbl_cash_dividends.nominal,
+        tbl_cash_dividends.declaration_date,
         tbl_cash_dividends.ex_date,
+        tbl_cash_dividends.record_date,
         tbl_cash_dividends.pay_out,
         tbl_currency.ccy_id AS ccy_code,
         tbl_cash_dividends.dividends_per_share,
         tbl_cash_dividends.tax,
         tbl_cash_dividends.charges,
         tbl_cash_dividends.status
-    FROM tbl_cash_dividends 
+    FROM tbl_cash_dividends
     INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_cash_dividends.bank_id
     INNER JOIN tbl_code ON tbl_code.ref_num = tbl_cash_dividends.stock_id
     INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_cash_dividends.ccy_id
@@ -47,7 +50,8 @@ def home():
     context = {
         "dividends": dividends,
         "start_date": start_date,
-        "end_date": end_date
+        "end_date": end_date,
+        "today": str(today),
     }
     return render_template("dividends/home.html", **context)
 
@@ -175,14 +179,14 @@ def select_fields(db, form):
 def create_table():
     db = get_db()
     sql = """
-    CREATE TABLE tbl_cash_dividends
+    CREATE TABLE IF NOT EXISTS tbl_cash_dividends
         (
         ref_num INTEGER PRIMARY KEY AUTOINCREMENT,
         bank_id INT,
         stock_id INT,
-        declaration_date TIMESTAMP,
+        declaration_date TEXT,
         ex_date TIMESTAMP,
-        record_date TIMESTAMP,
+        record_date TEXT,
         pay_out TIMESTAMP,
         nominal REAL,
         ccy_id INT,
@@ -193,3 +197,12 @@ def create_table():
         )
     ;"""
     db.execute(sql)
+    # Add new columns if they don't exist (for existing databases)
+    try:
+        db.execute("ALTER TABLE tbl_cash_dividends ADD COLUMN declaration_date TEXT")
+    except:
+        pass
+    try:
+        db.execute("ALTER TABLE tbl_cash_dividends ADD COLUMN record_date TEXT")
+    except:
+        pass
