@@ -179,14 +179,14 @@ def select_fields(db, form):
 def create_table():
     db = get_db()
     sql = """
-    CREATE TABLE IF NOT EXISTS tbl_cash_dividends
+    CREATE TABLE tbl_cash_dividends
         (
         ref_num INTEGER PRIMARY KEY AUTOINCREMENT,
         bank_id INT,
         stock_id INT,
-        declaration_date TEXT,
+        declaration_date TIMESTAMP,
         ex_date TIMESTAMP,
-        record_date TEXT,
+        record_date TIMESTAMP,
         pay_out TIMESTAMP,
         nominal REAL,
         ccy_id INT,
@@ -197,12 +197,3 @@ def create_table():
         )
     ;"""
     db.execute(sql)
-    # Add new columns if they don't exist (for existing databases)
-    try:
-        db.execute("ALTER TABLE tbl_cash_dividends ADD COLUMN declaration_date TEXT")
-    except:
-        pass
-    try:
-        db.execute("ALTER TABLE tbl_cash_dividends ADD COLUMN record_date TEXT")
-    except:
-        pass
