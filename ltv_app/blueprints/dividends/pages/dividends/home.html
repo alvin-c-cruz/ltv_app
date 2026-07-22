@@ -10,6 +10,7 @@
   <input type="submit" value="Go" class="btn btn-success">
 </form>
 <a href="{{ url_for('dividends.add') }}" class="btn btn-success" autofocus>Add dividend</a>
+<a href="{{ url_for('dividends.export', start_date=start_date, end_date=end_date) }}" class="btn btn-primary">Download Excel</a>
 {% if dividends %}
   <table class="table table-striped table-dark">
     <tr>

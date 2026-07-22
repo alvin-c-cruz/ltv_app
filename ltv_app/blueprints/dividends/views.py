@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, flash, redirect, url_for, request
+from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file
 from datetime import datetime
+import os
 
 from ..auth import login_required
 from ..database import get_db
@@ -7,6 +8,7 @@ from ...tz import ph_today
 
 from .models import CashDividends
 from .forms import Form
+from .extensions import CreateExcel
 
 bp = Blueprint('dividends', __name__, template_folder="pages", url_prefix="/dividends")
 
@@ -54,6 +56,23 @@ def home():
         "today": str(today),
     }
     return render_template("dividends/home.html", **context)
+
+
+@bp.route("/export", methods=["GET"])
+@login_required
+def export():
+    db = get_db()
+    today = ph_today()
+    start_date = request.args.get('start_date') or f"{today.year}-01-01"
+    end_date = request.args.get('end_date') or f"{today.year}-12-31"
+
+    excel_file = CreateExcel(
+        path=os.path.join(current_app.instance_path, "temp"),
+        start_date=start_date,
+        end_date=end_date,
+        db=db
+    )
+    return send_file(excel_file.filename, as_attachment=True)
 
 
 @bp.route("/add", methods=["GET", "POST"])
