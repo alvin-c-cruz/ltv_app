@@ -40,15 +40,15 @@ class CreateExcel:
         INNER JOIN tbl_code ON tbl_code.ref_num = tbl_cash_dividends.stock_id
         INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_cash_dividends.ccy_id
         WHERE tbl_cash_dividends.bank_id = ?
-          AND tbl_cash_dividends.ex_date >= ? AND tbl_cash_dividends.ex_date <= ?
-        ORDER BY tbl_cash_dividends.ex_date;
+          AND tbl_cash_dividends.pay_out >= ? AND tbl_cash_dividends.pay_out <= ?
+        ORDER BY tbl_cash_dividends.pay_out;
         """
         return self.db.execute(sql, (bank_ref, self.start_date, self.end_date)).fetchall()
 
     def create(self):
         headers = [
-            "Stock Name", "Code", "Quantity", "Declaration Date", "Ex Date",
-            "Record Date", "Pay-Out Date", "Ccy", "Div/Share", "Gross Amount",
+            "Pay-Out Date", "Stock Name", "Code", "Quantity", "Declaration Date", "Ex Date",
+            "Record Date", "Ccy", "Div/Share", "Gross Amount",
             "Tax/Charges", "Net Amount", "Status",
         ]
         for account in self.bank_accounts():
@@ -59,13 +59,13 @@ class CreateExcel:
                 gross = row["nominal"] * row["dividends_per_share"]
                 net = gross - row["tax"] - row["charges"]
                 ws.append([
+                    row["pay_out"],
                     row["stock_name"],
                     row["stock_code"],
                     row["nominal"],
                     row["declaration_date"] or "",
                     row["ex_date"],
                     row["record_date"] or "",
-                    row["pay_out"],
                     row["ccy_code"],
                     row["dividends_per_share"],
                     round(gross, 2),

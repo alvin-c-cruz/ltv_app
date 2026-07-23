@@ -44,7 +44,7 @@ def home():
     INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_cash_dividends.bank_id
     INNER JOIN tbl_code ON tbl_code.ref_num = tbl_cash_dividends.stock_id
     INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_cash_dividends.ccy_id
-    WHERE tbl_cash_dividends.ex_date >= ? AND tbl_cash_dividends.ex_date <= ?
+    WHERE tbl_cash_dividends.pay_out >= ? AND tbl_cash_dividends.pay_out <= ?
     ORDER BY tbl_cash_dividends.ref_num desc
     ;
     """

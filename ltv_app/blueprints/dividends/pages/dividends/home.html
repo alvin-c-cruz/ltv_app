@@ -14,6 +14,7 @@
 {% if dividends %}
   <table class="table table-striped table-dark">
     <tr>
+      <th>Pay-Out Date</th>
       <th>Bank / Account</th>
       <th> Stock Name</th>
       <th>Code</th>
@@ -21,7 +22,6 @@
       <th>Declaration Date</th>
       <th>Ex Date</th>
       <th>Record Date</th>
-      <th>Pay-Out Date</th>
       <th>Ccy</th>
       <th>Div per Share</th>
       <th>Gross Amount</th>
@@ -32,6 +32,7 @@
     </tr>
     {% for dividend in dividends%}
     <tr>
+      <td>{{ dividend.pay_out }}</td>
       <td>{{ dividend.bank_name }}</td>
       <td>{{ dividend.stock_name }}</td>
       <td>{{ dividend.stock_code }}</td>
@@ -39,7 +40,6 @@
       <td>{{ dividend.declaration_date or '' }}</td>
       <td>{{ dividend.ex_date }}</td>
       <td>{{ dividend.record_date or '' }}</td>
-      <td>{{ dividend.pay_out }}</td>
       <td>{{ dividend.ccy_code }}</td>
       <td>{{ '{:,.4f}'.format(dividend.dividends_per_share) }}</td>
       <td>{{ '{:,.2f}'.format(dividend.nominal * dividend.dividends_per_share) }}</td>
