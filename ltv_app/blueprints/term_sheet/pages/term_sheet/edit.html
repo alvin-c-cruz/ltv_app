@@ -193,6 +193,19 @@
             {% endif %}
         </div>
 
+        {% if schedule_warnings %}
+        <div style="margin-bottom: 0.6rem; padding: 0.6rem 0.75rem; border-radius: 6px;
+                    background: rgba(217,119,6,0.12); border: 1px solid rgba(217,119,6,0.4);
+                    color: #92400e; font-size: 0.83rem;">
+            <strong>⚠ Period schedule {{ 'warnings' if schedule_warnings|length > 1 else 'warning' }}:</strong>
+            <ul style="margin: 0.35rem 0 0; padding-left: 1.2rem;">
+                {% for warning in schedule_warnings %}
+                <li>{{ warning }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         <div style="overflow-x: auto; border-radius: 6px; border: 1px solid var(--border-color);">
             <table style="border-collapse: collapse; width: 100%; font-size: 0.82rem;">
                 <thead>

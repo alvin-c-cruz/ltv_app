@@ -170,9 +170,8 @@ function shiftDate(fieldId, days) {
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
-                {% set spot_rows     = data.rows | rejectattr('is_fixing') | rejectattr('source', 'equalto', 'contract') | list %}
+                {% set spot_rows     = data.rows | rejectattr('is_fixing') | list %}
                 {% set fixing_rows   = data.rows | selectattr('is_fixing') | list %}
-                {% set contract_rows = data.rows | selectattr('source', 'equalto', 'contract') | list %}
                 <tbody>
                 {% for row in spot_rows %}
                 <tr>
@@ -237,41 +236,6 @@ function shiftDate(fieldId, days) {
                               style="display:none"></form>
                         <button type="button" class="btn btn-danger btn-sm"
                                 onclick="showConfirm('Delete this transaction?', () => document.getElementById('del-{{ row.ref_num }}').submit())">Delete</button>
-                    </td>
-                </tr>
-                {% endfor %}
-                {% endif %}
-                {% if contract_rows %}
-                <tr><td colspan="9" class="wf-subheader">TERM SHEETS (ACCU / DECU)</td></tr>
-                {% for row in contract_rows %}
-                <tr>
-                    <td class="text-center">
-                        <input type="checkbox" class="review-checkbox"
-                               data-source="{{ row.source }}"
-                               data-ref="{{ row.ref_num }}"
-                               data-bank="{{ bank_name }}"
-                               onchange="updateReviewCount()">
-                    </td>
-                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
-                    <td style="white-space:nowrap">{{ row.value_date }}</td>
-                    <td>{{ row.stock }}</td>
-                    <td>{{ row.transaction_type }}</td>
-                    <td class="text-right">{{ row.quantity }}</td>
-                    <td class="text-right">{{ row.price }}</td>
-                    <td class="text-right">{{ row.amount }}</td>
-                    <td class="text-center" style="white-space:nowrap">
-                        <button type="button" class="btn btn-outline btn-sm"
-                                onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
-                        <form id="rev-{{ row.ref_num }}" method="post"
-                              action="{{ url_for('workflow.review_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:none"></form>
-                        <button type="button" class="btn btn-primary btn-sm"
-                                onclick="showConfirm('Mark as reviewed?', () => document.getElementById('rev-{{ row.ref_num }}').submit())">Review</button>
-                        <form id="del-{{ row.ref_num }}" method="post"
-                              action="{{ url_for('workflow.delete_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:none"></form>
-                        <button type="button" class="btn btn-danger btn-sm"
-                                onclick="showConfirm('Delete this term sheet?', () => document.getElementById('del-{{ row.ref_num }}').submit())">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -448,9 +412,8 @@ function shiftDate(fieldId, days) {
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
-                {% set spot_rows     = data.rows | rejectattr('is_fixing') | rejectattr('source', 'equalto', 'contract') | list %}
+                {% set spot_rows     = data.rows | rejectattr('is_fixing') | list %}
                 {% set fixing_rows   = data.rows | selectattr('is_fixing') | list %}
-                {% set contract_rows = data.rows | selectattr('source', 'equalto', 'contract') | list %}
                 <tbody>
                 {% for row in spot_rows %}
                 <tr>
@@ -517,43 +480,6 @@ function shiftDate(fieldId, days) {
                 </tr>
                 {% endfor %}
                 {% endif %}
-                {% if contract_rows %}
-                <tr>
-                    <td colspan="10"
-                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
-                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
-                        TERM SHEETS (ACCU / DECU)
-                    </td>
-                </tr>
-                {% for row in contract_rows %}
-                <tr>
-                    <td class="text-center">
-                        <input type="checkbox" class="lock-checkbox"
-                               data-source="{{ row.source }}"
-                               data-ref="{{ row.ref_num }}"
-                               data-bank="{{ bank_name }}"
-                               onchange="updateLockCount()">
-                    </td>
-                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
-                    <td>{{ row.stock }}</td>
-                    <td>{{ row.transaction_type }}</td>
-                    <td class="text-right">{{ row.quantity }}</td>
-                    <td class="text-right">{{ row.price }}</td>
-                    <td class="text-right">{{ row.amount }}</td>
-                    <td class="text-right">{{ row.charges }}</td>
-                    <td></td>
-                    <td class="text-center" style="white-space:nowrap">
-                        <button type="button" class="btn btn-outline btn-sm"
-                                onclick="openContractWfModal({{ row.ref_num }})">Edit</button>
-                        <form id="lock-{{ row.ref_num }}" method="post"
-                              action="{{ url_for('workflow.lock_txn', source=row.source, ref_num=row.ref_num, date_from=date_from, date_to=date_to) }}"
-                              style="display:none"></form>
-                        <button type="button" class="btn btn-danger btn-sm"
-                                onclick="showConfirm('Lock this contract?', () => document.getElementById('lock-{{ row.ref_num }}').submit())">Lock</button>
-                    </td>
-                </tr>
-                {% endfor %}
-                {% endif %}
                 </tbody>
             </table>
         </div>
@@ -603,9 +529,8 @@ function shiftDate(fieldId, days) {
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
-                {% set spot_rows     = data.rows | rejectattr('is_fixing') | rejectattr('source', 'equalto', 'contract') | list %}
+                {% set spot_rows     = data.rows | rejectattr('is_fixing') | list %}
                 {% set fixing_rows   = data.rows | selectattr('is_fixing') | list %}
-                {% set contract_rows = data.rows | selectattr('source', 'equalto', 'contract') | list %}
                 <tbody>
                 {% for row in spot_rows %}
                 <tr style="opacity:0.7;">
@@ -640,30 +565,6 @@ function shiftDate(fieldId, days) {
                     <td class="text-right">{{ row.amount }}</td>
                     <td class="text-right">{{ row.charges }}</td>
                     <td class="text-right">{{ row.net_amount }}</td>
-                    <td class="text-center">
-                        <span style="color:var(--success);font-weight:500;">✓ Locked</span>
-                    </td>
-                </tr>
-                {% endfor %}
-                {% endif %}
-                {% if contract_rows %}
-                <tr>
-                    <td colspan="9"
-                        style="background:var(--bg-secondary);font-size:0.78rem;font-weight:600;
-                               color:var(--text-muted);padding:4px 8px;letter-spacing:0.04em;">
-                        TERM SHEETS (ACCU / DECU)
-                    </td>
-                </tr>
-                {% for row in contract_rows %}
-                <tr style="opacity:0.7;">
-                    <td style="white-space:nowrap">{{ row.trade_date }}</td>
-                    <td>{{ row.stock }}</td>
-                    <td>{{ row.transaction_type }}</td>
-                    <td class="text-right">{{ row.quantity }}</td>
-                    <td class="text-right">{{ row.price }}</td>
-                    <td class="text-right">{{ row.amount }}</td>
-                    <td class="text-right">{{ row.charges }}</td>
-                    <td></td>
                     <td class="text-center">
                         <span style="color:var(--success);font-weight:500;">✓ Locked</span>
                     </td>
@@ -883,8 +784,7 @@ function openEditModal(source, refNum) {
         .then(response => response.json())
         .then(data => {
             // Populate modal
-            document.getElementById('editModalTitle').textContent =
-                data.source === 'contract' ? 'Edit Term Sheet' : 'Edit Transaction';
+            document.getElementById('editModalTitle').textContent = 'Edit Transaction';
 
             // Populate form fields
             document.getElementById('editTradeDate').value = data.trade_date;
@@ -931,18 +831,13 @@ function openEditModal(source, refNum) {
                 typeSelect.appendChild(option);
             });
 
-            // Show/hide charges section based on source
-            const chargesSection = document.getElementById('editChargesSection');
-            if (data.source === 'contract') {
-                chargesSection.style.display = 'none';
-            } else {
-                chargesSection.style.display = 'block';
-                document.getElementById('editBrokerage').value = data.brokerage || 0;
-                document.getElementById('editCommission').value = data.commission || 0;
-                document.getElementById('editForeignCharge').value = data.foreign_charge || 0;
-                document.getElementById('editStampDuty').value = data.stamp_duty || 0;
-                document.getElementById('editMisc').value = data.misc || 0;
-            }
+            // Populate charges section
+            document.getElementById('editChargesSection').style.display = 'block';
+            document.getElementById('editBrokerage').value = data.brokerage || 0;
+            document.getElementById('editCommission').value = data.commission || 0;
+            document.getElementById('editForeignCharge').value = data.foreign_charge || 0;
+            document.getElementById('editStampDuty').value = data.stamp_duty || 0;
+            document.getElementById('editMisc').value = data.misc || 0;
 
             // Set form action with date parameters
             const dateFrom = '{{ date_from or "" }}';
@@ -986,108 +881,8 @@ function updateEditAmount() {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { closeEditModal(); closeFixingWfModal(); closeContractWfModal(); confirmCancel(); }
+    if (e.key === 'Escape') { closeEditModal(); closeFixingWfModal(); confirmCancel(); }
 });
-
-// ── Contract (ACCU / DECU term sheet) edit modal ──────────────────────────────
-function openContractWfModal(refNum) {
-    fetch(`/workflow/edit/contract/${refNum}/data`)
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('cwModalTitle').textContent = 'Edit Contract #' + refNum;
-
-            document.getElementById('cwTradeDate').value   = data.trade_date;
-            document.getElementById('cwStartDate').value   = data.value_date;
-            document.getElementById('cwDailyShares').value = data.quantity_raw;
-            document.getElementById('cwSpot').value        = data.price_raw;
-            document.getElementById('cwStrikeRate').value  = data.strike_rate || 0;
-            document.getElementById('cwKoRate').value      = data.ko_rate     || 0;
-            document.getElementById('cwReference').value   = data.reference   || '';
-            document.getElementById('cwBankDoc').value     = data.bank_doc    || '';
-
-            // Account
-            const bankSel = document.getElementById('cwBankRef');
-            bankSel.innerHTML = '<option value="">— select —</option>';
-            data.banks.forEach(b => {
-                const opt = document.createElement('option');
-                opt.value = b.ref_num; opt.textContent = b.bank_name;
-                if (b.ref_num === data.bank_ref) opt.selected = true;
-                bankSel.appendChild(opt);
-            });
-
-            // Stock
-            const stockSel = document.getElementById('cwCodeRef');
-            stockSel.innerHTML = '<option value="">— select —</option>';
-            data.stocks.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.ref_num; opt.textContent = `${s.stock_name} (${s.code})`;
-                if (s.ref_num === data.code_ref) opt.selected = true;
-                stockSel.appendChild(opt);
-            });
-
-            // Type — ACCU/DECU only
-            const typeSel = document.getElementById('cwTransactionType');
-            Array.from(typeSel.options).forEach(opt => {
-                opt.selected = opt.value === data.transaction_type;
-            });
-
-            // Status
-            const statusSel = document.getElementById('cwStatus');
-            Array.from(statusSel.options).forEach(opt => {
-                opt.selected = opt.value === (data.status || 'active');
-            });
-
-            // Tenor
-            const tenorSel = document.getElementById('cwTenor');
-            Array.from(tenorSel.options).forEach(opt => {
-                opt.selected = opt.value === (data.tenor || '');
-            });
-
-            // Frequency
-            const freqSel = document.getElementById('cwFrequency');
-            Array.from(freqSel.options).forEach(opt => {
-                opt.selected = opt.value === (data.frequency || '');
-            });
-
-            // Leveraged
-            const levSel = document.getElementById('cwLeveraged');
-            Array.from(levSel.options).forEach(opt => {
-                opt.selected = opt.value === (data.leveraged || 'No');
-            });
-
-            // GTD
-            const gtdSel = document.getElementById('cwGtd');
-            Array.from(gtdSel.options).forEach(opt => {
-                opt.selected = opt.value === (data.gtd || 'No');
-            });
-
-            const dateFrom = '{{ date_from or "" }}';
-            const dateTo   = '{{ date_to or "" }}';
-            const params   = new URLSearchParams();
-            if (dateFrom) params.append('date_from', dateFrom);
-            if (dateTo)   params.append('date_to',   dateTo);
-            document.getElementById('cwForm').action = `/workflow/edit/contract/${refNum}?${params.toString()}`;
-
-            updateCwPrices();
-            document.getElementById('editContractWfModal').classList.add('active');
-        })
-        .catch(err => {
-            console.error(err);
-            alert('Error loading contract data. Please try again.');
-        });
-}
-
-function closeContractWfModal() {
-    document.getElementById('editContractWfModal').classList.remove('active');
-}
-
-function updateCwPrices() {
-    const spot = parseFloat(document.getElementById('cwSpot').value)       || 0;
-    const sr   = parseFloat(document.getElementById('cwStrikeRate').value) || 0;
-    const kor  = parseFloat(document.getElementById('cwKoRate').value)     || 0;
-    document.getElementById('cwStrikePrice').value = (spot && sr)  ? (spot * sr  / 100).toFixed(4) : '';
-    document.getElementById('cwKoPrice').value     = (spot && kor) ? (spot * kor / 100).toFixed(4) : '';
-}
 
 // ── Fixing-specific edit modal (ACCU / DECU) ─────────────────────────────────
 const FW_TYPES = ['Buy (Accu)', 'Buy (Accu-KO)', 'Sell (Decu)', 'Sell (Decu-KO)'];
@@ -1426,155 +1221,6 @@ function updateFwAmount() {
             <div class="form-actions">
                 <button type="submit" class="btn btn-success">Save Changes</button>
                 <button type="button" class="btn btn-secondary" onclick="closeFixingWfModal()">Cancel</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-{# ── Contract Edit Modal (ACCU / DECU term sheet) ────────────────────── #}
-<div class="modal-overlay" id="editContractWfModal" onclick="if(event.target===this)closeContractWfModal()">
-    <div class="modal">
-        <div class="modal-header">
-            <span class="modal-title" id="cwModalTitle">Edit Contract</span>
-            <button type="button" class="modal-close" onclick="closeContractWfModal()">&times;</button>
-        </div>
-        <form method="post" id="cwForm" action="">
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Account</label>
-                    <select name="bank_ref" id="cwBankRef" required>
-                        <option value="">— select —</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Reference</label>
-                    <input type="text" name="reference" id="cwReference">
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Type</label>
-                    <select name="transaction_type" id="cwTransactionType" required>
-                        <option value="ACCU">Accumulator</option>
-                        <option value="DECU">Decumulator</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Status</label>
-                    <select name="status" id="cwStatus">
-                        <option value="active">Active</option>
-                        <option value="KO">KO</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Underlying Stock</label>
-                <select name="code_ref" id="cwCodeRef" required>
-                    <option value="">— select —</option>
-                </select>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Trade Date</label>
-                    <input type="date" name="trade_date" id="cwTradeDate" required>
-                </div>
-                <div class="form-group">
-                    <label>Start Date</label>
-                    <input type="date" name="value_date" id="cwStartDate" required>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Tenor</label>
-                    <select name="tenor" id="cwTenor">
-                        <option value="">— select —</option>
-                        {% for n in range(1, 16) %}
-                        <option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Frequency</label>
-                    <select name="frequency" id="cwFrequency">
-                        <option value="">— select —</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="bi-monthly">Bi-Weekly</option>
-                        <option value="weekly">Weekly</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Spot</label>
-                    <input type="number" step="any" name="price" id="cwSpot" required oninput="updateCwPrices()">
-                </div>
-                <div class="form-group">
-                    <label>Daily Shares</label>
-                    <input type="number" step="1" name="quantity" id="cwDailyShares" required>
-                </div>
-            </div>
-
-            <div class="form-section">
-                <div class="form-section-label">Rates</div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Strike Rate (%)</label>
-                        <input type="number" step="0.01" name="strike_rate" id="cwStrikeRate" oninput="updateCwPrices()">
-                    </div>
-                    <div class="form-group">
-                        <label style="font-size:0.74rem;opacity:0.7;">Strike Price</label>
-                        <input type="text" id="cwStrikePrice" readonly tabindex="-1"
-                               style="background:var(--bg-secondary);font-weight:600;">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>KO Rate (%)</label>
-                        <input type="number" step="0.01" name="ko_rate" id="cwKoRate" oninput="updateCwPrices()">
-                    </div>
-                    <div class="form-group">
-                        <label style="font-size:0.74rem;opacity:0.7;">KO Price</label>
-                        <input type="text" id="cwKoPrice" readonly tabindex="-1"
-                               style="background:var(--bg-secondary);font-weight:600;">
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Leveraged</label>
-                    <select name="leveraged" id="cwLeveraged">
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>GTD</label>
-                    <select name="gtd" id="cwGtd">
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                        {% for n in range(1, 5) %}
-                        <option value="{{ n }}m">{{ n }} month{{ 's' if n > 1 }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Bank Reference No.</label>
-                <input type="text" name="bank_doc" id="cwBankDoc">
-            </div>
-
-            <div class="form-actions">
-                <button type="submit" class="btn btn-success">Save Changes</button>
-                <button type="button" class="btn btn-secondary" onclick="closeContractWfModal()">Cancel</button>
             </div>
         </form>
     </div>

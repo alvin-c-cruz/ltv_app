@@ -133,6 +133,8 @@ def add():
         ts.save()
 
         CreateSchedules(ts, db)
+        ts.get_schedules()
+        schedule_warnings = ts.validate_schedule()
 
         # periods_dict = {}
         # for key, value in form.items():
@@ -158,6 +160,9 @@ def add():
         #     schedule.save()
 
         flash(f"{ts.ref_num}: {ts.transaction_type} {ts.reference} has been saved.")
+        if schedule_warnings:
+            flash(f"⚠ {ts.ref_num}: generated schedule has {len(schedule_warnings)} "
+                  f"warning(s) — review its Period Schedule.")
         return redirect(url_for('transactions.home', trade_date=trade_date))
     else:
         ts = {}
@@ -221,6 +226,8 @@ def edit(contract_ref, view_only=False):
         ("4m", "4 month"),
     ]
 
+    schedule_warnings = []
+
     if request.method == "POST":
         form = request.form
 
@@ -252,8 +259,11 @@ def edit(contract_ref, view_only=False):
             db.commit()
             CreateSchedules(ts, db)
             ts.get_schedules()
+            schedule_warnings = ts.validate_schedule()
             freq_label = dict(frequencies).get(ts.frequency, ts.frequency)
             flash(f"Period schedule regenerated for {ts.transaction_type} {ts.reference} ({freq_label}).")
+            if schedule_warnings:
+                flash(f"⚠ Regenerated schedule has {len(schedule_warnings)} warning(s) — see Period Schedule below.")
             return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
 
         periods_dict = {}
@@ -282,15 +292,19 @@ def edit(contract_ref, view_only=False):
             schedule.save()
 
         ts.get_schedules()
+        schedule_warnings = ts.validate_schedule()
         flash(f"{ts.transaction_type} {ts.reference} has been saved.")
+        if schedule_warnings:
+            flash(f"⚠ {len(schedule_warnings)} period schedule warning(s) — see Period Schedule below.")
     else:
         ts.get(ref_num=contract_ref)
         ts.get_schedules()
+        schedule_warnings = ts.validate_schedule()
 
     bank_id = db.execute("SELECT bank_id FROM tbl_bank_account WHERE ref_num=?", (ts.bank_ref,)).fetchone()[0]
     return render_template('term_sheet/edit.html', ts=ts, contract_ref=contract_ref,
                            codes=codes, tenors=tenors, frequencies=frequencies,
-                           gtds=gtds, bank_id=bank_id)
+                           gtds=gtds, bank_id=bank_id, schedule_warnings=schedule_warnings)
 
 
 @bp.route("/<contract_ref>/data", methods=["GET"])

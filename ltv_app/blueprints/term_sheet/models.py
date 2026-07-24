@@ -20,6 +20,12 @@ def _to_int(value):
     return int(float(value))
 
 
+# Rough expected trading-day density used by StockContract.validate_schedule() —
+# not HK-holiday-calendar-precise, just enough to flag a schedule that's short
+# a period or has drifted (see BUGS.md 2026-07-13 period-schedule-drift entry).
+_TENOR_TRADING_DAYS_PER_MONTH = 21
+
+
 def _normalize_period_value(value):
     """Coerce a period column for *storage*: strip commas/whitespace and store
     as int, but preserve blank/None as the empty-string marker.
@@ -199,6 +205,50 @@ class StockContract(Model):
             period = FixingSchedule(db=self.db)
             period.get(ref_num=sched_ref)
             self.schedules.append(period)
+
+    def validate_schedule(self):
+        """Sanity-check the loaded period schedule (self.schedules, set by
+        get_schedules()) against the contract's stated Tenor, and check for
+        gaps/overlaps between periods. Returns a list of warning strings —
+        empty if nothing looks off. Advisory only; does not block saving.
+
+        Skips 'inactive' contracts: closed-out historical records are not
+        worth re-flagging (real-world sweep found ~12% of them fail the
+        contiguity check, mostly pre-dating the 2026-07-17 schedule-generation
+        fix — that's just noise for a contract nobody will revisit).
+        """
+        warnings = []
+
+        if not self.schedules or self.status == 'inactive':
+            return warnings
+
+        if self.tenor:
+            tenor_months = int(self.tenor.replace('m', ''))
+            expected_days = tenor_months * _TENOR_TRADING_DAYS_PER_MONTH
+            tolerance = max(5, round(expected_days * 0.10))
+            if abs(self.total_days - expected_days) > tolerance:
+                warnings.append(
+                    f"Total scheduled days ({self.total_days}) is outside the expected "
+                    f"range for a {tenor_months}-month tenor "
+                    f"(~{expected_days} ± {tolerance} days)."
+                )
+
+        # Contiguity: each period's Start Date should be the next working day
+        # after the previous period's End Date — no gaps or overlaps. Ordered
+        # by ref_num (insertion/temporal order), not start_date — a single
+        # corrupted date would otherwise scramble the sort and turn one bad
+        # row into two confusing warnings instead of pinpointing it.
+        ordered = sorted(self.schedules, key=lambda s: s.ref_num)
+        for prev, nxt in zip(ordered, ordered[1:]):
+            expected_start = self.next_working_day(prev.end_date)
+            if nxt.start_date != expected_start:
+                warnings.append(
+                    f"Gap/overlap between periods: period ending {prev.end_date} is "
+                    f"followed by a period starting {nxt.start_date} "
+                    f"(expected {expected_start})."
+                )
+
+        return warnings
 
     def as_dict(self):
         self.__post_init__()

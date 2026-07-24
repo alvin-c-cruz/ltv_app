@@ -17,26 +17,20 @@ def _fetch_review(db, date_from=None, date_to=None):
     """Fetch unreviewed transactions (Review section)."""
     params_spot = []
     params_short = []
-    params_contracts = []
 
     date_cond_spot = ""
     date_cond_short = ""
-    date_cond_contracts = ""
 
     if date_from:
         date_cond_spot += " AND T.trade_date >= ?"
         params_spot.append(date_from)
         date_cond_short += " AND T.trade_date >= ?"
         params_short.append(date_from)
-        date_cond_contracts += " AND c.trade_date >= ?"
-        params_contracts.append(date_from)
     if date_to:
         date_cond_spot += " AND T.trade_date <= ?"
         params_spot.append(date_to)
         date_cond_short += " AND T.trade_date <= ?"
         params_short.append(date_to)
-        date_cond_contracts += " AND c.trade_date <= ?"
-        params_contracts.append(date_to)
 
     spot = db.execute(f"""
         SELECT T.ref_num, 'spot' AS source, T.trade_date, T.value_date,
@@ -66,21 +60,6 @@ def _fetch_review(db, date_from=None, date_to=None):
         ORDER BY T.trade_date DESC, B.priority, C.code
     """, params_short).fetchall()
 
-    contracts = db.execute(f"""
-        SELECT c.ref_num, 'contract' AS source, c.trade_date, c.start_date AS value_date,
-               a.bank_name, a.priority,
-               s.code, s.stock_name,
-               c.transaction_type,
-               c.daily_shares AS quantity, c.spot AS price,
-               0 AS amount
-        FROM tbl_stock_contract c
-        INNER JOIN tbl_bank_account a ON a.ref_num = c.bank_ref
-        INNER JOIN tbl_code s ON s.ref_num = c.code_ref
-        WHERE c.reviewed = 0
-          {date_cond_contracts}
-        ORDER BY c.trade_date DESC, a.priority, s.code
-    """, params_contracts).fetchall()
-
     def fmt(rows, source):
         result = []
         for r in rows:
@@ -100,7 +79,7 @@ def _fetch_review(db, date_from=None, date_to=None):
             })
         return result
 
-    return fmt(spot, 'spot') + fmt(short, 'short') + fmt(contracts, 'contract')
+    return fmt(spot, 'spot') + fmt(short, 'short')
 
 
 def _fetch_charges(db, date_from=None, date_to=None):
@@ -173,25 +152,19 @@ def _fetch_lock(db, date_from=None, date_to=None):
     """Fetch reviewed transactions with charges ready to lock (Lock section)."""
     params_spot = []
     params_short = []
-    params_contracts = []
     date_cond_spot = ""
     date_cond_short = ""
-    date_cond_contracts = ""
 
     if date_from:
         date_cond_spot += " AND T.trade_date >= ?"
         params_spot.append(date_from)
         date_cond_short += " AND T.trade_date >= ?"
         params_short.append(date_from)
-        date_cond_contracts += " AND c.trade_date >= ?"
-        params_contracts.append(date_from)
     if date_to:
         date_cond_spot += " AND T.trade_date <= ?"
         params_spot.append(date_to)
         date_cond_short += " AND T.trade_date <= ?"
         params_short.append(date_to)
-        date_cond_contracts += " AND c.trade_date <= ?"
-        params_contracts.append(date_to)
 
     spot = db.execute(f"""
         SELECT T.ref_num, 'spot' AS source, T.trade_date,
@@ -227,30 +200,10 @@ def _fetch_lock(db, date_from=None, date_to=None):
         ORDER BY B.priority, T.trade_date DESC, C.code
     """, params_short).fetchall()
 
-    contracts = db.execute(f"""
-        SELECT c.ref_num, 'contract' AS source, c.trade_date,
-               a.bank_name, a.priority,
-               s.code, s.stock_name,
-               c.transaction_type,
-               c.daily_shares AS quantity, c.spot AS price,
-               0 AS amount, 0 AS charges
-        FROM tbl_stock_contract c
-        INNER JOIN tbl_bank_account a ON a.ref_num = c.bank_ref
-        INNER JOIN tbl_code s ON s.ref_num = c.code_ref
-        WHERE c.reviewed = 1
-          AND c.locked = 0
-          {date_cond_contracts}
-        ORDER BY a.priority, c.trade_date DESC, s.code
-    """, params_contracts).fetchall()
-
     def fmt(rows):
         result = []
         for r in rows:
-            if r['source'] != 'contract':
-                net = r['amount'] + r['charges'] if r['quantity'] >= 0 else r['amount'] - r['charges']
-                net_amount = '{:,.2f}'.format(net)
-            else:
-                net_amount = ''
+            net = r['amount'] + r['charges'] if r['quantity'] >= 0 else r['amount'] - r['charges']
             result.append({
                 'ref_num': r['ref_num'],
                 'source': r['source'],
@@ -265,37 +218,31 @@ def _fetch_lock(db, date_from=None, date_to=None):
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
                 'charges': '{:,.2f}'.format(r['charges']),
-                'net_amount': net_amount,
+                'net_amount': '{:,.2f}'.format(net),
                 'is_fixing': r['source'] == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
 
-    return fmt(spot) + fmt(short) + fmt(contracts)
+    return fmt(spot) + fmt(short)
 
 
 def _fetch_locked(db, date_from=None, date_to=None):
     """Fetch locked transactions (Locked section)."""
     params_spot = []
     params_short = []
-    params_contracts = []
     date_cond_spot = ""
     date_cond_short = ""
-    date_cond_contracts = ""
 
     if date_from:
         date_cond_spot += " AND T.trade_date >= ?"
         params_spot.append(date_from)
         date_cond_short += " AND T.trade_date >= ?"
         params_short.append(date_from)
-        date_cond_contracts += " AND c.trade_date >= ?"
-        params_contracts.append(date_from)
     if date_to:
         date_cond_spot += " AND T.trade_date <= ?"
         params_spot.append(date_to)
         date_cond_short += " AND T.trade_date <= ?"
         params_short.append(date_to)
-        date_cond_contracts += " AND c.trade_date <= ?"
-        params_contracts.append(date_to)
 
     spot = db.execute(f"""
         SELECT T.ref_num, 'spot' AS source, T.trade_date,
@@ -327,29 +274,10 @@ def _fetch_locked(db, date_from=None, date_to=None):
         ORDER BY B.priority, T.trade_date DESC, C.code
     """, params_short).fetchall()
 
-    contracts = db.execute(f"""
-        SELECT c.ref_num, 'contract' AS source, c.trade_date,
-               a.bank_name, a.priority,
-               s.code, s.stock_name,
-               c.transaction_type,
-               c.daily_shares AS quantity, c.spot AS price,
-               0 AS amount, 0 AS charges
-        FROM tbl_stock_contract c
-        INNER JOIN tbl_bank_account a ON a.ref_num = c.bank_ref
-        INNER JOIN tbl_code s ON s.ref_num = c.code_ref
-        WHERE c.locked = 1
-          {date_cond_contracts}
-        ORDER BY a.priority, c.trade_date DESC, s.code
-    """, params_contracts).fetchall()
-
     def fmt(rows):
         result = []
         for r in rows:
-            if r['source'] != 'contract':
-                net = r['amount'] + r['charges'] if r['quantity'] >= 0 else r['amount'] - r['charges']
-                net_amount = '{:,.2f}'.format(net)
-            else:
-                net_amount = ''
+            net = r['amount'] + r['charges'] if r['quantity'] >= 0 else r['amount'] - r['charges']
             result.append({
                 'ref_num': r['ref_num'],
                 'source': r['source'],
@@ -362,12 +290,12 @@ def _fetch_locked(db, date_from=None, date_to=None):
                 'price': '{:,.4f}'.format(r['price']),
                 'amount': '{:,.2f}'.format(r['amount']),
                 'charges': '{:,.2f}'.format(r['charges']),
-                'net_amount': net_amount,
+                'net_amount': '{:,.2f}'.format(net),
                 'is_fixing': r['source'] == 'spot' and 'cu' in r['transaction_type'].lower(),
             })
         return result
 
-    return fmt(spot) + fmt(short) + fmt(contracts)
+    return fmt(spot) + fmt(short)
 
 
 def _group_by_bank(rows):
@@ -427,7 +355,7 @@ def home():
 @superuser_required
 def review_txn(source, ref_num):
     db = get_db()
-    table = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}[source]
+    table = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short'}[source]
     db.execute(f"UPDATE {table} SET reviewed=1 WHERE ref_num=?", (ref_num,))
     db.commit()
     flash("Transaction reviewed.")
@@ -452,7 +380,7 @@ def review_multiple():
         flash("No transactions selected.")
         return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
-    table_map = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}
+    table_map = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short'}
     reviewed_count = 0
     for txn in transactions:
         source = txn.get('source')
@@ -550,7 +478,7 @@ def mark_no_charges(source, ref_num):
 @bp.route('/edit/<source>/<int:ref_num>/data', methods=['GET'])
 @superuser_required
 def get_edit_data(source, ref_num):
-    """Fetch transaction/contract data for the edit modal."""
+    """Fetch transaction data for the edit modal."""
     db = get_db()
 
     # Fetch dropdown options
@@ -566,70 +494,36 @@ def get_edit_data(source, ref_num):
         "SELECT DISTINCT transaction_type FROM tbl_transaction_type ORDER BY transaction_type"
     ).fetchall()
 
-    if source == 'contract':
-        row = db.execute(
-            "SELECT c.*, b.bank_name, s.code, s.stock_name "
-            "FROM tbl_stock_contract c "
-            "INNER JOIN tbl_bank_account b ON b.ref_num = c.bank_ref "
-            "INNER JOIN tbl_code s ON s.ref_num = c.code_ref "
-            "WHERE c.ref_num=?", (ref_num,)
-        ).fetchone()
+    table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
+    row = db.execute(
+        f"SELECT T.*, B.bank_name, C.code, C.stock_name "
+        f"FROM {table} T "
+        f"INNER JOIN tbl_bank_account B ON B.ref_num = T.bank_ref "
+        f"INNER JOIN tbl_code C ON C.ref_num = T.code_ref "
+        f"WHERE T.ref_num=?", (ref_num,)
+    ).fetchone()
 
-        if not row:
-            return {'error': 'Contract not found'}, 404
+    if not row:
+        return {'error': 'Transaction not found'}, 404
 
-        data = {
-            'source': 'contract',
-            'trade_date': row['trade_date'],
-            'value_date': row['start_date'],
-            'bank_ref': row['bank_ref'],
-            'code_ref': row['code_ref'],
-            'transaction_type': row['transaction_type'],
-            'quantity_raw': row['daily_shares'],
-            'price_raw': row['spot'],
-            'strike_rate': row['strike_rate'] or 0,
-            'ko_rate': row['ko_rate'] or 0,
-            'reference': row['reference'] or '',
-            'status': row['status'] or 'active',
-            'tenor': row['tenor'] or '',
-            'frequency': row['frequency'] or '',
-            'leveraged': row['leveraged'] or 'No',
-            'gtd': row['gtd'] or 'No',
-            'bank_doc': row['bank_doc'] or '',
-            'banks': [{'ref_num': b['ref_num'], 'bank_name': b['bank_name']} for b in banks],
-            'stocks': [{'ref_num': s['ref_num'], 'code': s['code'], 'stock_name': s['stock_name']} for s in stocks],
-        }
-    else:
-        table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
-        row = db.execute(
-            f"SELECT T.*, B.bank_name, C.code, C.stock_name "
-            f"FROM {table} T "
-            f"INNER JOIN tbl_bank_account B ON B.ref_num = T.bank_ref "
-            f"INNER JOIN tbl_code C ON C.ref_num = T.code_ref "
-            f"WHERE T.ref_num=?", (ref_num,)
-        ).fetchone()
-
-        if not row:
-            return {'error': 'Transaction not found'}, 404
-
-        data = {
-            'source': source,
-            'trade_date': row['trade_date'],
-            'value_date': row['value_date'],
-            'bank_ref': row['bank_ref'],
-            'code_ref': row['code_ref'],
-            'transaction_type': row['transaction_type'],
-            'quantity_raw': row['quantity'],
-            'price_raw': row['price'],
-            'brokerage': row['brokerage'] or 0,
-            'commission': row['commission'] or 0,
-            'foreign_charge': row['foreign_charge'] or 0,
-            'stamp_duty': row['stamp_duty'] or 0,
-            'misc': row['misc'] or 0,
-            'banks': [{'ref_num': b['ref_num'], 'bank_name': b['bank_name']} for b in banks],
-            'stocks': [{'ref_num': s['ref_num'], 'code': s['code'], 'stock_name': s['stock_name']} for s in stocks],
-            'transaction_types': [t['transaction_type'] for t in transaction_types],
-        }
+    data = {
+        'source': source,
+        'trade_date': row['trade_date'],
+        'value_date': row['value_date'],
+        'bank_ref': row['bank_ref'],
+        'code_ref': row['code_ref'],
+        'transaction_type': row['transaction_type'],
+        'quantity_raw': row['quantity'],
+        'price_raw': row['price'],
+        'brokerage': row['brokerage'] or 0,
+        'commission': row['commission'] or 0,
+        'foreign_charge': row['foreign_charge'] or 0,
+        'stamp_duty': row['stamp_duty'] or 0,
+        'misc': row['misc'] or 0,
+        'banks': [{'ref_num': b['ref_num'], 'bank_name': b['bank_name']} for b in banks],
+        'stocks': [{'ref_num': s['ref_num'], 'code': s['code'], 'stock_name': s['stock_name']} for s in stocks],
+        'transaction_types': [t['transaction_type'] for t in transaction_types],
+    }
 
     return data
 
@@ -637,7 +531,7 @@ def get_edit_data(source, ref_num):
 @bp.route('/edit/<source>/<int:ref_num>', methods=['POST'])
 @superuser_required
 def save_edit(source, ref_num):
-    """Save edited transaction/contract data."""
+    """Save edited transaction data."""
     db = get_db()
 
     trade_date = request.form.get('trade_date')
@@ -648,50 +542,26 @@ def save_edit(source, ref_num):
     quantity = float(request.form.get('quantity', 0))
     price = float(request.form.get('price', 0))
 
-    if source == 'contract':
-        strike_rate = float(request.form.get('strike_rate', 0) or 0)
-        ko_rate     = float(request.form.get('ko_rate', 0) or 0)
-        reference   = request.form.get('reference', '')
-        status      = request.form.get('status', 'active')
-        tenor       = request.form.get('tenor', '')
-        frequency   = request.form.get('frequency', '')
-        leveraged   = request.form.get('leveraged', 'No')
-        gtd         = request.form.get('gtd', 'No')
-        bank_doc    = request.form.get('bank_doc', '')
-        db.execute(
-            "UPDATE tbl_stock_contract SET "
-            "trade_date=?, start_date=?, bank_ref=?, code_ref=?, transaction_type=?, "
-            "daily_shares=?, spot=?, strike_rate=?, ko_rate=?, "
-            "reference=?, status=?, tenor=?, frequency=?, leveraged=?, gtd=?, bank_doc=? "
-            "WHERE ref_num=?",
-            (trade_date, value_date, bank_ref, code_ref, transaction_type,
-             quantity, price, strike_rate, ko_rate,
-             reference, status, tenor, frequency, leveraged, gtd, bank_doc,
-             ref_num)
-        )
-        db.commit()
-        flash("Term sheet updated successfully.")
-    else:
-        table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
+    table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
 
-        fields = {
-            'brokerage': float(request.form.get('brokerage', 0) or 0),
-            'commission': float(request.form.get('commission', 0) or 0),
-            'foreign_charge': float(request.form.get('foreign_charge', 0) or 0),
-            'stamp_duty': float(request.form.get('stamp_duty', 0) or 0),
-            'misc': float(request.form.get('misc', 0) or 0)
-        }
+    fields = {
+        'brokerage': float(request.form.get('brokerage', 0) or 0),
+        'commission': float(request.form.get('commission', 0) or 0),
+        'foreign_charge': float(request.form.get('foreign_charge', 0) or 0),
+        'stamp_duty': float(request.form.get('stamp_duty', 0) or 0),
+        'misc': float(request.form.get('misc', 0) or 0)
+    }
 
-        db.execute(
-            f"UPDATE {table} SET trade_date=?, value_date=?, bank_ref=?, code_ref=?, "
-            f"transaction_type=?, quantity=?, price=?, "
-            f"brokerage=?, commission=?, foreign_charge=?, stamp_duty=?, misc=? WHERE ref_num=?",
-            (trade_date, value_date, bank_ref, code_ref, transaction_type, quantity, price,
-             fields['brokerage'], fields['commission'], fields['foreign_charge'],
-             fields['stamp_duty'], fields['misc'], ref_num)
-        )
-        db.commit()
-        flash("Transaction updated successfully.")
+    db.execute(
+        f"UPDATE {table} SET trade_date=?, value_date=?, bank_ref=?, code_ref=?, "
+        f"transaction_type=?, quantity=?, price=?, "
+        f"brokerage=?, commission=?, foreign_charge=?, stamp_duty=?, misc=? WHERE ref_num=?",
+        (trade_date, value_date, bank_ref, code_ref, transaction_type, quantity, price,
+         fields['brokerage'], fields['commission'], fields['foreign_charge'],
+         fields['stamp_duty'], fields['misc'], ref_num)
+    )
+    db.commit()
+    flash("Transaction updated successfully.")
 
     # Preserve date range
     date_from = request.args.get('date_from', '')
@@ -704,7 +574,7 @@ def save_edit(source, ref_num):
 @superuser_required
 def lock_txn(source, ref_num):
     db = get_db()
-    table = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}[source]
+    table = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short'}[source]
     db.execute(f"UPDATE {table} SET locked=1 WHERE ref_num=?", (ref_num,))
     db.commit()
     flash("Transaction locked.")
@@ -728,7 +598,7 @@ def lock_multiple():
         flash("No transactions selected.")
         return redirect(url_for('workflow.home', date_from=date_from, date_to=date_to))
 
-    table_map = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short', 'contract': 'tbl_stock_contract'}
+    table_map = {'spot': 'tbl_transaction', 'short': 'tbl_transaction_short'}
     locked_count = 0
     for txn in transactions:
         source = txn.get('source')
@@ -747,10 +617,7 @@ def lock_multiple():
 @superuser_required
 def delete_txn(source, ref_num):
     db = get_db()
-    if source == 'contract':
-        db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?", (ref_num,))
-        db.execute("DELETE FROM tbl_stock_contract WHERE ref_num=?", (ref_num,))
-    elif source == 'short':
+    if source == 'short':
         db.execute("DELETE FROM tbl_transaction_short WHERE ref_num=?", (ref_num,))
     elif source == 'spot':
         db.execute("DELETE FROM tbl_transaction WHERE ref_num=?", (ref_num,))
