@@ -1,11 +1,12 @@
-"""Presentation-agnostic data/logic helpers shared by excel_writer.py and
-pdf_writer.py.
+"""Presentation-agnostic data/logic helpers used by excel_writer.py.
 
 Everything here is pure Python (dates, DB reads, classification logic) with
-no dependency on openpyxl, reportlab, or any other rendering library --
-moved out of excel_writer.py so a second renderer (pdf_writer.py) can reuse
-it instead of duplicating business logic. See docs/superpowers/specs/
-2026-07-28-ltv-stocks-pdf-report-design.md.
+no dependency on openpyxl or any other rendering library -- moved out of
+excel_writer.py so this logic isn't tangled up with cell/style-writing code,
+and so any future second renderer could reuse it without duplicating
+business logic (a PDF renderer was scoped and prototyped against this split
+but was decided against -- see docs/superpowers/specs/
+2026-07-28-ltv-stocks-pdf-report-design.md for that history).
 """
 
 from datetime import date, timedelta
@@ -38,13 +39,11 @@ def compute_status_flags(records, first_row, date_range, report_date, wd, price_
     records, starting at `first_row`.
 
     Ported unchanged from excel_writer.py's _compute_circle_cells (same
-    body/behavior) -- renamed since it now has two consumers with two
-    different visual treatments of the same classification (excel_writer.py
-    draws a circle at these coordinates; pdf_writer.py draws a bordered box).
-    `col_letter` is one of _OX_COLS purely as a stable per-day-offset label
-    inherited from the Excel layout -- pdf_writer.py maps it back to its own
-    date-column index via _OX_COLS.index(col_letter), not by re-using it as
-    an actual spreadsheet column.
+    body/behavior) -- renamed on the move since "circle cells" was specific
+    to how excel_writer.py visualizes this classification (a drawn ellipse);
+    the classification itself is presentation-agnostic. `col_letter` is one
+    of _OX_COLS, a stable per-day-offset label inherited from the Excel
+    layout.
 
     See _write_contracts' own O:X gating in excel_writer.py for why each
     skip condition below exists (before start/after end/holiday -> never a
