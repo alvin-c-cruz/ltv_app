@@ -30,6 +30,12 @@ from .term_sheet_calc import _FREQ_DIV, contract_records
 from .positions_calc import position_records, _average, _transactions_narrative
 from .working_day import WorkingDay, position_start_date
 from .stock_price import get_stock_price
+from .report_data import (
+    week_dates, compute_status_flags, inject_accu_only_positions,
+    PRIMARY_BANK_ACCOUNT, PRIMARY_SHEET_NAME, _CCYS,
+    _BANK_NAME, _SUB_TITLE, _POSITION_COLOR, _ACCOUNT_LABEL,
+    _CODE_FILLS, _SMALL_FONT_CODES,
+)
 from ....tz import ph_today
 
 
@@ -60,18 +66,6 @@ def xl_fill(fill_color):
     return PatternFill(patternType='solid', fgColor=fill_color)
 
 
-# Per-code background fills for column A (ltv_stocks2.py ~688-704).
-_CODE_FILLS = {
-    '2333': 'FFE5E39F',
-    '0700': '00FFFFCC',
-    '1024': '009999FF',
-    '0388': '00CC99FF',
-    '3993': '00FFCC99',
-    '0175': '00CCFFFF',
-    '9988': '00008080',
-}
-_SMALL_FONT_CODES = ('0981', '2196')
-
 _GREY_FILL = '00C0C0C0'
 
 # O-X column -> offset into the 10-date range.
@@ -85,13 +79,6 @@ _OX_COLS = ('O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 _STATUS_COLS = ('AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ')
 _ALL_DATA_COLS = ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N') + _OX_COLS
 _ZERO_ROW_COLS = ('A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
-
-
-def week_dates(report_date: date) -> list:
-    """The 10-date range: previous Mon-Fri + current Mon-Fri, built with isoweekday()."""
-    start = report_date - timedelta(days=6 + report_date.isoweekday())
-    offsets = (0, 1, 2, 3, 4, 7, 8, 9, 10, 11)
-    return [start + timedelta(days=o) for o in offsets]
 
 
 def _write_contracts(ws, records, product, row, report_date, date_range, wd, price_lookup,
@@ -381,137 +368,6 @@ def _write_status_grid(ws, count_row, n, date_range):
             cell.border = xl_box()
 
 
-def _compute_circle_cells(records, first_row, date_range, report_date, wd, price_lookup):
-    """Returns [(col_letter, row), ...] for every O:X cell that will show a "D"
-    status (strike breached without knocking out) once opened in Excel.
-
-    openpyxl never evaluates the AA:AJ status formulas _write_status_grid writes,
-    so this recomputes the same test in Python from the same source data, in
-    order to know where to draw circles (openpyxl can't draw shapes at all --
-    see _inject_circles). Mirrors _write_contracts' own O:X gating (start/end
-    window, holiday) so a cell is only proposed for circling if it will
-    actually display a numeric price there:
-    - before start_date / after end_date / a holiday: the cell is blank or a
-      "Done" placeholder, never a price -- skipped.
-    - report_date itself gets a two-part rule, matching _write_contracts'
-      own `d == report_date and d == ph_today() and not cols[col]` gating: if
-      a price is already recorded (price_lookup returns a real number),
-      classify it exactly like any other day. If not, AND report_date is the
-      actual current day (still showing the live
-      `=INDEX(closing_price!...)` formula against the never-populated
-      `closing_price` sheet) -- don't skip outright, inherit the most
-      recently classified real trading day's status for that row instead, so
-      report_date still gets circled when the position was already "D" as of
-      the last known close. If report_date is NOT today (a past or future
-      date the report happens to be generated for), there is no live formula
-      to inherit toward, so a missing price there is skipped like any other
-      gap -- same as every other date.
-    - every other date: px = price_lookup(code_ref, d); skipped unless it's a
-      real, nonzero number (rules out None, 0, and the "Done" *string*
-      placeholder, which the bare `px in (0, None, "")` check wouldn't catch
-      since it's neither of those three values).
-    """
-    today = ph_today()
-    cells = []
-    for i, rec in enumerate(records):
-        r = first_row + i
-        e, f, g = rec['spot'], rec['strike'], rec['ko']
-        above = e > f
-        last_status = None  # most recent real-priced day's status for this row
-        for col, d in zip(_OX_COLS, date_range):
-            if d < rec['start_date'] or d > rec['end_date'] or wd.is_holiday(d):
-                continue
-            px = price_lookup(rec['code_ref'], d)
-            has_price = isinstance(px, (int, float)) and px != 0
-            if not has_price:
-                if d != report_date or report_date != today or last_status is None:
-                    continue  # no data and nothing to inherit -- skip
-                status = last_status  # report_date inherits the last known day
-            else:
-                if above:
-                    status = 'KO' if g <= px else ('D' if f >= px else '.')
-                else:
-                    status = 'KO' if g >= px else ('D' if f <= px else '.')
-                last_status = status
-            if status == 'D':
-                cells.append((col, r))
-    return cells
-
-
-# --- Reference data ported verbatim from ltv_stocks2.py's LTV_Stocks.__init__ / position() ---
-
-PRIMARY_BANK_ACCOUNT = 'DBPe'
-PRIMARY_SHEET_NAME = f'{PRIMARY_BANK_ACCOUNT}-HKD'
-
-_CCYS = ('HKD', 'SGD')
-
-_BANK_NAME = {
-    "CB1": "CITIBANK",
-    "CB2": "CITIBANK",
-    "CB3": "CITIBANK",
-    "CBBH": "CITIBANK",
-    "CBBH2": "CITIBANK",
-    "CBSG": "CITIBANK",
-    "BOS": "Bank of Singapore",
-    "DBPe": "DEUTSCHE BANK",
-    "DBPL": "DEUTSCHE BANK",
-    "SC": "STANDARD CHARTERED",
-    "SHK": "SUN HUNG KAI Account No. 1",
-    "SHK2": "SUN HUNG KAI Account No. 2",
-    "MST1": "MORGAN STANLEY",
-    "MST2": "MORGAN STANLEY",
-    "MSPL": "MORGAN STANLEY",
-    "NSG": "NOMURA SINGAPORE",
-}
-
-_SUB_TITLE = {
-    'CB2': {'title': 'ACCOUNT # 2 (REALGOLD)', 'color': 'FF7030A0'},
-    'CB3': {'title': 'ACCOUNT # 3', 'color': 'FF0070C0'},
-    'CBBH': {'title': 'BERRY HILL Account', 'color': '00FF6600'},
-    'CBBH2': {'title': 'BERRY HILL Account 2', 'color': '00FF6600'},
-    'CBSG': {'title': 'Singapore Account No. 1', 'color': 'FF7030A0'},
-    'DBPL': {'title': 'PERFECT LEGEND HOLDINGS w/ Lucio Yan', 'color': '00000000'},
-    'MST1': {'title': 'Titan Account No. 1', 'color': '00000000'},
-    'MST2': {'title': 'ACCOUNT NO. 2 (Titan) - PERSONAL', 'color': '00000000'},
-    'MSPL': {'title': '(Perfect Legend)', 'color': '00000000'},
-}
-
-# Per-bank font colors used on the positions-table account label (position() ~716-733).
-_POSITION_COLOR = {
-    'CB1': 'FF7030A0', 'CB2': 'FF7030A0', 'CB3': 'FF0070C0',
-    'CBBH': '00FF6600', 'CBBH2': '00FF6600', 'CBSG': 'FF7030A0',
-    'BOS': '00000000', 'DBPe': '00000000', 'DBPL': '00000000',
-    'SC': '00000000', 'SHK': '00000000', 'SHK2': '00000000',
-    'MST1': '00000000', 'MST2': '00000000', 'MSPL': '00000000', 'NSG': '00000000',
-}
-
-# Positions-table account label (position() ~735-758); values are either a
-# plain string or a dict keyed by ccy.
-_ACCOUNT_LABEL = {
-    "CB1": {
-        "HKD": "Citibank Account No. 1 Stocks",
-        "JPY": "Citibank Account No. 1 Stocks",
-        "AUD": "Citibank Account No. 1 Stocks",
-        "USD": "Citibank Account No. 1 Stocks",
-        "SGD": "Citibank Account No. 1 Stocks",
-    },
-    "CB2": "Citibank Account No. 2 Stocks",
-    "CB3": "Citibank Account No. 3 Stocks",
-    "CBBH": "Citibank Berry Hill  Stocks",
-    "CBBH2": "Citibank Berry Hill No. 2 Stocks",
-    "CBSG": "Citibank Singapore Account No. 1 Stocks",
-    "BOS": "Bank of Singapore Stocks",
-    "DBPe": "DEUTSCHE PERSONAL Stocks",
-    "DBPL": "DEUTSCHE PERFECT LEGEND Stocks",
-    "SC": "Standard Chartered Stocks",
-    "SHK": "Sun Hung Kai Account No. 1 Stocks",
-    "SHK2": "Sun Hung Kai Account No. 2 Stocks",
-    "MST1": "MORGAN TITAN No. 1 Stocks",
-    "MST2": "MORGAN TITAN No. 2 Stocks",
-    "MSPL": "MORGAN PERFECT LEGEND Stocks",
-    "NSG": "NOMURA SINGAPORE",
-}
-
 # column_width() (298-339). Z-AJ intentionally omitted — those are widths for
 # the out-of-scope reconciliation helper columns.
 _COLUMN_WIDTHS = {
@@ -751,58 +607,6 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
     return r
 
 
-def _inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date):
-    """Port of `contract()`'s side-effect on `self.stock_position` (ltv_stocks2.py
-    ~561-563): any ACCU contract whose code has no balance-derived position (zero
-    net shares as of the report's AS-OF snapshot date) gets a placeholder row
-    (`unblocked=0, blocked=0`). DECU contracts get no such placeholder (legacy sets
-    them to `None`, which `position()` skips entirely).
-
-    BUG FIX (diverges from legacy): the placeholder's `average` used to always be
-    the contract's strike price. But `position_records()` gates solely on the
-    AS-OF-snapshot-date balance (deliberately -- that's what Unblocked/Blocked/Total
-    Shares show); a code that accumulated real shares THIS WEEK (trades landed after
-    the snapshot but on/before report_date) has a real, charge-inclusive cost basis
-    via `_average()` that was being discarded in favor of the strike. Every other
-    position row already prices Ave. Price fresh as of report_date rather than the
-    walked-back AS-OF date (see position_records()'s own comment on this) -- apply
-    that same principle here: use the real average (and attach the week's
-    transactions narrative) whenever one exists; fall back to the strike only when
-    the code truly has no computable average as of report_date either (no trades
-    ever, or still net zero). Returns a fresh dict re-sorted by code.
-    """
-    positions = dict(positions)
-    for rec in accu:
-        code = rec['code']
-        if code not in positions:
-            real_average = _average(db, bank_id, code, report_date)
-            if real_average is not None:
-                positions[code] = {
-                    'stock_name': rec['stock_name_plain'],
-                    'code': code,
-                    'code_ref': rec['code_ref'],
-                    'yahoo_ticker': rec['yahoo_ticker'],
-                    'balance': 0,
-                    'blocked': 0,
-                    'unblocked': 0,
-                    'average': real_average,
-                    'transactions': _transactions_narrative(db, bank_ref, rec['code_ref'], report_date),
-                }
-            else:
-                positions[code] = {
-                    'stock_name': rec['stock_name_plain'],
-                    'code': code,
-                    'code_ref': rec['code_ref'],
-                    'yahoo_ticker': rec['yahoo_ticker'],
-                    'balance': 0,
-                    'blocked': 0,
-                    'unblocked': 0,
-                    'average': rec['strike'],
-                    'transactions': None,
-                }
-    return dict(sorted(positions.items()))
-
-
 _NS_CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
 _NS_PKGREL = 'http://schemas.openxmlformats.org/package/2006/relationships'
 _NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -1006,7 +810,7 @@ def build_workbook(db, report_date, bank_ids):
             accu = [r for r in contract_records(db, bank_ref, 'ACCU') if r['ccy_id'] == ccy]
             decu = [r for r in contract_records(db, bank_ref, 'DECU') if r['ccy_id'] == ccy]
             positions = position_records(db, bank_ref, bank_id, ccy, report_date, hkd_wd=hkd_wd)
-            positions = _inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date)
+            positions = inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date)
 
             if not (accu or decu or positions):
                 continue
@@ -1043,8 +847,8 @@ def build_workbook(db, report_date, bank_ids):
             _write_status_grid(ws, decu_count_row, len(decu), date_range)
 
             sheet_circles = (
-                _compute_circle_cells(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
-                + _compute_circle_cells(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
+                compute_status_flags(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
+                + compute_status_flags(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
             )
             if sheet_name == PRIMARY_SHEET_NAME:
                 # The cell directly above each block's "CODE" column header
