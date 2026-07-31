@@ -169,6 +169,95 @@ def get_currency_from_code(code):
     return 'HKD'  # Default
 
 
+def annotate_decu_strikes(db, wb, sheet_name):
+    """Port of legacy Stock_Balance.get_decu() (localhost/modules/stock_balance.py).
+
+    Preserves its exact row offsets (H{row-2} for closing price, P{row-1} for the
+    stock code cell, L{row} for the strike annotation itself — confirmed against
+    both the legacy source and the live values already baked into
+    excel_templates/stock_summary.xlsx, e.g. sheet "3" rows 9/11/12 and sheet "1"
+    row 17, which line up with the bank-id row, not two rows above it) and its
+    code-variable-carries-over-from-last-CBSG-row quirk on non-CBSG rows — this
+    matches legacy behavior as-is, not a bug fix. See task-4 brief/report for
+    details.
+    """
+    date_now = str(ph_today())
+
+    ws = wb[sheet_name]
+    counter = 0
+    row_num = 0
+    code = None
+
+    while counter < 20:
+        row_num += 1
+        bank_id = ws[f"O{row_num}"].value
+        if not bank_id:
+            counter += 1
+            continue
+        else:
+            counter = 0
+
+        if bank_id == "CBSG":
+            raw_code = ws[f"P{row_num - 1}"].value
+            raw_code = raw_code[:len(raw_code) - 3]
+            code = "{:0>4}".format(raw_code)
+
+            price_row = db.execute(
+                "SELECT tbl_stock_price.closing_price "
+                "FROM tbl_stock_price "
+                "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_stock_price.code_ref "
+                "WHERE tbl_stock_price.trade_date=? AND tbl_code.code=?",
+                (date_now, code)
+            ).fetchone()
+            ws[f"H{row_num - 2}"].value = price_row['closing_price'] if price_row else 0
+
+        # Note: on non-CBSG rows, `code` is whatever the last CBSG row set it to
+        # (legacy scoping quirk, preserved deliberately — see docstring above).
+        contract_refs = [row['ref_num'] for row in db.execute(
+            "SELECT c.ref_num "
+            "FROM tbl_stock_contract as c "
+            "INNER JOIN tbl_bank_account as account ON account.ref_num = c.bank_ref "
+            "INNER JOIN tbl_code as stock ON stock.ref_num = c.code_ref "
+            "WHERE c.transaction_type='DECU' "
+            "  AND c.status='active' "
+            "  AND account.bank_id=? "
+            "  AND stock.code=?",
+            (bank_id, code)
+        ).fetchall()]
+
+        decus = []
+        for contract_ref in contract_refs:
+            ts_row = db.execute(
+                "SELECT strike_rate, spot FROM tbl_stock_contract WHERE ref_num=?",
+                (contract_ref,)
+            ).fetchone()
+            strike_value = ts_row['spot'] * ts_row['strike_rate'] / 100
+
+            # "Still open" = at least one period not yet received. Verified against
+            # the live DB: tbl_stock_contract_period.received stores "" (empty
+            # string) for not-yet-received periods, never NULL (typeof() check
+            # across the whole table returned only 'integer' and 'text', no
+            # 'null') — matches legacy's `received != ""` / ts.footer['remaining']
+            # logic and ltv_app/blueprints/term_sheet/models.py's own
+            # `if period['received']:` truthiness check. Guard both NULL and ''
+            # to be safe.
+            remaining = db.execute(
+                "SELECT COUNT(*) AS remaining FROM tbl_stock_contract_period "
+                "WHERE contract_ref=? AND (received IS NULL OR received='')",
+                (contract_ref,)
+            ).fetchone()['remaining']
+
+            if remaining != 0:
+                decus.append(strike_value)
+
+        if decus:
+            dq_list = "with Decu Strike " + "; ".join('{:,.4f}'.format(x) for x in decus)
+        else:
+            dq_list = None
+
+        ws[f"L{row_num}"].value = dq_list
+
+
 def create_excel_report(positions, db):
     """Create Excel file with stock positions using template"""
 
@@ -220,6 +309,11 @@ def create_excel_report(positions, db):
         ws_stocks[f'A{stocks_row}'] = code
         ws_stocks[f'B{stocks_row}'] = stock_name
         stocks_row += 1
+
+    # Annotate the per-bank sheets with DECU strike-list info (port of legacy's
+    # Stock_Balance.get_decu())
+    for sheet_name in ("1", "2", "3", "4"):
+        annotate_decu_strikes(db, wb, sheet_name)
 
     # Save to temporary file
     temp_file = tempfile.NamedTemporaryFile(mode='wb', suffix='.xlsx', delete=False)
