@@ -32,3 +32,4 @@ from . import workflow
 from . import bank_accounts
 from . import users
 from . import stock_position
+from . import marissa_orders

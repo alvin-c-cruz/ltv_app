@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Marissa Orders</h2>
+
+<form method="post">
+  <fieldset>
+    <legend>Download Stock Posting</legend>
+    <select name="posting_month">
+      {% for num, name in months %}
+        <option value="{{ num }}" {% if num == def_month %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+    <select name="posting_year">
+      {% for y in years %}
+        <option value="{{ y }}" {% if y == def_year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" name="cmd_button" value="Download Stock Posting">Download Stock Posting</button>
+  </fieldset>
+</form>
+
+<form method="post">
+  <fieldset>
+    <legend>Download Daily Transaction</legend>
+    <input type="date" name="trade_date" value="{{ trade_date.strftime('%Y-%m-%d') }}">
+    <button type="submit" name="cmd_button" value="Download Daily Transaction">Download Daily Transaction</button>
+  </fieldset>
+</form>
+
+<form method="post">
+  <fieldset>
+    <legend>Download Transaction Range</legend>
+    <input type="date" name="range_start">
+    <input type="date" name="range_end">
+    <button type="submit" name="cmd_button" value="Download Transaction Range">Download Transaction Range</button>
+  </fieldset>
+</form>
+{% endblock %}
