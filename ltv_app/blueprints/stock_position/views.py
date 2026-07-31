@@ -25,6 +25,19 @@ def download():
     # Get stock positions for all bank accounts
     stock_positions = get_stock_positions(db)
 
+    # Get blocked/unblocked shares from active DECU contracts
+    to_block = get_blocked_unblocked(db)
+
+    # Split each position into blocked/unblocked
+    for bank_id in stock_positions:
+        for code in stock_positions[bank_id]:
+            pos = stock_positions[bank_id][code]
+            blocked, unblocked = split_blocked_unblocked(
+                pos['shares'], to_block.get(bank_id, {}).get(code, 0)
+            )
+            pos['blocked'] = blocked
+            pos['unblocked'] = unblocked
+
     # Create Excel file
     excel_file = create_excel_report(stock_positions, db)
 
@@ -94,6 +107,56 @@ def get_stock_positions(db):
         }
 
     return positions
+
+
+def get_blocked_unblocked(db):
+    """
+    Total DECU shares still to be delivered per bank/code, same formula as
+    ltv_app's block_unblock blueprint: daily_shares * remaining_days,
+    doubled when leveraged. Caller clamps this against the actual share
+    balance to split it into blocked/unblocked (legacy: blocked_shares class).
+    """
+    from ..term_sheet import StockContract
+
+    sql = """
+        SELECT tbl_stock_contract.ref_num
+        FROM tbl_stock_contract
+        INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_stock_contract.bank_ref
+        INNER JOIN tbl_code ON tbl_code.ref_num = tbl_stock_contract.code_ref
+        WHERE status="active"
+            AND transaction_type="DECU"
+    """
+    active_decu_refs = [row['ref_num'] for row in db.execute(sql).fetchall()]
+
+    to_block = {}
+    for contract_ref in active_decu_refs:
+        ts = StockContract(db=db)
+        ts.get(ref_num=contract_ref)
+        ts.get_schedules()
+
+        bank_id = ts.bank_id
+        code = ts.code
+
+        if bank_id not in to_block:
+            to_block[bank_id] = {}
+        if code not in to_block[bank_id]:
+            to_block[bank_id][code] = 0
+
+        if ts.leveraged == 'Yes':
+            to_block[bank_id][code] += ts.daily_shares * ts.remaining_days * 2
+        else:
+            to_block[bank_id][code] += ts.daily_shares * ts.remaining_days
+
+    return to_block
+
+
+def split_blocked_unblocked(shares_balance, to_block):
+    """Clamp total_blocked against the actual balance — mirrors legacy's
+    blocked_shares: if the amount still owed exceeds what's on hand, treat
+    the whole balance as blocked rather than reporting negative unblocked."""
+    if to_block >= shares_balance:
+        return shares_balance, 0
+    return to_block, shares_balance - to_block
 
 
 def get_currency_from_code(code):
