@@ -1,4 +1,17 @@
+from datetime import datetime, timedelta
+
 from .. term_sheet import StockContract
+from ...tz import ph_today
+
+
+# How many working days sd_3_days() will look back for a closing price before
+# giving up on a code with no (or very stale) tbl_stock_price history. Without
+# this cap, a code with zero price rows (e.g. a stock traded for the first
+# time today) sends previous_day() walking backwards forever -- confirmed hang
+# on newly-added ticker 3308 (2026-07-31), zero rows in tbl_stock_price at the
+# time. Ported from localhost/modules/cash_margin.py's already-fixed constant
+# of the same name.
+_MAX_PRICE_LOOKBACK_DAYS = 60
 
 
 def _short_date(date_str):
@@ -99,6 +112,82 @@ def _contract_to_dict(ts):
         "next_month": 0,
         "_ts": ts,
     }
+
+
+def sd_3_days(db, code, strike_value, product):
+    """Port of legacy localhost/modules/cash_margin.py::sd_3_days (already
+    fixed there this session with the bounded lookback via
+    _MAX_PRICE_LOOKBACK_DAYS above). Returns 1 (single) or 2 (double) signal
+    based on whether strike_value has been breached on each of the 3 most
+    recent working days going back from today.
+
+    Takes strike_value as a raw float (Task B2's ts_dict["strike_value"])
+    instead of re-parsing a comma-formatted display string with float() --
+    that exact bug crashed production earlier this session in a different
+    file, generate_fixings.py.
+
+    Uses the same in-memory holiday-set + previous_day() closure pattern as
+    ltv_app/blueprints/fixings/extensions/generate_fixings.py, rather than
+    legacy's working_day() class, which re-queries tbl_holiday per call.
+    """
+    ccy = db.execute(
+        "SELECT tbl_currency.ccy_id FROM tbl_code "
+        "INNER JOIN tbl_currency ON tbl_code.ccy_ref = tbl_currency.ref_num "
+        "WHERE tbl_code.code=?", (code,)
+    ).fetchone()['ccy_id']
+
+    holidays = {
+        (str(r['holi_date'])[:10], r['ccy_id'])
+        for r in db.execute(
+            "SELECT holi_date, tbl_currency.ccy_id FROM tbl_holiday "
+            "INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_holiday.ccy_ref"
+        ).fetchall()
+    }
+
+    def is_holiday(date_str):
+        return (date_str[:10], ccy) in holidays
+
+    def previous_day(date_str):
+        d = datetime.strptime(date_str[:10], '%Y-%m-%d') - timedelta(days=1)
+        while is_holiday(str(d)[:10]) or d.isoweekday() in (6, 7):
+            d -= timedelta(days=1)
+        return str(d)[:10]
+
+    def get_price(date_str):
+        row = db.execute(
+            "SELECT closing_price FROM tbl_stock_price "
+            "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_stock_price.code_ref "
+            "WHERE tbl_code.code=? AND tbl_stock_price.trade_date=?",
+            (code, date_str)
+        ).fetchone()
+        return row['closing_price'] if row else None
+
+    def sdk(closing):
+        if closing is None:
+            # No price found within the lookback window -- can't tell whether
+            # strike has been breached, so don't count this day either way.
+            return 1
+        if product == "ACCU":
+            return 2 if strike_value >= closing else 1
+        else:
+            return 2 if strike_value <= closing else 1
+
+    def find_closing(start_date):
+        trade_date = start_date
+        closing = get_price(trade_date)
+        lookback = 0
+        while closing is None and lookback < _MAX_PRICE_LOOKBACK_DAYS:
+            trade_date = previous_day(trade_date)
+            closing = get_price(trade_date)
+            lookback += 1
+        return trade_date, closing
+
+    trade_date_1, closing_1 = find_closing(str(ph_today()))
+    trade_date_2, closing_2 = find_closing(previous_day(trade_date_1))
+    trade_date_3, closing_3 = find_closing(previous_day(trade_date_2))
+
+    sd_total = sdk(closing_1) + sdk(closing_2) + sdk(closing_3)
+    return 2 if sd_total >= 5 else 1
 
 
 def gather_margin_data(db, ccy, observation_month):
