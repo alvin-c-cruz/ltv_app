@@ -290,7 +290,7 @@ def build_cash_margin_file(db, ccy, observation_month, instance_path):
     save to the instance temp/ dir, matching every other ltv_app Excel
     export).
 
-    Three real discrepancies were found and fixed versus the plan's draft
+    Four real discrepancies were found and fixed versus the plan's draft
     pseudocode, by reading legacy's actual update_file() source rather than
     trusting the draft:
 
