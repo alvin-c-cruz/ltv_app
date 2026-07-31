@@ -19,6 +19,7 @@ from . import notebook
 from . import ltv_stocks
 from . import gain_loss
 from . import hkd_margin
+from . import cash_margin
 from . import portfolio
 from . import forecasts
 from . import pricing
