@@ -38,45 +38,60 @@ def download():
 
 def get_stock_positions(db):
     """
-    Calculate stock positions for all bank accounts
-    Returns dict: {bank_id: {code: {shares, average_cost, total}}}
+    Calculate LONG-side stock positions for all bank accounts, using the same
+    weighted-average cost engine as block_unblock/transactions (accumulate_position).
+    Short-side activity ('Sell (Short)', 'Buy (Pay Short)') is excluded — legacy
+    only ever reports long positions (short tracking is permanently disabled
+    there too), and mixing the two into one SUM corrupts both.
+    Returns dict: {bank_id: {code: {shares, average_cost, total_cost}}}
     """
-    sql = """
-        SELECT
-            b.bank_id,
-            c.code,
-            SUM(t.quantity) as total_shares,
-            SUM(t.quantity * t.price) as total_cost
+    from ..transactions.models import accumulate_position
+
+    pairs = db.execute("""
+        SELECT DISTINCT b.ref_num AS bank_ref, b.bank_id, c.ref_num AS code_ref, c.code
         FROM tbl_transaction t
         INNER JOIN tbl_bank_account b ON b.ref_num = t.bank_ref
         INNER JOIN tbl_code c ON c.ref_num = t.code_ref
-        WHERE t.transaction_type IN ('Buy (Spot)', 'Sell (Spot)', 'Buy (Accu)', 'Buy (Accu-KO)',
-                                      'Sell (Decu)', 'Sell (Decu-KO)', 'Buy (Pay Short)',
-                                      'Sell (Short)', 'Transfer-In', 'Transfer-Out')
-        GROUP BY b.bank_id, c.code
-        HAVING total_shares != 0
+        WHERE t.transaction_type NOT IN ('Sell (Short)', 'Buy (Pay Short)')
         ORDER BY b.priority, c.code
-    """
+    """).fetchall()
 
-    results = db.execute(sql).fetchall()
+    trade_date = str(ph_today())
 
     positions = {}
-    for row in results:
-        bank_id = row['bank_id']
-        code = row['code']
-        shares = row['total_shares']
-        cost = row['total_cost']
+    for pair in pairs:
+        transaction_basis = db.execute(
+            "SELECT transaction_basis FROM tbl_bank_account WHERE ref_num=?",
+            (pair['bank_ref'],)
+        ).fetchone()[0]
+
+        transactions = db.execute(
+            "SELECT * FROM tbl_transaction "
+            "INNER JOIN tbl_transaction_type "
+            "ON tbl_transaction_type.transaction_type = tbl_transaction.transaction_type "
+            "WHERE tbl_transaction.bank_ref=? AND tbl_transaction.code_ref=? "
+            "AND tbl_transaction.transaction_type NOT IN ('Sell (Short)', 'Buy (Pay Short)') "
+            f"AND tbl_transaction.{transaction_basis}<=? "
+            f"ORDER BY tbl_transaction.{transaction_basis}, tbl_transaction_type.priority",
+            (pair['bank_ref'], pair['code_ref'], trade_date)
+        ).fetchall()
+
+        shares, cost_to_date, average = accumulate_position(transactions)
+
+        if shares == 0:
+            continue
+
+        bank_id = pair['bank_id']
+        code = pair['code']
 
         if bank_id not in positions:
             positions[bank_id] = {}
 
-        if shares != 0:
-            avg_cost = abs(cost / shares) if shares != 0 else 0
-            positions[bank_id][code] = {
-                'shares': shares,
-                'average_cost': avg_cost,
-                'total_cost': abs(cost)
-            }
+        positions[bank_id][code] = {
+            'shares': shares,
+            'average_cost': abs(average),
+            'total_cost': abs(cost_to_date)
+        }
 
     return positions
 
