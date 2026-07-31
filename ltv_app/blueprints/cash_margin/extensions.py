@@ -53,7 +53,11 @@ def _contract_to_dict(ts):
         shares = "{0:,.0f}".format(single)
 
     last_period = len(ts.schedules)
-    end_date = ts.schedules[-1].end_date if ts.schedules else ts.end_date
+    # ts.end_date is only ever set by __post_init__'s loop over periods, so it
+    # doesn't exist at all when a contract has zero schedule periods -- fall
+    # back to start_date (always a populated dataclass field) rather than an
+    # attribute that may not exist.
+    end_date = ts.schedules[-1].end_date if ts.schedules else ts.start_date
 
     if ts.frequency == "monthly":
         total = last_period
@@ -126,8 +130,7 @@ def gather_margin_data(db, ccy, observation_month):
     for contract_ref in contract_refs:
         ts = StockContract(db=db)
         ts.get(ref_num=contract_ref)
-        ts.__post_init__()
-        ts.get_schedules()
+        ts.get_schedules()  # get_schedules() already calls __post_init__() internally
 
         bank_id = ts.bank_id
         product = ts.transaction_type  # "ACCU" or "DECU"
