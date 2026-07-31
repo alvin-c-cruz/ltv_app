@@ -1233,8 +1233,11 @@ def download_posting(db, posting_month, posting_year):
     Transcribe the exact SQL/column list/formulas from that class here —
     only the DB access (`db.execute(sql, params)` via ltv_app's get_db()
     instead of a standalone sqlite3.connect) and the save path change."""
+    # Legacy never deletes the default 'Sheet' -- do NOT del wb['Sheet'] here.
+    # An earlier draft of this snippet did, which crashes with IndexError
+    # (openpyxl requires >=1 visible sheet) whenever a month has zero
+    # matching transactions across every bank/ccy group.
     wb = Workbook()
-    del wb['Sheet']
 
     # ... port DownloadPosting's SQL query, per-(bank_id, ccy_id) sheet
     # creation, and row-writing loop here verbatim, using db.execute(...)
