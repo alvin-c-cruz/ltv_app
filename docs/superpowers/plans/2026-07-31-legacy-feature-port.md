@@ -352,7 +352,7 @@ No commit needed — no code changed in this task.
 - Consumes: `db` (already passed into `create_excel_report`).
 - Produces: `create_excel_report` now also calls a new `annotate_decu_strikes(db, wb, sheet_name)` for each of sheets `"1"`, `"2"`, `"3"`, `"4"`, mirroring legacy's `Stock_Balance.get_decu()`.
 
-This is the piece the current `ltv_app` port drops entirely. Legacy's `get_decu()` (`localhost/modules/stock_balance.py`) walks down column `O` of each of the 4 sheets looking for a `bank_id` value; when it finds `bank_id == "CBSG"` it also reads a stock code out of `P{row-1}` (trimming a `"-something"` suffix and zero-padding to 4 digits) and writes that day's closing price into `H{row-2}`. Independent of the `CBSG` branch, for **every** row with a `bank_id` present it looks up active DECU contracts for that `bank_id` + the current `code`, collects each one's strike (`ts.header['strike']`, already comma-formatted) whose corresponding period hasn't fully finished (`ts.footer['remaining'] != 0`), and writes `L{row-2}` as `"with Decu Strike {joined list}"` (or `None` if there are no open DECU contracts for that pair). The loop stops after 20 consecutive blank `O` cells.
+This is the piece the current `ltv_app` port drops entirely. Legacy's `get_decu()` (`localhost/modules/stock_balance.py`) walks down column `O` of each of the 4 sheets looking for a `bank_id` value; when it finds `bank_id == "CBSG"` it also reads a stock code out of `P{row-1}` (trimming a `"-something"` suffix and zero-padding to 4 digits) and writes that day's closing price into `H{row-2}`. Independent of the `CBSG` branch, for **every** row with a `bank_id` present it looks up active DECU contracts for that `bank_id` + the current `code`, collects each one's strike (`ts.header['strike']`, already comma-formatted) whose corresponding period hasn't fully finished (`ts.footer['remaining'] != 0`), and writes `L{row}` as `"with Decu Strike {joined list}"` (or `None` if there are no open DECU contracts for that pair). The loop stops after 20 consecutive blank `O` cells.
 
 One quirk to preserve exactly, not "fix": when a row's `bank_id != "CBSG"`, legacy's DECU-lookup SQL reuses whatever `code` variable is still in scope from the **previous** iteration (the `code` variable is only reassigned inside the `if bank_id == "CBSG":` branch) — i.e. for non-`CBSG` rows the strike-list is computed against the *last CBSG row's* stock code, not a code derived from that row itself. This looks like a pre-existing bug in the legacy source, but since legacy's actual production template apparently only ever puts `CBSG` bank_id values in column `O` in practice (single-broker sheets), it has never manifested. Port it byte-for-byte as legacy behaves today (do not "fix" the scoping) — call this out in the PR/commit message so it's a documented, deliberate carry-over rather than a silent introduction.
 
@@ -361,7 +361,7 @@ One quirk to preserve exactly, not "fix": when a row's `bank_id != "CBSG"`, lega
 ```python
 def annotate_decu_strikes(db, wb, sheet_name):
     """Port of legacy Stock_Balance.get_decu() (localhost/modules/stock_balance.py).
-    Preserves its exact row offsets (H{row-2}, L{row-2}, P{row-1}) and its
+    Preserves its exact row offsets (H{row-2}, L{row} -- no offset on L, confirmed against legacy source and the live template's baked-in sample values, unlike an earlier draft of this plan which incorrectly said L{row-2} -- and P{row-1}) and its
     code-variable-carries-over-from-last-CBSG-row quirk on non-CBSG rows —
     this matches legacy behavior as-is, not a bug fix."""
     from ...tz import ph_today
@@ -429,7 +429,7 @@ def annotate_decu_strikes(db, wb, sheet_name):
         else:
             dq_list = None
 
-        ws[f"L{row_num - 2}"].value = dq_list
+        ws[f"L{row_num}"].value = dq_list
 ```
 
 **Note for the implementer:** confirm the `tbl_stock_contract_period` column that marks a period as fixed/received is actually named `received` and that "still open" is `received IS NULL` (vs. an empty string, as legacy's `ts.footer['remaining']` implies) — check against `ltv_app/blueprints/term_sheet/models.py`'s schedule-loading SQL before running Step 3 below; adjust the `remaining` query's `WHERE` clause to match whatever the real "not yet received" predicate is in that table (legacy stores `""` for not-yet-received in its `ts.schedule[i]["received"]` dict value, which is DB-column-derived — verify the actual stored value, e.g. it may be `NULL`, `''`, or `0`, and fix the literal in this query to match, not the concept).
