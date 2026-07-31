@@ -220,8 +220,12 @@ def download_posting(db, posting_month, posting_year):
         1) - timedelta(days=1)
     )[:10]
 
+    # Legacy never deletes the default 'Sheet' -- it stays as a blank leading
+    # tab alongside whatever per-bank sheets get created. Deleting it
+    # unconditionally (as an earlier draft of this port did) left a
+    # zero-sheet workbook -- and openpyxl requires at least one visible
+    # sheet -- whenever a month has no matching transactions at all.
     wb = Workbook()
-    del wb['Sheet']
 
     transactions = _posting_transactions(db, start_date, end_date)
 
