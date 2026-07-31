@@ -616,10 +616,19 @@ from ..term_sheet import StockContract
 
 
 def _short_date(date_str):
-    """Match localhost/modules/dates.py::short_date's exact output format
-    (confirmed via scratch script against a real date — see Task B2 Step 1)."""
-    from datetime import datetime
-    return datetime.strptime(date_str[:10], "%Y-%m-%d").strftime("%m/%d/%y")
+    """Match localhost/modules/dates.py::short_date's exact output format --
+    confirmed against real dates (see Task 6 Step 1): D-Mon-YYYY, day NOT
+    zero-padded, e.g. short_date('2026-08-05') -> '5-Aug-2026'. An earlier
+    draft of this plan wrongly assumed MM/DD/YY via strftime -- do not use
+    strftime's %d, it zero-pads single-digit days incorrectly."""
+    months = {
+        1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+        7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+    }
+    year = date_str[:4]
+    month = int(date_str[5:7])
+    day = int(date_str[-2:])
+    return f"{day}-{months[month]}-{year}"
 
 
 def get_next_month(observation_month):
@@ -643,7 +652,10 @@ def _contract_to_dict(ts):
         shares = "{0:,.0f}".format(single)
 
     last_period = len(ts.schedules)
-    end_date = ts.schedules[-1].end_date if ts.schedules else ts.end_date
+    # ts.end_date is only ever set by __post_init__'s loop over periods, so
+    # it doesn't exist when a contract has zero schedule periods -- fall
+    # back to start_date (always populated) rather than a missing attribute.
+    end_date = ts.schedules[-1].end_date if ts.schedules else ts.start_date
 
     if ts.frequency == "monthly":
         total = last_period
@@ -715,8 +727,7 @@ def gather_margin_data(db, ccy, observation_month):
     for contract_ref in contract_refs:
         ts = StockContract(db=db)
         ts.get(ref_num=contract_ref)
-        ts.__post_init__()
-        ts.get_schedules()
+        ts.get_schedules()  # get_schedules() already calls __post_init__() internally
 
         bank_id = ts.bank_id
         product = ts.transaction_type  # "ACCU" or "DECU"
