@@ -159,14 +159,18 @@ def split_blocked_unblocked(shares_balance, to_block):
     return to_block, shares_balance - to_block
 
 
-def get_currency_from_code(code):
-    """Determine currency from stock code"""
-    if code.endswith('JP'):
-        return 'JPY'
-    elif ':' in code:
-        suffix = code.split(':')[1]
-        return suffix + 'D'  # e.g., HK -> HKD, SG -> SGD
-    return 'HKD'  # Default
+def get_currency_from_code(db, code):
+    """Determine currency from stock code via a real DB lookup, matching
+    legacy's getccy() (localhost/modules/stocks.py:96-111). Defaults to 'HKD'
+    only when the code has no matching tbl_code row at all, same as legacy's
+    unguarded result[0][0] would (blow up) -- here we fail soft instead,
+    since this is a report generator, not an interactive form."""
+    row = db.execute(
+        "SELECT tbl_currency.ccy_id FROM tbl_code "
+        "INNER JOIN tbl_currency ON tbl_code.ccy_ref = tbl_currency.ref_num "
+        "WHERE tbl_code.code = ?", (code,)
+    ).fetchone()
+    return row['ccy_id'] if row else 'HKD'
 
 
 def annotate_decu_strikes(db, wb, sheet_name):
@@ -275,16 +279,28 @@ def create_excel_report(positions, db):
     for bank_id in sorted(positions.keys()):
         for code in sorted(positions[bank_id].keys()):
             pos = positions[bank_id][code]
-            ccy = get_currency_from_code(code)
+            ccy = get_currency_from_code(db, code)
+            average = round(pos['average_cost'], 4)
 
-            # Write to Download sheet - this feeds the formulas in ALL sheet
+            # Write to Download sheet - this feeds the formulas in ALL sheet.
+            # Column C/Stocks!A must hold the "{code}:{ccy_prefix}" key format
+            # the ALL sheet's formulas (J=H&I, D=SUMIF(...,J,...), B=INDEX/MATCH
+            # against Stocks!A) expect -- matches legacy's Stock_Balance.populate()
+            # exactly (localhost/modules/stock_balance.py), including its
+            # try/except fallback for non-numeric codes.
             ws_download[f'A{download_row}'] = bank_id
             ws_download[f'B{download_row}'].value = f'=A{download_row}&C{download_row}'
-            ws_download[f'C{download_row}'] = code
+            try:
+                ws_download[f'C{download_row}'] = f'{int(code)}:{ccy[:2]}'
+            except ValueError:
+                ws_download[f'C{download_row}'] = f'{code}:{ccy[:2]}'
             ws_download[f'D{download_row}'] = f'{int(pos["shares"]):,} shares'
-            ws_download[f'E{download_row}'] = f'{ccy} ={pos["total_cost"]}/{pos["shares"]}'
-            ws_download[f'G{download_row}'] = pos['shares']
-            ws_download[f'H{download_row}'] = round(pos['average_cost'], 4)
+            ws_download[f'E{download_row}'] = f'{ccy} {average}'
+            # Deliberately NOT writing G/H here -- the template's own formulas
+            # (=IFERROR(VALUE(LEFT(D,LEN(D)-7)),"") etc.) parse the numeric
+            # value back out of the D/E display strings above. Legacy never
+            # writes to G/H either; writing raw floats here (as this code used
+            # to) destroys those formulas.
 
             download_row += 1
 
@@ -299,14 +315,22 @@ def create_excel_report(positions, db):
     for bank_id in positions:
         all_codes.update(positions[bank_id].keys())
 
-    # Write stock code to name mapping
+    # Write stock code to name mapping. Column A must hold the same
+    # "{code}:{ccy_prefix}" key format as Download!C -- the ALL sheet's
+    # B column (=INDEX(Stocks!A:B,MATCH(I,Stocks!A:A,),2)) matches against it.
     for code in sorted(all_codes):
         stock_name_row = db.execute(
             "SELECT stock_name FROM tbl_code WHERE code = ?", (code,)
         ).fetchone()
         stock_name = stock_name_row['stock_name'] if stock_name_row else code
 
-        ws_stocks[f'A{stocks_row}'] = code
+        ccy = get_currency_from_code(db, code)
+        try:
+            stock_key = f'{int(code)}:{ccy[:2]}'
+        except ValueError:
+            stock_key = f'{code}:{ccy[:2]}'
+
+        ws_stocks[f'A{stocks_row}'] = stock_key
         ws_stocks[f'B{stocks_row}'] = stock_name
         stocks_row += 1
 
