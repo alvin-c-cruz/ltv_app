@@ -94,9 +94,9 @@ class GenerateFixings:
 
                     closing = get_closing_fallback(ts.code_ref, self.trade_date)
                     if ts.transaction_type == "ACCU":
-                        is_ko = float(ts.ko) <= closing
+                        is_ko = ts.ko_value <= closing
                     else:
-                        is_ko = float(ts.ko) >= closing
+                        is_ko = ts.ko_value >= closing
 
                     if is_ko:
                         is_fixing = "KO"
@@ -181,9 +181,9 @@ def analyze_fixing(ts, end_date, db, is_working_day, get_closing, get_closing_fa
 
     closing_at_end = get_closing_fallback(ts.code_ref, end_date)
     if ts.transaction_type == "ACCU":
-        is_ko = float(ts.ko) <= closing_at_end
+        is_ko = ts.ko_value <= closing_at_end
     else:
-        is_ko = float(ts.ko) >= closing_at_end
+        is_ko = ts.ko_value >= closing_at_end
 
     if is_ko:
         period_refs = check_ko_fixing(ts, end_date, ts_dict=ts_dict)
@@ -205,7 +205,7 @@ def analyze_fixing(ts, end_date, db, is_working_day, get_closing, get_closing_fa
                 closing_price = get_closing(ts.code_ref, str(date)[:10])
 
                 if closing_price is not None:
-                    sdk = single_double_ko(ts.transaction_type, ts.strike, ts.ko, closing_price)
+                    sdk = single_double_ko(ts.transaction_type, ts.strike_value, ts.ko_value, closing_price)
                     days_closing.append((date, closing_price))
                     if sdk == 2:
                         days_double += 1
@@ -227,7 +227,7 @@ def analyze_fixing(ts, end_date, db, is_working_day, get_closing, get_closing_fa
                         prev_closing = get_closing(ts.code_ref, prev_date)
 
                     days_closing.append((date, prev_closing))
-                    sdk = single_double_ko(ts.transaction_type, ts.strike, ts.ko, prev_closing)
+                    sdk = single_double_ko(ts.transaction_type, ts.strike_value, ts.ko_value, prev_closing)
                     if sdk == 2:
                         days_indicative += 1
                         shares_indicative += ts.daily_shares * 2

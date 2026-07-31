@@ -68,8 +68,13 @@ class StockContract(Model):
 
     def __post_init__(self):
         if self.ref_num:
-            self.strike = "{0:,.4f}".format(self.spot * self.strike_rate / 100)
-            self.ko = "{0:,.4f}".format(self.spot * self.ko_rate / 100)
+            # Raw numeric values for callers that need to do arithmetic/comparisons
+            # (e.g. fixings generation) — .strike/.ko below are comma-formatted
+            # display strings for templates and break float() past 1,000.
+            self.strike_value = self.spot * self.strike_rate / 100
+            self.ko_value = self.spot * self.ko_rate / 100
+            self.strike = "{0:,.4f}".format(self.strike_value)
+            self.ko = "{0:,.4f}".format(self.ko_value)
 
             self.ccy_ref = self.db.execute("SELECT ccy_ref FROM tbl_code WHERE ref_num=?",
                                            (self.code_ref, )).fetchone()[0]
@@ -399,13 +404,21 @@ class CreateSchedules:
         month = int(self.trade_date[5:7])
         end_day = int(self.trade_date[-2:])
 
-        end_year = year
-        end_month = month + self.tenor
-        if end_month > 12: 
-            end_month -= 12            
-            end_year += 1
+        total = (month - 1) + self.tenor
+        end_year = year + total // 12
+        end_month = total % 12 + 1
 
-        end_date = str(date(end_year, end_month, end_day))
+        # Trade dates on the 29th/30th/31st can land on a maturity month that's
+        # shorter (e.g. 31 Jul + 9m -> 31 Apr, which doesn't exist) — clamp the
+        # day down like __next_end_date() already does for per-period ends.
+        end_date = None
+        day = end_day
+        while end_date is None:
+            try:
+                end_date = str(date(end_year, end_month, day))
+            except ValueError:
+                day -= 1
+
         end_date = self.check_date(end_date)
 
         return end_day, end_date
