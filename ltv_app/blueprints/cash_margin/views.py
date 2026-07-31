@@ -2,7 +2,7 @@ from flask import Blueprint, send_file, current_app
 
 from ..auth import login_required
 from ..database import get_db
-from ...tz import ph_today
+from .extensions import build_cash_margin_file
 
 bp = Blueprint('cash_margin', __name__, template_folder='pages', url_prefix='/cash-margin')
 
