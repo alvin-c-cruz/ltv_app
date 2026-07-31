@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, send_file
-from datetime import datetime
 
 from ..auth import login_required
 from ..database import get_db
+from ...tz import ph_now
 
 bp = Blueprint('marissa_orders', __name__, template_folder='pages', url_prefix='/maris')
 
@@ -19,7 +19,7 @@ def home():
     from .extensions import download_posting, download_daily_transactions, download_transaction_range
 
     db = get_db()
-    trade_date = datetime.now()
+    trade_date = ph_now()
     month = trade_date.month - 1 if trade_date.month != 1 else 12
     year = trade_date.year
     years = range(2017, year + 1)

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Cash Margin</h2>
+
+<form method="get" action="{{ url_for('cash_margin.home') }}">
+  <fieldset>
+    <legend>Download Cash Margin Report</legend>
+    <select name="ccy">
+      {% for ccy in currencies %}
+        <option value="{{ ccy }}">{{ ccy }}</option>
+      {% endfor %}
+    </select>
+    <input type="month" name="observation_month" required>
+    <button type="submit">Download Cash Margin</button>
+  </fieldset>
+</form>
+{% endblock %}
