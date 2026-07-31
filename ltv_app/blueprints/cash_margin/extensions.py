@@ -1,7 +1,40 @@
+import os
 from datetime import datetime, timedelta
+
+from openpyxl import load_workbook
+from openpyxl.styles.fills import PatternFill
 
 from .. term_sheet import StockContract
 from ...tz import ph_today
+
+
+# Per-bank fill color used to mark the "live" (E or G) shares-per-day column --
+# ported verbatim from localhost/modules/cash_margin.py::update_file's
+# ACCOUNT_COLOR dict.
+ACCOUNT_COLOR = {
+    "CB1": "0099CC00", "CB2": "0099CC00", "CB3": "0099CC00",
+    "CBBH": "0099CC00", "CBBH2": "0099CC00", "CBSG": "0099CC00",
+    "BOS": "00FFFF00",
+    "DBPe": "00CCFFFF", "DBPL": "00CCFFFF",
+    "SC": "00FFCC00",
+    "SHK": "00FF00FF", "SHK2": "00FF00FF",
+    "MST1": "00FF8080", "MST2": "00FF8080", "MSPL": "00FF8080", "NSG": "00FF8080",
+}
+
+# Bank groups whose "received" / "total" progress is tracked in fixing PERIODS
+# (ts_dict["received"] / ts_dict["total"]) rather than DAYS
+# (ts_dict["days_received"] / ts_dict["days_max"]) -- matches legacy
+# update_file()'s `if bank_account in ("CB1", "CB2", "CB3", "CBBH", "CBBH2")`
+# branch exactly, including CBSG's deliberate *exclusion* from this list even
+# though it shares CB1's fill color in ACCOUNT_COLOR above.
+_PERIOD_TRACKED_BANKS = ("CB1", "CB2", "CB3", "CBBH", "CBBH2")
+
+_ALL_COLS = ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T")
+
+
+def _fill(ws, row_num, hex_color, cols=_ALL_COLS):
+    for col in cols:
+        ws[f"{col}{row_num}"].fill = PatternFill(patternType='solid', fgColor=hex_color)
 
 
 # How many working days sd_3_days() will look back for a closing price before
@@ -250,4 +283,139 @@ def gather_margin_data(db, ccy, observation_month):
 
 
 def build_cash_margin_file(db, ccy, observation_month, instance_path):
-    raise NotImplementedError
+    """Port of legacy localhost/modules/cash_margin.py::update_file's
+    template-walking loop (lines ~107-225), minus the NAS-share load/save
+    branches (this is a download-on-demand report, not legacy's
+    scheduled-file-refresh flow -- always load the packaged template and
+    save to the instance temp/ dir, matching every other ltv_app Excel
+    export).
+
+    Three real discrepancies were found and fixed versus the plan's draft
+    pseudocode, by reading legacy's actual update_file() source rather than
+    trusting the draft:
+
+    1. known_bank_ids must be the FULL set of bank_id values from
+       tbl_bank_account (legacy's `accounts = list_bank_accounts()`), not
+       just dict_margin.keys(). dict_margin only contains bank_ids that have
+       at least one active contract in this ccy -- a bank with zero such
+       contracts would have its D-column header row misclassified as an
+       unmatched "reference" and wrongly red-filled.
+
+    2. Column B must be the PLAIN stock name (contract.stock_name), not the
+       GTD-suffixed ts_dict["stock_name"]. Legacy's update_file() explicitly
+       recomputes `stock_name = getstock_name(code)` -- a fresh, un-suffixed
+       lookup -- rather than reusing the GTD-suffixed name summary_ts()
+       already built into the ts dict for other purposes. Confirmed by
+       cross-referencing /hkd-margin's StockContract.as_dict(), which also
+       exposes the plain `self.stock_name`, never a GTD-suffixed variant.
+
+    3. Columns E/G (single/double shares-per-day) must be the RAW
+       contract.daily_shares int (and daily_shares*2 when leveraged),
+       matching legacy's `ts['single'] = dict_ts.header['daily_shares']` and
+       `double = ts.get('double') if ts.get('double') else ts['single']`
+       (double is only ever set when leveraged == "Yes"; otherwise it falls
+       back to the same raw single value) -- not the comma-formatted display
+       string embedded in ts_dict["shares"] (e.g. "12,000"). Legacy writes
+       pre-formatted STRINGS for H/I/J (spot/strike/ko) but a raw NUMBER for
+       E/G; the two columns are not interchangeable in kind.
+
+    4. K/M (received / total) must branch on bank_id: legacy uses
+       ts['received']/ts['total'] (fixing-PERIOD counts) only for
+       ("CB1", "CB2", "CB3", "CBBH", "CBBH2"); every other bank -- including
+       CBSG despite sharing CB1's fill color -- uses
+       ts['days_received']/ts['days_max'] (day counts) instead. The draft
+       used the period-count pair unconditionally.
+    """
+    dict_margin = gather_margin_data(db, ccy, observation_month)
+
+    known_bank_ids = {
+        row['bank_id'] for row in db.execute("SELECT bank_id FROM tbl_bank_account").fetchall()
+    }
+
+    template_path = os.path.join(
+        os.path.dirname(__file__), '..', '..', 'excel_templates', 'cash_margin.xlsx'
+    )
+    wb = load_workbook(template_path)
+
+    for product in ("ACCU", "DECU"):
+        ws = wb[product]
+
+        counter = 0
+        row_num = 5
+        bank_id = ""
+        while counter < 100:
+            cell_value = ws[f'D{row_num}'].value
+            if cell_value is None:
+                counter += 1
+            else:
+                counter = 0
+                if cell_value in known_bank_ids:
+                    bank_id = cell_value
+                else:
+                    reference = cell_value
+                    bank_data = dict_margin.get(bank_id, {}).get(product, {})
+
+                    if reference in bank_data:
+                        _fill(ws, row_num, "00FFFFFF")
+
+                        ts = bank_data[reference]
+                        contract = ts["_ts"]
+
+                        stock_name = contract.stock_name
+
+                        single = contract.daily_shares
+                        double = (
+                            contract.daily_shares * 2
+                            if contract.leveraged == "Yes"
+                            else contract.daily_shares
+                        )
+
+                        if bank_id in _PERIOD_TRACKED_BANKS:
+                            rvd = ts["received"]
+                            total_mos = ts["total"]
+                        else:
+                            rvd = ts["days_received"]
+                            total_mos = ts["days_max"]
+
+                        sd = sd_3_days(db, ts["code"], ts["strike_value"], product)
+
+                        cols = {
+                            "B": stock_name,
+                            "C": ts["code"],
+                            "E": single,
+                            "F": "/",
+                            "G": double,
+                            "H": ts["spot"],
+                            "I": ts["strike"],
+                            "J": ts["ko"],
+                            "K": rvd,
+                            "L": f"=M{row_num}-K{row_num}",
+                            "M": total_mos,
+                            "N": ts["start_date"],
+                            "O": ts["end_date"],
+                            "V": ts["this_month"],
+                            "W": ts["this_month"] + ts["next_month"],
+                            "X": sd,
+                        }
+                        for col, value in cols.items():
+                            ws[f"{col}{row_num}"].value = value
+
+                        if sd == 2:
+                            ws[f"G{row_num}"].fill = PatternFill(patternType='solid', fgColor=ACCOUNT_COLOR[bank_id])
+                        else:
+                            ws[f"E{row_num}"].fill = PatternFill(patternType='solid', fgColor=ACCOUNT_COLOR[bank_id])
+
+                        if single == double:
+                            ws[f"E{row_num}"].fill = PatternFill(patternType='solid', fgColor=ACCOUNT_COLOR[bank_id])
+
+                        if rvd == total_mos:
+                            _fill(ws, row_num, "00FFFF00")
+                    else:
+                        _fill(ws, row_num, "00FF0000")
+
+            row_num += 1
+
+    temp_path = os.path.join(instance_path, 'temp', f'cash_margin_{ccy}_{observation_month}.xlsx')
+    wb.save(temp_path)
+    wb.close()
+    return temp_path
