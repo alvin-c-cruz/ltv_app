@@ -176,7 +176,10 @@ def sd_3_days(db, code, strike_value, product):
         trade_date = start_date
         closing = get_price(trade_date)
         lookback = 0
-        while closing is None and lookback < _MAX_PRICE_LOOKBACK_DAYS:
+        # Falsy check (not closing), not `is None` -- matches legacy's
+        # `while not closing` exactly: a literal 0 closing price is treated
+        # as "not found" and the walk continues further back, same as legacy.
+        while not closing and lookback < _MAX_PRICE_LOOKBACK_DAYS:
             trade_date = previous_day(trade_date)
             closing = get_price(trade_date)
             lookback += 1
