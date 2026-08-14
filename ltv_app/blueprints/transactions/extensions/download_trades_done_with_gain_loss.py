@@ -334,6 +334,14 @@ class DownloadTradesDoneWithGainLoss:
                         "H": f"=SUM(H{start_row}:H{end_row})"
                     }
 
+                    if transaction_type == "Sell (Spot)":
+                        # SUBTOTAL(9,...) ignores any nested SUBTOTAL cells inside its range,
+                        # so this picks up the detail rows only and never double-counts the
+                        # per-bank subtotal rows written above.
+                        cols["L"] = f"=SUBTOTAL(9,L{start_row}:L{end_row})"
+                        cols["M"] = f"=SUBTOTAL(9,M{start_row}:M{end_row})"
+                        cols["N"] = f"=M{row_num}/L{row_num}"
+
                     for col, value in cols.items():
                         cell = ws[f"{col}{row_num}"]
                         cell.value = value
@@ -345,6 +353,14 @@ class DownloadTradesDoneWithGainLoss:
                             cell.number_format = "#,##0"
                         elif col == "H":
                             cell.number_format = f"[${ccy}] #,##0.00"
+                        elif col in ("L", "M"):
+                            cell.number_format = f"[${ccy}]* #,##0.00; ([${ccy}]* #,##0.00)"
+                            cell.alignment = Alignment(horizontal="right", vertical="center")
+                            cell.font = Font(size=11, bold=True)
+                        elif col == "N":
+                            cell.number_format = "0.00%;( 0.00% )"
+                            cell.alignment = Alignment(horizontal="center", vertical="center")
+                            cell.font = Font(size=11, bold=True)
 
                 row_num += 2
 
