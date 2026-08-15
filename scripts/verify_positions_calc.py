@@ -3,7 +3,7 @@
 Pins known-good output (captured against the real instance/LTV Stocks.db) for
 the four narrative/average bugs fixed in this codebase's 2026-07 session, so
 a future change to _average, _transactions_narrative, or
-_inject_accu_only_positions can't silently regress them. All functions here
+inject_accu_only_positions can't silently regress them. All functions here
 are read-only (SELECT-only) — this script never mutates the database.
 
 Run: server/.venv/Scripts/python.exe scripts/verify_positions_calc.py
@@ -22,7 +22,7 @@ from ltv_app.blueprints.ltv_stocks.legacy_port.positions_calc import (
     _average, _transactions_narrative, position_records,
 )
 from ltv_app.blueprints.ltv_stocks.legacy_port.term_sheet_calc import contract_records
-from ltv_app.blueprints.ltv_stocks.legacy_port.excel_writer import _inject_accu_only_positions
+from ltv_app.blueprints.ltv_stocks.legacy_port.report_data import inject_accu_only_positions
 
 DB_PATH = os.path.join(SERVER, "instance", "LTV Stocks.db")
 REPORT_DATE = date(2026, 7, 10)
@@ -77,7 +77,7 @@ def main():
         accu = [r for r in contract_records(db, 5, "ACCU")
                 if r["ccy_id"] == "HKD" and r["code"] == "3993"]
         positions = position_records(db, 5, "DBPe", "HKD", REPORT_DATE)
-        injected = _inject_accu_only_positions(positions, accu, db, 5, "DBPe", REPORT_DATE)
+        injected = inject_accu_only_positions(positions, accu, db, 5, "DBPe", REPORT_DATE)
         rec = injected.get("3993")
         ok &= _case("C average 3993@DBPe (ACCU-only)",
                     rec["average"] if rec else None, 15.461374358974359)
@@ -89,7 +89,7 @@ def main():
         # via _moving_average_engine's short-covering/short-flip branches)
         # must stay a real average (float 0.0), not be reclassified as "no
         # average" (None) -- which would wrongly fall back to a strike-price
-        # placeholder elsewhere (_inject_accu_only_positions).
+        # placeholder elsewhere (inject_accu_only_positions).
         ok &= _case(
             "D _average CB1/9618 (genuine zero-cost, nonzero balance)",
             _average(db, "CB1", "9618", date(2022, 3, 28)),
