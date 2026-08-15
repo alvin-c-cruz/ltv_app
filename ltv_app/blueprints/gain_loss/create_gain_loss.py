@@ -2,84 +2,89 @@ import io
 import os
 import openpyxl
 from datetime import datetime, timedelta
-from flask import current_app, url_for
+from flask import current_app, g, url_for
 
 from .. database import get_db
 from .. transactions import get_balance, get_transactions, get_short_balance, get_short_transactions
+from .. transactions.models import (
+    accumulate_position, accumulate_short_position,
+    restructure_transactions, restructure_short_transactions,
+)
+
+
+def _refs():
+    """Reference tables, loaded once per request.
+
+    These are tiny (16 banks, 94 codes, 5 currencies) but were previously
+    re-queried per use -- get_code/get_stock_name alone fired once per written
+    workbook row, which is most of this report's query count.
+    """
+    if 'gain_loss_refs' not in g:
+        db = get_db()
+        # dict preserves insertion order, so 'ORDER BY priority' is retained
+        # by the *_order lists below.
+        banks = {r['ref_num']: r for r in
+                 db.execute("SELECT * FROM tbl_bank_account ORDER BY priority;").fetchall()}
+        codes = {r['ref_num']: r for r in
+                 db.execute("SELECT * FROM tbl_code;").fetchall()}
+        currencies = db.execute("SELECT * FROM tbl_currency ORDER BY priority;").fetchall()
+
+        g.gain_loss_refs = {
+            'banks': banks,
+            'codes': codes,
+            'bank_ref_by_id': {r['bank_id']: ref for ref, r in banks.items()},
+            'ccy_id_by_ref': {r['ref_num']: r['ccy_id'] for r in currencies},
+            'ccy_ref_by_id': {r['ccy_id']: r['ref_num'] for r in currencies},
+            'ccy_order': [r['ccy_id'] for r in currencies],
+            'bank_id_order': [r['bank_id'] for r in banks.values()],
+            'code_refs': list(codes.keys()),
+        }
+    return g.gain_loss_refs
 
 
 def list_currency():
-    db = get_db()
-    return [ccy['ccy_id'] for ccy in db.execute("SELECT * FROM tbl_currency ORDER BY priority;").fetchall()]
+    return list(_refs()['ccy_order'])
 
 
 def list_bank_accounts():
-    db = get_db()
-    return [bank['bank_id'] for bank in db.execute("SELECT * FROM tbl_bank_account ORDER BY priority;").fetchall()]
+    return list(_refs()['bank_id_order'])
 
 
 def bank_ref_nums():
-    db = get_db()
-    return [bank['ref_num'] for bank in db.execute("SELECT * FROM tbl_bank_account ORDER BY priority;").fetchall()]
+    return list(_refs()['banks'].keys())
 
 
 def get_bank_ref(bank_id):
-    db = get_db()
-    bank = db.execute("SELECT * FROM tbl_bank_account WHERE bank_id=?;", (bank_id, )).fetchone()
-
-    return bank["ref_num"]
+    return _refs()['bank_ref_by_id'][bank_id]
 
 
 def get_bank_id(bank_ref):
-    db = get_db()
-    bank = db.execute("SELECT * FROM tbl_bank_account WHERE ref_num=?;", (bank_ref, )).fetchone()
-
-    return bank["bank_id"]
+    return _refs()['banks'][bank_ref]['bank_id']
 
 
 def get_bank_name(bank_ref):
-    db = get_db()
-    bank = db.execute("SELECT * FROM tbl_bank_account WHERE ref_num=?;", (bank_ref, )).fetchone()
-
-    return bank["bank_name"]
+    return _refs()['banks'][bank_ref]['bank_name']
 
 
 def get_code(code_ref):
-    db = get_db()
-    stock = db.execute("SELECT * FROM tbl_code WHERE ref_num=?;", (code_ref, )).fetchone()
-
-    return stock["code"]
+    return _refs()['codes'][code_ref]['code']
 
 
 def get_stock_name(code_ref):
-    db = get_db()
-    stock = db.execute("SELECT * FROM tbl_code WHERE ref_num=?;", (code_ref, )).fetchone()
-
-    return stock["stock_name"]
+    return _refs()['codes'][code_ref]['stock_name']
 
 
 def get_ccy_ref(ccy_id):
-    db = get_db()
-    currency = db.execute("SELECT * FROM tbl_currency WHERE ccy_id=?;", (ccy_id, )).fetchone()
-
-    return currency["ref_num"]
+    return _refs()['ccy_ref_by_id'][ccy_id]
 
 
 def get_ccy(code_ref):
-    db = get_db()
-    currency = db.execute("SELECT * FROM tbl_currency "
-                          "INNER JOIN tbl_code on tbl_code.ccy_ref = tbl_currency.ref_num "
-                          "WHERE tbl_code.ref_num=?;", (code_ref, )).fetchone()
-
-    return currency["ccy_id"]
+    refs = _refs()
+    return refs['ccy_id_by_ref'][refs['codes'][code_ref]['ccy_ref']]
 
 
 def get_stock_ref():
-    db = get_db()
-    sql = "SELECT ref_num FROM tbl_code;"
-    stock_refs = [stock["ref_num"] for stock in db.execute(sql).fetchall()]
-
-    return stock_refs
+    return list(_refs()['code_refs'])
 
 
 def create_file(date_from, date_to, bank_ref, code_ref):
@@ -531,8 +536,62 @@ def _get_refs_and_name(date_from, date_to, bank_ref, code_ref):
 #         }
 #     }
 # }
+def _banks_by_basis(bank_refs):
+    """Group the requested banks by transaction_basis.
+
+    The date column to filter and sort on differs per bank ('trade_date' vs
+    'value_date'), so batched queries are issued one per distinct basis --
+    two, in practice -- rather than one per bank/code pair.
+    """
+    refs = _refs()
+    by_basis = {}
+    for bank_ref in bank_refs:
+        basis = refs['banks'][bank_ref]['transaction_basis']
+        by_basis.setdefault(basis, []).append(bank_ref)
+    return by_basis
+
+
+def _grouped_rows(db, table, columns, bank_refs, code_refs, date_to, order_by_priority):
+    """All rows of `table` up to date_to, grouped by (bank_ref, code_ref).
+
+    Each group comes back in exactly the order the per-pair queries produced:
+    ordered by the bank's transaction_basis (then transaction-type priority for
+    the long book). Rows are fetched with no lower date bound because the
+    opening balance replays the position from inception.
+    """
+    grouped = {}
+    for basis, basis_banks in _banks_by_basis(bank_refs).items():
+        bank_marks = ",".join("?" * len(basis_banks))
+        code_marks = ",".join("?" * len(code_refs))
+
+        if order_by_priority:
+            sql = (f"SELECT {columns}, {table}.{basis} AS _basis "
+                   f"FROM {table} "
+                   "INNER JOIN tbl_transaction_type "
+                   f"ON tbl_transaction_type.transaction_type = {table}.transaction_type "
+                   f"WHERE {table}.bank_ref IN ({bank_marks}) "
+                   f"AND {table}.code_ref IN ({code_marks}) "
+                   f"AND {table}.{basis}<=? "
+                   f"ORDER BY {table}.bank_ref, {table}.code_ref, "
+                   f"{table}.{basis}, tbl_transaction_type.priority;")
+        else:
+            sql = (f"SELECT {columns}, {table}.{basis} AS _basis "
+                   f"FROM {table} "
+                   f"WHERE {table}.bank_ref IN ({bank_marks}) "
+                   f"AND {table}.code_ref IN ({code_marks}) "
+                   f"AND {table}.{basis}<=? "
+                   f"ORDER BY {table}.bank_ref, {table}.code_ref, {table}.{basis};")
+
+        params = (*basis_banks, *code_refs, date_to)
+        for row in db.execute(sql, params).fetchall():
+            grouped.setdefault((row['bank_ref'], row['code_ref']), []).append(row)
+
+    return grouped
+
+
 def gather_gain_loss(date_from, date_to, bank_refs, code_refs):
     db = get_db()
+    refs = _refs()
     dict_gain_loss = {}
 
     beginning_date = str(datetime.strptime(date_from, "%Y-%m-%d") - timedelta(days=1))[:10]
@@ -546,10 +605,34 @@ def gather_gain_loss(date_from, date_to, bank_refs, code_refs):
                 "short_beginning": {}, "short_trades": {},
             }
 
+    def bank_id_of(ref_num):
+        return refs['banks'][ref_num]['bank_id']
+
+    # Two bulk queries per book (one per transaction_basis) replace the
+    # 4 x len(bank_refs) x len(code_refs) per-pair queries this used to issue.
+    long_rows = _grouped_rows(db, "tbl_transaction", "tbl_transaction.*",
+                              bank_refs, code_refs, date_to, order_by_priority=True)
+    short_rows = _grouped_rows(
+        db, "tbl_transaction_short",
+        "tbl_transaction_short.ref_num, tbl_transaction_short.bank_ref, "
+        "tbl_transaction_short.code_ref, tbl_transaction_short.trade_date, "
+        "tbl_transaction_short.value_date, tbl_transaction_short.transaction_type, "
+        "tbl_transaction_short.quantity, tbl_transaction_short.price, "
+        "tbl_transaction_short.brokerage, tbl_transaction_short.commission, "
+        "tbl_transaction_short.foreign_charge, tbl_transaction_short.stamp_duty, "
+        "tbl_transaction_short.misc",
+        bank_refs, code_refs, date_to, order_by_priority=False)
+
     for bank_ref in bank_refs:
         for code_ref in code_refs:
+            long_group = long_rows.get((bank_ref, code_ref), ())
+            short_group = short_rows.get((bank_ref, code_ref), ())
+            if not long_group and not short_group:
+                continue
+
             #  1. Long book balance
-            quantity, cost_to_date = get_balance(db=db, bank_ref=bank_ref, code_ref=code_ref, trade_date=beginning_date)
+            opening = [r for r in long_group if r['_basis'] <= beginning_date]
+            quantity, cost_to_date, _ = accumulate_position(opening)
             if quantity:
                 ccy = get_ccy(code_ref)
                 _ensure(ccy, bank_ref)
@@ -560,8 +643,8 @@ def gather_gain_loss(date_from, date_to, bank_refs, code_refs):
                 }
 
             #  2. Long book transactions
-            transactions = get_transactions(db=db, bank_ref=bank_ref, code_ref=code_ref,
-                                            date_from=date_from, date_to=date_to)
+            period = [r for r in long_group if date_from <= r['_basis'] <= date_to]
+            transactions = restructure_transactions(period, bank_id_of) if period else []
             if transactions:
                 ccy = get_ccy(code_ref)
                 _ensure(ccy, bank_ref)
@@ -572,8 +655,8 @@ def gather_gain_loss(date_from, date_to, bank_refs, code_refs):
                 dict_gain_loss[ccy][bank_ref]["trades"][code_ref] = transactions
 
             #  3. Short book balance
-            short_qty, short_cost = get_short_balance(db=db, bank_ref=bank_ref, code_ref=code_ref,
-                                                      trade_date=beginning_date)
+            short_opening = [r for r in short_group if r['_basis'] <= beginning_date]
+            short_qty, short_cost = accumulate_short_position(short_opening)
             if short_qty:
                 ccy = get_ccy(code_ref)
                 _ensure(ccy, bank_ref)
@@ -584,8 +667,8 @@ def gather_gain_loss(date_from, date_to, bank_refs, code_refs):
                 }
 
             #  4. Short book transactions
-            short_transactions = get_short_transactions(db=db, bank_ref=bank_ref, code_ref=code_ref,
-                                                        date_from=date_from, date_to=date_to)
+            short_period = [r for r in short_group if date_from <= r['_basis'] <= date_to]
+            short_transactions = restructure_short_transactions(short_period) if short_period else []
             if short_transactions:
                 ccy = get_ccy(code_ref)
                 _ensure(ccy, bank_ref)
