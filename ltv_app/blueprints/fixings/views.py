@@ -92,7 +92,7 @@ def home():
     return render_template("fixings/home.html", **context)
 
 
-@bp.route('/<ref_num>/edit', methods=['GET', 'POST'])
+@bp.route('/<int:ref_num>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(ref_num):
     from .. database import get_db
@@ -143,7 +143,7 @@ def edit(ref_num):
     return render_template('fixings/edit.html', form=form, transaction_types=transaction_types, ref_num=ref_num)
 
 
-@bp.route('/<ref_num>/delete', methods=['GET', 'POST'])
+@bp.route('/<int:ref_num>/delete', methods=['GET', 'POST'])
 @login_required
 def delete(ref_num):
     from .. database import get_db
@@ -155,7 +155,7 @@ def delete(ref_num):
     return redirect(url_for('fixings.home'))
 
 
-@bp.route('/<ref_num>/unlock', methods=['GET'])
+@bp.route('/<int:ref_num>/unlock', methods=['GET'])
 @login_required
 def unlock(ref_num):
     from flask import abort

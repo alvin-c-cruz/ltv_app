@@ -182,7 +182,7 @@ def add():
     return render_template('term_sheet/add.html', **context)
 
 
-@bp.route("/edit/<contract_ref>", methods=["GET", "POST"])
+@bp.route("/edit/<int:contract_ref>", methods=["GET", "POST"])
 @login_required
 def edit(contract_ref, view_only=False):
     db = get_db()
@@ -307,7 +307,7 @@ def edit(contract_ref, view_only=False):
                            gtds=gtds, bank_id=bank_id, schedule_warnings=schedule_warnings)
 
 
-@bp.route("/<contract_ref>/data", methods=["GET"])
+@bp.route("/<int:contract_ref>/data", methods=["GET"])
 @login_required
 def contract_data(contract_ref):
     """Return contract fields as JSON for the edit modal."""
@@ -335,7 +335,7 @@ def contract_data(contract_ref):
     })
 
 
-@bp.route("/<contract_ref>/view", methods=["GET"])
+@bp.route("/<int:contract_ref>/view", methods=["GET"])
 @login_required
 def view(contract_ref):
     """View a locked contract (read-only)."""
@@ -343,7 +343,7 @@ def view(contract_ref):
     return edit(contract_ref, view_only=True)
 
 
-@bp.route("/<contract_ref>/lock", methods=["POST"])
+@bp.route("/<int:contract_ref>/lock", methods=["POST"])
 @login_required
 def lock_contract(contract_ref):
     """Lock a contract (superuser only)."""
@@ -357,7 +357,7 @@ def lock_contract(contract_ref):
     return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
 
 
-@bp.route("/<contract_ref>/unlock", methods=["POST"])
+@bp.route("/<int:contract_ref>/unlock", methods=["POST"])
 @login_required
 def unlock(contract_ref):
     """Unlock a contract (superuser only)."""
@@ -371,7 +371,7 @@ def unlock(contract_ref):
     return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
 
 
-@bp.route("/<contract_ref>/delete", methods=["GET", "POST"])
+@bp.route("/<int:contract_ref>/delete", methods=["GET", "POST"])
 @login_required
 def delete_contract(contract_ref):
     db = get_db()
@@ -385,7 +385,7 @@ def delete_contract(contract_ref):
     return redirect(url_for('transactions.home'))
 
 
-@bp.route("/<contract_ref>/<period_ref>/delete", methods=["GET", "POST"])
+@bp.route("/<int:contract_ref>/<int:period_ref>/delete", methods=["GET", "POST"])
 @login_required
 def delete_period(contract_ref, period_ref):
     db = get_db()
@@ -394,7 +394,7 @@ def delete_period(contract_ref, period_ref):
     return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))
 
 
-@bp.route("/<contract_ref>/set-inactive", methods=["POST"])
+@bp.route("/<int:contract_ref>/set-inactive", methods=["POST"])
 @login_required
 def set_inactive(contract_ref):
     db = get_db()
@@ -434,7 +434,7 @@ def set_inactive(contract_ref):
     return jsonify({"success": True, "message": "Contract status updated to inactive"})
 
 
-@bp.route("/<contract_ref>/set-active", methods=["POST"])
+@bp.route("/<int:contract_ref>/set-active", methods=["POST"])
 @login_required
 def set_active(contract_ref):
     db = get_db()
@@ -540,7 +540,7 @@ def next_reference(db, bank_ref, code_ref, transaction_type):
     return reference
 
 
-@bp.route("/<contract_ref>/add-line", methods=["GET", "POST"])
+@bp.route("/<int:contract_ref>/add-line", methods=["GET", "POST"])
 @login_required
 def add_line(contract_ref):
     db = get_db()

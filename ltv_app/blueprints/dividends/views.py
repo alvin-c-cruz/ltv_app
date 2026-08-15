@@ -108,7 +108,7 @@ def add():
     return render_template("dividends/add.html", **context)
 
 
-@bp.route("/edit/<ref_num>", methods=["GET", "POST"])
+@bp.route("/edit/<int:ref_num>", methods=["GET", "POST"])
 @login_required
 def edit(ref_num):
     db = get_db()
@@ -155,7 +155,7 @@ def edit(ref_num):
     return render_template("dividends/edit.html", **context)
 
 
-@bp.route("/delete/<ref_num>")
+@bp.route("/delete/<int:ref_num>")
 @login_required
 def delete(ref_num):
     db = get_db()

@@ -257,7 +257,7 @@ def stock_transfer():
     return render_template('transactions/add_transfer.html', **context)
 
 
-@bp.route('/<ref_num>/edit', methods=['GET', 'POST'])
+@bp.route('/<int:ref_num>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(ref_num):
     from .. database import get_db
@@ -367,7 +367,7 @@ def edit(ref_num):
     return render_template('transactions/edit.html', **context)
 
 
-@bp.route('/<ref_num>/view', methods=['GET'])
+@bp.route('/<int:ref_num>/view', methods=['GET'])
 @login_required
 def view(ref_num):
     """View a locked transaction (read-only)."""
@@ -403,7 +403,7 @@ def view(ref_num):
     return render_template('transactions/edit.html', **context)
 
 
-@bp.route('/<ref_num>/unlock', methods=['GET'])
+@bp.route('/<int:ref_num>/unlock', methods=['GET'])
 @login_required
 def unlock(ref_num):
     """Unlock a transaction (superuser only)."""
@@ -422,7 +422,7 @@ def unlock(ref_num):
     return redirect(url_for('transactions.home'))
 
 
-@bp.route('/<ref_num>/delete', methods=['GET', 'POST'])
+@bp.route('/<int:ref_num>/delete', methods=['GET', 'POST'])
 @login_required
 def delete(ref_num):
     from .. database import get_db
@@ -439,7 +439,7 @@ def delete(ref_num):
     return redirect(url_for('transactions.home'))
 
 
-@bp.route('/short/<ref_num>/edit', methods=['GET', 'POST'])
+@bp.route('/short/<int:ref_num>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_short(ref_num):
     from .. database import get_db
@@ -531,7 +531,7 @@ def edit_short(ref_num):
     return render_template('transactions/edit_short.html', **context)
 
 
-@bp.route('/short/<ref_num>/view', methods=['GET'])
+@bp.route('/short/<int:ref_num>/view', methods=['GET'])
 @login_required
 def view_short(ref_num):
     """View a locked short transaction (read-only)."""
@@ -568,7 +568,7 @@ def view_short(ref_num):
     return render_template('transactions/edit_short.html', **context)
 
 
-@bp.route('/short/<ref_num>/unlock', methods=['GET'])
+@bp.route('/short/<int:ref_num>/unlock', methods=['GET'])
 @login_required
 def unlock_short(ref_num):
     """Unlock a short transaction (superuser only)."""
@@ -587,7 +587,7 @@ def unlock_short(ref_num):
     return redirect(url_for('transactions.home'))
 
 
-@bp.route('/short/<ref_num>/delete', methods=['GET', 'POST'])
+@bp.route('/short/<int:ref_num>/delete', methods=['GET', 'POST'])
 @login_required
 def delete_short(ref_num):
     from .. database import get_db
