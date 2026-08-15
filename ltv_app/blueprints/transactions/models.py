@@ -90,44 +90,17 @@ def get_balance(db, bank_ref, code_ref, trade_date):
 
     transactions = db.execute(sql, (bank_ref, code_ref, trade_date)).fetchall()
 
-    balance = 0
-    cost_to_date = 0
-
-    for row in transactions:
-        quantity = row['quantity']
-        price = row['price']
-        charges = row['brokerage'] + row['commission'] + row['foreign_charge'] + row['stamp_duty'] + row['misc']
-        amount = quantity * price + charges
-
-        if quantity > 0:
-
-            if balance > 0:
-                cost_to_date += amount
-            elif balance == 0:
-                cost_to_date += amount
-            elif balance < 0:
-                if balance + quantity == 0:
-                    cost_to_date = 0
-                elif balance + quantity < 0:
-                    cost_to_date = 0
-                else:
-                    cost_to_date = (balance + quantity) / quantity * amount
-
-        else:
-            if balance > 0:
-                if balance - abs(quantity) > 0:
-                    cost_to_date -= cost_to_date * abs(quantity) / balance
-                else:
-                    cost_to_date = 0
-            else:
-                cost_to_date = 0
-
-        balance += quantity
-
+    balance, cost_to_date, _ = accumulate_position(transactions)
     return balance, cost_to_date
 
 
-def get_transactions(db, bank_ref, code_ref, date_from, date_to):
+def restructure_transactions(rows, bank_id_of):
+    """Ordered long-book rows -> the list-of-dicts the gain-loss report consumes.
+
+    `bank_id_of(ref_num)` resolves the counter-party bank for Transfer rows.
+    Callers pass either a DB-backed lookup or a preloaded dict, which is how
+    the batched path avoids a query per transfer row.
+    """
     short_name = {
         "CB1": "Citibank A/C 1",
         "CB2": "Citibank A/C 2",
@@ -147,24 +120,10 @@ def get_transactions(db, bank_ref, code_ref, date_from, date_to):
         "NSG": "Nomura Singapore",
     }
 
-    transaction_basis = db.execute("SELECT transaction_basis FROM tbl_bank_account WHERE ref_num=?",
-                                   (bank_ref,)).fetchone()[0]
-
-    sql = ("SELECT * FROM tbl_transaction "
-            + "INNER JOIN tbl_transaction_type "
-            + "ON tbl_transaction_type.transaction_type = tbl_transaction.transaction_type "
-            + f"WHERE tbl_transaction.bank_ref=? AND tbl_transaction.code_ref=? "
-            + f"AND tbl_transaction.{transaction_basis}>=? "
-            + f"AND tbl_transaction.{transaction_basis}<=? "
-            + f"ORDER BY tbl_transaction.{transaction_basis}, tbl_transaction_type.priority;")
-
-    transactions = db.execute(sql, (bank_ref, code_ref, date_from, date_to)).fetchall()
-
     restructured_data = []
-    for trans in transactions:
+    for trans in rows:
         if 'Transfer' in trans['transaction_type']:
-            bank_id = db.execute("SELECT bank_id FROM tbl_bank_account WHERE ref_num=?",
-                                   (trans['counter_bank_ref'],)).fetchone()[0]
+            bank_id = bank_id_of(trans['counter_bank_ref'])
             if '-In' in trans['transaction_type']:
                 description = f'From {short_name[bank_id]}'
             else:
@@ -188,6 +147,27 @@ def get_transactions(db, bank_ref, code_ref, date_from, date_to):
     return restructured_data
 
 
+def get_transactions(db, bank_ref, code_ref, date_from, date_to):
+    transaction_basis = db.execute("SELECT transaction_basis FROM tbl_bank_account WHERE ref_num=?",
+                                   (bank_ref,)).fetchone()[0]
+
+    sql = ("SELECT * FROM tbl_transaction "
+            + "INNER JOIN tbl_transaction_type "
+            + "ON tbl_transaction_type.transaction_type = tbl_transaction.transaction_type "
+            + f"WHERE tbl_transaction.bank_ref=? AND tbl_transaction.code_ref=? "
+            + f"AND tbl_transaction.{transaction_basis}>=? "
+            + f"AND tbl_transaction.{transaction_basis}<=? "
+            + f"ORDER BY tbl_transaction.{transaction_basis}, tbl_transaction_type.priority;")
+
+    transactions = db.execute(sql, (bank_ref, code_ref, date_from, date_to)).fetchall()
+
+    def bank_id_of(ref_num):
+        return db.execute("SELECT bank_id FROM tbl_bank_account WHERE ref_num=?",
+                          (ref_num,)).fetchone()[0]
+
+    return restructure_transactions(transactions, bank_id_of)
+
+
 def _update_short_cost(balance, cost_to_date, qty, price, charges):
     amount = abs(qty) * price + charges
     if qty < 0:  # opening/deepening short
@@ -200,6 +180,18 @@ def _update_short_cost(balance, cost_to_date, qty, price, charges):
             else:
                 cost_to_date = 0.0
     return cost_to_date
+
+
+def accumulate_short_position(rows):
+    """Net short position and cost basis from ordered tbl_transaction_short rows."""
+    balance = 0
+    cost_to_date = 0.0
+    for row in rows:
+        charges = row['brokerage'] + row['commission'] + row['foreign_charge'] + row['stamp_duty'] + row['misc']
+        cost_to_date = _update_short_cost(balance, cost_to_date, row['quantity'], row['price'], charges)
+        balance += row['quantity']
+
+    return balance, cost_to_date
 
 
 def get_short_balance(db, bank_ref, code_ref, trade_date):
@@ -216,14 +208,7 @@ def get_short_balance(db, bank_ref, code_ref, trade_date):
         (bank_ref, code_ref, trade_date)
     ).fetchall()
 
-    balance = 0
-    cost_to_date = 0.0
-    for row in rows:
-        charges = row['brokerage'] + row['commission'] + row['foreign_charge'] + row['stamp_duty'] + row['misc']
-        cost_to_date = _update_short_cost(balance, cost_to_date, row['quantity'], row['price'], charges)
-        balance += row['quantity']
-
-    return balance, cost_to_date
+    return accumulate_short_position(rows)
 
 
 def get_short_transactions(db, bank_ref, code_ref, date_from, date_to):
@@ -241,6 +226,11 @@ def get_short_transactions(db, bank_ref, code_ref, date_from, date_to):
         (bank_ref, code_ref, date_from, date_to)
     ).fetchall()
 
+    return restructure_short_transactions(rows)
+
+
+def restructure_short_transactions(rows):
+    """Ordered short-book rows -> the list-of-dicts the gain-loss report consumes."""
     result = []
     for row in rows:
         charges = (row['brokerage'] + row['commission'] + row['foreign_charge']
