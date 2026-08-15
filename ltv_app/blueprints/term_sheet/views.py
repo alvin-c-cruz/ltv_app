@@ -321,7 +321,8 @@ def contract_data(contract_ref):
     """Return contract fields as JSON for the edit modal."""
     db = get_db()
     ts = StockContract(db=db)
-    ts.get(ref_num=contract_ref)
+    if not ts.get(ref_num=contract_ref):
+        abort(404)
     return jsonify({
         "ref_num":          ts.ref_num,
         "reference":        ts.reference,

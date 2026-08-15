@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, flash, request, redirect, url_for, send_file
+from flask import Blueprint, render_template, flash, request, redirect, url_for, send_file, abort
 
 from .. auth import login_required
 from .. database import get_db
@@ -97,7 +97,8 @@ def home():
 def edit(ref_num):
     from .. database import get_db
     transaction = Transaction(db=get_db())
-    transaction.get(ref_num=ref_num)
+    if not transaction.get(ref_num=ref_num):
+        abort(404)
 
     transaction_types = [(i, i) for i in ['Buy (Accu)', 'Buy (Accu-KO)', 'Sell (Decu)', 'Sell (Decu-KO)']]
 
@@ -158,7 +159,6 @@ def delete(ref_num):
 @bp.route('/<int:ref_num>/unlock', methods=['GET'])
 @login_required
 def unlock(ref_num):
-    from flask import abort
     from flask_login import current_user
 
     # Only superusers can unlock

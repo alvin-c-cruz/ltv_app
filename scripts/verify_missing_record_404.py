@@ -45,6 +45,12 @@ with app.app_context():
         "SELECT b.bank_id, s.code FROM tbl_transaction t "
         "INNER JOIN tbl_bank_account b ON b.ref_num = t.bank_ref "
         "INNER JOIN tbl_code s ON s.ref_num = t.code_ref LIMIT 1").fetchone()
+    short_txn = db.execute("SELECT ref_num FROM tbl_transaction_short LIMIT 1").fetchone()
+    # fixings.edit renders a fixing-type transaction, so pick one of those.
+    fixing_txn = db.execute(
+        "SELECT ref_num FROM tbl_transaction "
+        "WHERE transaction_type LIKE '%Accu%' OR transaction_type LIKE '%Decu%' "
+        "LIMIT 1").fetchone()
 
 missing = [n for n, v in [("stock_contract", contract), ("transaction", txn),
                           ("cash_dividend", div), ("bank/code pair", bank_code)] if v is None]
@@ -77,7 +83,29 @@ CASES = [
     # --- dividends: Model.get() miss
     (f"/dividends/edit/{GHOST_ID}",            404, "dividends.edit, missing dividend"),
     (f"/dividends/edit/{div['ref_num']}",      200, "control: real dividend edit"),
+    # --- routes that used to render a BLANK form/JSON (200) rather than 500.
+    # Worse than an error in one way: the form submitted, and only a NOT NULL
+    # constraint on tbl_transaction.locked stopped save() taking its INSERT
+    # branch and creating a phantom row. That protection was incidental to the
+    # schema, not intended by the code.
+    (f"/fixings/{GHOST_ID}/edit",              404, "fixings.edit, was blank form"),
+    (f"/trades/short/{GHOST_ID}/edit",         404, "transactions.edit_short, was blank form"),
+    (f"/trades/short/{GHOST_ID}/view",         404, "transactions.view_short, was blank page"),
+    (f"/term-sheet/{GHOST_ID}/data",           404, "term_sheet.contract_data, was JSON of nulls"),
 ]
+
+if short_txn:
+    CASES += [
+        (f"/trades/short/{short_txn['ref_num']}/view", 200, "control: real short transaction"),
+    ]
+if fixing_txn:
+    CASES += [
+        (f"/fixings/{fixing_txn['ref_num']}/edit", 200, "control: real fixing edit"),
+    ]
+if contract:
+    CASES += [
+        (f"/term-sheet/{contract['ref_num']}/data", 200, "control: real contract JSON"),
+    ]
 
 client = app.test_client()
 failures = []

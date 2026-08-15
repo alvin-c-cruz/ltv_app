@@ -446,7 +446,8 @@ def delete(ref_num):
 def edit_short(ref_num):
     from .. database import get_db
     transaction = TransactionShort(db=get_db())
-    transaction.get(ref_num=ref_num)
+    if not transaction.get(ref_num=ref_num):
+        abort(404)
 
     if transaction.locked and current_user.role != 'superuser':
         flash("This transaction is locked and cannot be edited.")
@@ -539,7 +540,8 @@ def view_short(ref_num):
     """View a locked short transaction (read-only)."""
     from .. database import get_db
     transaction = TransactionShort(db=get_db())
-    transaction.get(ref_num=ref_num)
+    if not transaction.get(ref_num=ref_num):
+        abort(404)
 
     transaction_types = [(i, i) for i in [
         'Buy (Pay Short)', 'Sell (Short)', 'Return Shares', 'Borrow Shares'
