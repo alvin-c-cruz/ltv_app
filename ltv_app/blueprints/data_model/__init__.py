@@ -44,7 +44,13 @@ class Model:
             fields = [f'{field["name"]}=?' for field in self.fields()]
             values = [getattr(self, field['name']) for field in self.fields()]
 
-            self.db.execute(f"UPDATE {self.table_name} set {', '.join(fields)} WHERE ref_num={self.ref_num};", values)
+            # ref_num is bound, not interpolated: term_sheet.edit assigns it
+            # straight from a URL segment. table_name is safe to interpolate --
+            # it is always a class constant set in __post_init__.
+            self.db.execute(
+                f"UPDATE {self.table_name} set {', '.join(fields)} WHERE ref_num=?;",
+                values + [self.ref_num],
+            )
 
         else:
             fields = [field['name'] for field in self.fields() if field['name'] != 'ref_num']
