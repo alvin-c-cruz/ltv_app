@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 import os
 import secrets
+import sqlite3
 
 
 def _get_version():
@@ -30,6 +31,58 @@ def _ensure_instance_dirs(instance_path):
                  os.path.join(instance_path, "test_database"),
                  os.path.join(instance_path, "temp")):
         os.makedirs(path, exist_ok=True)
+
+
+# Indexes the Excel report endpoints depend on. Without them the reports
+# full-scan tbl_transaction (27k rows) and tbl_stock_price (151k rows) thousands
+# of times each, which pushed both /gain-loss/ and /ltv-stocks/download past
+# PythonAnywhere's 300s request limit (BUGS.md, 2026-08-15).
+#
+# Declared here rather than hand-applied because this tree has no migration
+# tooling: a rebuilt, restored or freshly-cloned DB would otherwise silently
+# regress to a five-minute timeout with nothing in the repo to explain why.
+_REPORT_INDEXES = (
+    ("idx_transaction_bank_code", "tbl_transaction", "(bank_ref, code_ref)"),
+    ("idx_transaction_short_bank_code", "tbl_transaction_short", "(bank_ref, code_ref)"),
+    ("idx_stock_price_code_date", "tbl_stock_price", "(code_ref, trade_date)"),
+    ("idx_contract_period_contract", "tbl_stock_contract_period", "(contract_ref)"),
+)
+
+
+def _ensure_report_indexes(db_path):
+    """Create any missing report indexes. Idempotent and best-effort.
+
+    Deliberately does NOT create the database. sqlite3.connect() on a missing
+    path would produce an empty file, and every page would then fail on a
+    missing table instead of failing loudly about the absent DB.
+
+    Index creation must never stop the app booting, so a locked, read-only or
+    partially-built database is skipped rather than raised: the reports get
+    slower, they do not break.
+    """
+    if not os.path.exists(db_path):
+        return
+
+    try:
+        con = sqlite3.connect(db_path, timeout=30)
+    except sqlite3.Error:
+        return
+
+    try:
+        tables = {row[0] for row in
+                  con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        for name, table, columns in _REPORT_INDEXES:
+            if table not in tables:
+                continue
+            try:
+                con.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table} {columns};")
+            except sqlite3.Error:
+                pass
+        con.commit()
+    except sqlite3.Error:
+        pass
+    finally:
+        con.close()
 
 
 def create_app(test_config=None):
@@ -63,6 +116,7 @@ def create_app(test_config=None):
         app.config.from_mapping(test_config)
 
     _ensure_instance_dirs(app.instance_path)
+    _ensure_report_indexes(app.config["DATABASE"])
 
     app.jinja_env.globals['app_version'] = VERSION
 
