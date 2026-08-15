@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from ...tz import ph_today
 import io
 from .. transactions import get_balance, get_transactions
+from .. auth import login_required
 
 bp = Blueprint('bank', __name__, template_folder='pages', url_prefix='/bank')
 
@@ -22,11 +23,13 @@ def _fmt_num(value, decimals=2):
 
 
 @bp.route('/')
+@login_required
 def home():
     return render_template('bank/home.html')
 
 
 @bp.route('/<bank_id>')
+@login_required
 def account_position(bank_id):
     from .. database import get_db
     db = get_db()
@@ -276,6 +279,7 @@ def _compute_transactions(db, bank_ref, code_ref, date_from, date_to):
 
 
 @bp.route('/<bank_id>/<code>', methods=['GET', 'POST'])
+@login_required
 def transaction_list(bank_id, code):
     from .. database import get_db
     db = get_db()
@@ -323,6 +327,7 @@ def transaction_list(bank_id, code):
 
 
 @bp.route('/<bank_id>/<code>/short', methods=['GET', 'POST'])
+@login_required
 def short_transaction_list(bank_id, code):
     from .. database import get_db
     db = get_db()
@@ -417,6 +422,7 @@ def short_transaction_list(bank_id, code):
 
 
 @bp.route('/<bank_id>/<code>/download')
+@login_required
 def download_transactions(bank_id, code):
     from .. database import get_db
     from openpyxl import Workbook
