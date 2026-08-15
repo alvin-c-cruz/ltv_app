@@ -1,6 +1,6 @@
 """Verification for the D-circle DrawingML injection (excel_writer.py).
 
-Two parts: an isolated check of _compute_circle_cells' classification logic
+Two parts: an isolated check of compute_status_flags' classification logic
 (no DB, synthetic rows -- mirrors the exact algorithm given in the spec), and
 a live end-to-end check that generates a real workbook against the real DB,
 confirms every XML part it touched is well-formed, that openpyxl can reopen
@@ -23,9 +23,8 @@ from openpyxl.utils import get_column_letter
 
 from ltv_app import create_app
 from ltv_app.blueprints.database.views import get_db
-from ltv_app.blueprints.ltv_stocks.legacy_port.excel_writer import (
-    _compute_circle_cells, build_workbook,
-)
+from ltv_app.blueprints.ltv_stocks.legacy_port.excel_writer import build_workbook
+from ltv_app.blueprints.ltv_stocks.legacy_port.report_data import compute_status_flags
 from ltv_app.blueprints.ltv_stocks.legacy_port.working_day import WorkingDay
 from ltv_app.tz import ph_today
 
@@ -52,7 +51,7 @@ class _NeverHoliday:
 
 
 def isolated_checks():
-    print("Isolated _compute_circle_cells checks:")
+    print("Isolated compute_status_flags checks:")
     date_range = [date(2026, 7, i) for i in (6, 7, 8, 9, 10, 13, 14)]
     wd = _NeverHoliday()
     price_lookup = lambda code_ref, d: {
@@ -68,7 +67,7 @@ def isolated_checks():
     # Row: spot=200 > strike=150 (above branch), ko=180.
     rec_above = _Rec(code_ref=1, spot=200.0, strike=150.0, ko=180.0,
                       start_date=date(2026, 7, 6), end_date=date(2026, 7, 20))
-    cells = _compute_circle_cells([rec_above], 10, date_range, date(2026, 7, 14), wd, price_lookup)
+    cells = compute_status_flags([rec_above], 10, date_range, date(2026, 7, 14), wd, price_lookup)
     # 07/06 px=100: KO? 180<=100 no. D? 150>=100 yes -> D at O10.
     # 07/07 px=120: 150>=120 yes -> D at P10.
     # 07/08 px=0 -> skip (zero).
@@ -98,7 +97,7 @@ def isolated_checks():
     }[d]
     rec_above_today = _Rec(code_ref=1, spot=200.0, strike=150.0, ko=180.0,
                             start_date=today_date_range[0], end_date=today_date_range[0] + timedelta(days=30))
-    cells = _compute_circle_cells(
+    cells = compute_status_flags(
         [rec_above_today], 10, today_date_range, today, wd, price_lookup_today_no_price
     )
     check("report_date (== today) inherits previous day's D status", sorted(cells),
@@ -122,7 +121,7 @@ def isolated_checks():
     }[d]
     rec_above_not_today = _Rec(code_ref=1, spot=200.0, strike=150.0, ko=180.0,
                                 start_date=not_today_date_range[0], end_date=not_today_date_range[0] + timedelta(days=30))
-    cells = _compute_circle_cells(
+    cells = compute_status_flags(
         [rec_above_not_today], 10, not_today_date_range, not_today, wd, price_lookup_not_today_no_price
     )
     # Earlier real-priced days still classify normally (O/P/T, same pattern as
@@ -135,7 +134,7 @@ def isolated_checks():
     # Row: spot=100 <= strike=150 (else branch), ko=90.
     rec_below = _Rec(code_ref=1, spot=100.0, strike=150.0, ko=90.0,
                       start_date=date(2026, 7, 6), end_date=date(2026, 7, 20))
-    cells = _compute_circle_cells([rec_below], 20, date_range, date(2026, 7, 14), wd, price_lookup)
+    cells = compute_status_flags([rec_below], 20, date_range, date(2026, 7, 14), wd, price_lookup)
     # 07/06 px=100: KO? 90>=100 no. D? 150<=100 no -> "." (no circle).
     # 07/07 px=120: KO? 90>=120 no. D? 150<=120 no -> "." (no circle).
     # 07/13 px=150: KO? 90>=150 no. D? 150<=150 yes -> D at T20.
@@ -144,7 +143,7 @@ def isolated_checks():
     # start_date/end_date window: date outside range never circled even with a real price.
     rec_window = _Rec(code_ref=1, spot=200.0, strike=150.0, ko=180.0,
                        start_date=date(2026, 7, 8), end_date=date(2026, 7, 9))
-    cells = _compute_circle_cells([rec_window], 30, date_range, date(2026, 7, 14), wd, price_lookup)
+    cells = compute_status_flags([rec_window], 30, date_range, date(2026, 7, 14), wd, price_lookup)
     check("outside start/end window -> no circles", cells, [])
 
 
@@ -176,8 +175,8 @@ def live_check():
         decu_count_row = accu_count_row + 6 + len(accu)
 
         expected = set(
-            _compute_circle_cells(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
-            + _compute_circle_cells(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
+            compute_status_flags(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
+            + compute_status_flags(decu, decu_count_row + 4, date_range, report_date, wd, price_lookup)
             # Cells (col B) above "CODE", circled on DBPe-HKD only.
             + [('B', accu_count_row), ('B', decu_count_row)]
         )
