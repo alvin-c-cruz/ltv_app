@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g, abort
 from flask_login import current_user
 
 from .models import TermSheet, StockContract, FixingSchedule, CreateSchedules, next_day
@@ -16,6 +16,13 @@ def home(bank_id):
     db = get_db()
 
     row = db.execute("SELECT ref_num, bank_name, priority FROM tbl_bank_account WHERE bank_id=?", (bank_id,)).fetchone()
+    if row is None:
+        # bank_id is a string code ('DBPe', 'SHK'), not a ref_num, so a bad value
+        # can't be rejected by a route converter the way <int:ref_num> does it.
+        # Without this guard fetchone() returns None and the unpack below raises
+        # TypeError -> HTTP 500. Seen live for /term-sheet/8 (SHK's ref_num) and
+        # /term-sheet/12099112 (SHK1's broker account number).
+        abort(404)
     bank_ref, bank_name, current_priority = row['ref_num'], row['bank_name'], row['priority']
 
     # Get previous bank with active term sheets
@@ -347,7 +354,6 @@ def view(contract_ref):
 @login_required
 def lock_contract(contract_ref):
     """Lock a contract (superuser only)."""
-    from flask import abort
     if current_user.role != 'superuser':
         abort(403)
     db = get_db()
@@ -361,7 +367,6 @@ def lock_contract(contract_ref):
 @login_required
 def unlock(contract_ref):
     """Unlock a contract (superuser only)."""
-    from flask import abort
     if current_user.role != 'superuser':
         abort(403)
     db = get_db()
@@ -464,7 +469,10 @@ def set_active(contract_ref):
 @login_required
 def term_sheet_summary(bank_id, transaction_type, code):
     db = get_db()
-    bank_ref = db.execute("SELECT ref_num FROM tbl_bank_account WHERE bank_id=?", (bank_id,)).fetchone()[0]
+    bank_row = db.execute("SELECT ref_num FROM tbl_bank_account WHERE bank_id=?", (bank_id,)).fetchone()
+    if bank_row is None:
+        abort(404)  # same guard as home() -- see the note there
+    bank_ref = bank_row[0]
     sql = """
         SELECT
             tbl_stock_contract.ref_num,
