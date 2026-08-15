@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file
+from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file, abort
 from datetime import datetime
 import os
 
@@ -114,7 +114,8 @@ def edit(ref_num):
     db = get_db()
     form = Form()
     dividend = CashDividends(db=db)
-    dividend.get(ref_num=ref_num)
+    if not dividend.get(ref_num=ref_num):
+        abort(404)
     select_fields(db, form)
 
     if request.method == "POST" or form.validate_on_submit():

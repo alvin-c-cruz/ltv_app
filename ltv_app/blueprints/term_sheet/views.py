@@ -194,7 +194,8 @@ def add():
 def edit(contract_ref, view_only=False):
     db = get_db()
     ts = StockContract(db=db)
-    ts.get(ref_num=contract_ref)
+    if not ts.get(ref_num=contract_ref):
+        abort(404)
     if ts.locked:
         if request.method == "POST":
             flash("Cannot save a locked contract. Unlock it first.")

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, g, request, send_file
+from flask import Blueprint, render_template, g, request, send_file, abort
 from datetime import date, timedelta
 from ...tz import ph_today
 import io
@@ -34,6 +34,8 @@ def account_position(bank_id):
     from .. database import get_db
     db = get_db()
     row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?;", (bank_id,)).fetchone()
+    if row is None:
+        abort(404)  # bank_id is a string code ('DBPe'), so no <int:> converter can catch a bad one
     bank_ref, bank_name = row['ref_num'], row['bank_name']
     trade_date = str(ph_today())
     position = gather_position(db=db, trade_date=trade_date, bank_ref=bank_ref)
@@ -284,8 +286,12 @@ def transaction_list(bank_id, code):
     from .. database import get_db
     db = get_db()
     bank_row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?;", (bank_id,)).fetchone()
+    if bank_row is None:
+        abort(404)
     bank_ref, bank_name = bank_row['ref_num'], bank_row['bank_name']
     code_row = db.execute("SELECT ref_num, stock_name FROM tbl_code WHERE code=?;", (code,)).fetchone()
+    if code_row is None:
+        abort(404)
     code_ref, stock_name = code_row['ref_num'], code_row['stock_name']
 
     if request.method == 'POST':
@@ -332,8 +338,12 @@ def short_transaction_list(bank_id, code):
     from .. database import get_db
     db = get_db()
     bank_row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?;", (bank_id,)).fetchone()
+    if bank_row is None:
+        abort(404)
     bank_ref, bank_name = bank_row['ref_num'], bank_row['bank_name']
     code_row = db.execute("SELECT ref_num, stock_name FROM tbl_code WHERE code=?;", (code,)).fetchone()
+    if code_row is None:
+        abort(404)
     code_ref, stock_name = code_row['ref_num'], code_row['stock_name']
 
     if request.method == 'POST':
@@ -432,8 +442,12 @@ def download_transactions(bank_id, code):
 
     db = get_db()
     bank_row = db.execute("SELECT ref_num, bank_name FROM tbl_bank_account WHERE bank_id=?;", (bank_id,)).fetchone()
+    if bank_row is None:
+        abort(404)
     bank_ref, bank_name = bank_row['ref_num'], bank_row['bank_name']
     code_row = db.execute("SELECT ref_num, stock_name FROM tbl_code WHERE code=?;", (code,)).fetchone()
+    if code_row is None:
+        abort(404)
     code_ref, stock_name = code_row['ref_num'], code_row['stock_name']
 
     today = ph_today()

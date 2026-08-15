@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g, jsonify, abort
 from flask_login import current_user
 from datetime import timedelta, datetime
 from ...tz import ph_today, add_business_days
@@ -262,7 +262,8 @@ def stock_transfer():
 def edit(ref_num):
     from .. database import get_db
     transaction = Transaction(db=get_db())
-    transaction.get(ref_num=ref_num)
+    if not transaction.get(ref_num=ref_num):
+        abort(404)
 
     if transaction.locked and current_user.role != 'superuser':
         flash("This transaction is locked and cannot be edited.")
@@ -373,7 +374,8 @@ def view(ref_num):
     """View a locked transaction (read-only)."""
     from .. database import get_db
     transaction = Transaction(db=get_db())
-    transaction.get(ref_num=ref_num)
+    if not transaction.get(ref_num=ref_num):
+        abort(404)
 
     transaction_types = [(i, i) for i in ['Buy (Spot)', 'Sell (Spot)', 'Transfer-In', 'Transfer-Out', "Stock Dividend"]]
 

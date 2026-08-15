@@ -67,6 +67,13 @@ class Model:
         self.db.commit()
 
     def get(self, **filter):
+        """Load one row into this instance. Returns True if a row was found.
+
+        On a miss every field is set to None and False is returned -- callers
+        that go on to use a field must check, or they get an AttributeError-ish
+        TypeError far from the cause. Historically this returned None whether
+        or not the row existed, which is why several views 500'd on a bad id.
+        """
         clause = [f'{key}=?' for key in filter]
         record = self.db.execute(f'SELECT * FROM {self.table_name} WHERE {", ".join(clause)};',
                                  tuple(filter.values())).fetchone()
@@ -76,6 +83,8 @@ class Model:
                 setattr(self, field['name'], record[field['name']])
             else:
                 setattr(self, field['name'], None)
+
+        return record is not None
 
     def all(self, fields=None, order_by=None, **filter_by):
         sql = f"SELECT {', '.join(fields)}  " if fields else "SELECT * "
