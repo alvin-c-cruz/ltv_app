@@ -50,6 +50,11 @@ def create_app(test_config=None):
         # must be at instance/config.py, NOT the server/ root.
         SECRET_KEY=secrets.token_hex(32),
         DATABASE=os.path.join(app.instance_path, "LTV Stocks.db"),
+        # No CSRFProtect is registered, so SameSite is the only thing stopping a
+        # cross-site state-changing POST. SESSION_COOKIE_SECURE is deliberately
+        # left False here and set to True in PythonAnywhere's instance/config.py
+        # -- setting it in code would break login over local plain HTTP.
+        SESSION_COOKIE_SAMESITE="Lax",
     )
 
     if test_config is None:
