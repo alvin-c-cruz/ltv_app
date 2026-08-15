@@ -19,6 +19,11 @@
 !/migrations/
 !/scripts/
 
+# ...but not the generated verification baselines. These are full cell-by-cell
+# dumps of real client workbooks (bank names, positions, prices). The remote is
+# public -- they must never be committed. Regenerate locally with --save.
+/scripts/_*_snapshot.txt
+
 # Keep Claude Code skills only (not worktrees, venvs, or local settings)
 !/.claude/
 /.claude/*
