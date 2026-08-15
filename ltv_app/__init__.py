@@ -44,8 +44,10 @@ def create_app(test_config=None):
                 instance_relative_config=True)
     app.config.from_mapping(
         # Random per-process fallback so a fresh clone still boots without a
-        # committed secret. config.py (untracked) overrides this with a real,
-        # persisted key for actual use — see Step 2 of this task.
+        # committed secret. Overridden below by instance/config.py (untracked).
+        # NOTE: the app is built with instance_relative_config=True, so
+        # from_pyfile('config.py') resolves against instance_path -- the file
+        # must be at instance/config.py, NOT the server/ root.
         SECRET_KEY=secrets.token_hex(32),
         DATABASE=os.path.join(app.instance_path, "LTV Stocks.db"),
     )
