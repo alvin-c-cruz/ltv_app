@@ -1,6 +1,6 @@
-from flask import Flask
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 import os
 import secrets
 
@@ -81,6 +81,39 @@ def create_app(test_config=None):
         user = User(db=get_db())
         user.get(id=int(user_id))
         return user if user.id else None
+
+    # Authentication is default-deny: every endpoint requires a logged-in user
+    # unless it is named below. The per-view @login_required decorators remain
+    # as defence in depth, but they are no longer what keeps a route private.
+    #
+    # Why: the bank blueprint shipped with no @login_required on any of its five
+    # routes and served real client holdings to anonymous callers for months
+    # (BUGS.md, 2026-08-15). Nothing caught it, because privacy depended on
+    # every author remembering a decorator on every route. Now a new blueprint
+    # is private by default and making something public takes a deliberate edit
+    # to this set -- which shows up in review.
+    #
+    # Registered before the blueprints so it runs ahead of database.base_variables
+    # (a before_app_request that queries on every request); an anonymous caller
+    # is turned away before any DB work happens.
+    PUBLIC_ENDPOINTS = {
+        'auth.login',   # the login form itself -- GET renders it, POST submits it
+        'static',       # CSS/JS the login page needs before anyone is logged in
+    }
+
+    @app.before_request
+    def _require_authentication_by_default():
+        # Honour Flask-Login's own test switch, which the verify_*.py scripts use.
+        if app.config.get('LOGIN_DISABLED'):
+            return None
+        endpoint = request.endpoint
+        if endpoint is None:
+            return None          # unmatched URL -- let Flask produce its 404
+        if endpoint in PUBLIC_ENDPOINTS or endpoint.endswith('.static'):
+            return None
+        if current_user.is_authenticated:
+            return None
+        return login_manager.unauthorized()
 
     from . import blueprints
     for module_ in dir(blueprints):
