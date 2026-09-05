@@ -4,7 +4,7 @@
 <h1>LTV Stocks</h1>
 
 <div class="mt-3" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.5rem;">
-    <form method="post" action="{{ url_for('ltv_stocks.home') }}"
+    <form method="post" action="{{ url_for('ltv_stocks.home') }}" id="ltv-stocks-form"
           style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
         <div class="form-group" style="margin:0;">
             <label class="form-label">Report Date</label>
@@ -13,10 +13,35 @@
         <button type="submit" class="btn btn-primary">Apply</button>
         {% if data %}
         <button type="submit" formaction="{{ url_for('ltv_stocks.download') }}"
-                class="btn btn-outline">&#8595; Download Excel</button>
+                class="btn btn-outline" id="ls-download-btn">&#8595; Download Excel</button>
+        <span class="report-generating" id="ls-generating" style="display:none;">
+            Generating report&hellip;
+        </span>
         {% endif %}
     </form>
 </div>
 
+<script>
+// PA runs this app on a single uWSGI worker, so a second click while the
+// workbook is being built does not cancel the first -- it queues behind it and
+// the whole site is unavailable to everyone until both finish (a 3.77s abandoned
+// download once left the next click waiting 278.98s; see server/BUGS.md
+// 2026-08-15). Disabling the button is what stops a second request being made.
+// Mirrors the guard on the gain-loss form.
+document.getElementById('ltv-stocks-form').addEventListener('submit', function (event) {
+    var btn = document.getElementById('ls-download-btn');
+    // Only the download is slow; "Apply" is an ordinary form re-render.
+    if (!btn || event.submitter !== btn) { return; }
+    var msg = document.getElementById('ls-generating');
+    btn.disabled = true;
+    msg.style.display = 'inline';
+    // The response is a file download, so this page is never replaced and
+    // nothing else re-enables the button. Time it out rather than stranding it.
+    setTimeout(function () {
+        btn.disabled = false;
+        msg.style.display = 'none';
+    }, 60000);
+});
+</script>
 
 {% endblock %}
