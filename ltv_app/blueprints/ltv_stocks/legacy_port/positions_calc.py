@@ -37,6 +37,18 @@ def _format_price(price):
     return "{:,.{}f}".format(price, decimals)
 
 
+def narrative_week_start(report_date: date) -> date:
+    """The calendar Monday of report_date's own week: the first day the trade
+    narrative covers, and so also the first day of the window that decides
+    whether a code earns a position row at all (see position_records). Kept in
+    one place so those two windows cannot drift apart -- a code that would print
+    a narrative but gets no row is exactly the bug the second caller fixes.
+
+    Deliberately the *calendar* Monday, not position_start_date(); see
+    _transactions_narrative for why."""
+    return report_date - timedelta(days=report_date.isoweekday() - 1)
+
+
 def _transactions_narrative(db, bank_ref, code_ref, report_date):
     """Current-week trade narrative for one (bank, code): every trade from the
     calendar Monday of report_date's own week through report_date, grouped by day.
@@ -57,7 +69,7 @@ def _transactions_narrative(db, bank_ref, code_ref, report_date):
     report_date (self-computed here, not the caller's beginning-of-week snapshot --
     that snapshot is the wrong figure to show as the running total after these
     trades)."""
-    week_monday = report_date - timedelta(days=report_date.isoweekday() - 1)
+    week_monday = narrative_week_start(report_date)
     rows = db.execute(
         "SELECT t.trade_date, t.transaction_type, t.quantity, t.price, "
         "ba.bank_name AS counter_name "
@@ -198,7 +210,8 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
     """Port of stock_balance.stock_position + blocked_shares for one bank/currency.
 
     Returns positions keyed by code, sorted by code, for every code of `ccy_id`
-    held at `bank_ref` with a non-zero long-leg share balance.
+    that either carried a non-zero long-leg share balance at `bank_ref` on the
+    AS-OF date or traded there during the reported week (see the query below).
 
     NOTE (ltv_stocks2.py:33): Gather_Info snapshots the balance/blocked/average as
     of `start_date` -- the **HKD**-working-day walk-back to the current-week's
@@ -233,23 +246,47 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
     # blocked was already computed as of the correct beginning date.
     cutoff = start_date if indicative == 'YES' else wd.previous_day(start_date)
 
+    # BUG FIX (2026-09-06, server/BUGS.md): a code is emitted when it held a
+    # balance on the AS-OF date OR traded during the reported week. It used to be
+    # the balance alone (`HAVING SUM(quantity) != 0` as of beginning_date), which
+    # silently dropped any code that started the week flat -- so the week's trades
+    # in it had nowhere to print and the shares vanished from the report. A code
+    # that arrives during the week is emitted with a zero beginning balance, which
+    # is what the AS-OF column is asking for and is already how
+    # inject_accu_only_positions renders an ACCU-only code.
+    #
+    # The two CASE windows cannot overlap: beginning_date < start_date <=
+    # week_start for every report_date, since position_start_date() never walks
+    # forward past its own week's Monday.
+    # HAVING spells both aggregates out again rather than reusing the SELECT
+    # aliases: `tbl_transaction` has its own `balance` column, and a bare name in
+    # HAVING binds to the table column in preference to a result alias -- so
+    # `HAVING balance != 0` silently filters on the stored per-row balance
+    # instead of the computed one. Named parameters keep the repeated dates from
+    # drifting out of order.
+    week_start = narrative_week_start(report_date)
     rows = db.execute(
         "SELECT s.ref_num AS code_ref, s.code, s.stock_name, s.yahoo_ticker, "
-        "       SUM(t.quantity) AS balance "
+        "       COALESCE(SUM(CASE WHEN t.trade_date <= :as_of THEN t.quantity END), 0) "
+        "           AS beginning_balance "
         "FROM tbl_transaction t "
         "INNER JOIN tbl_code s ON s.ref_num = t.code_ref "
         "INNER JOIN tbl_currency cy ON cy.ref_num = s.ccy_ref "
-        "WHERE t.bank_ref = ? AND cy.ccy_id = ? AND t.trade_date <= ? "
+        "WHERE t.bank_ref = :bank_ref AND cy.ccy_id = :ccy_id "
+        "AND t.trade_date <= :report_date "
         "GROUP BY s.ref_num "
-        "HAVING SUM(t.quantity) != 0",
-        (bank_ref, ccy_id, beginning_date.isoformat())
+        "HAVING COALESCE(SUM(CASE WHEN t.trade_date <= :as_of THEN t.quantity END), 0) != 0 "
+        "    OR COUNT(CASE WHEN t.trade_date >= :week_start THEN 1 END) > 0",
+        {'as_of': beginning_date.isoformat(), 'week_start': week_start.isoformat(),
+         'bank_ref': bank_ref, 'ccy_id': ccy_id,
+         'report_date': report_date.isoformat()}
     ).fetchall()
 
     result = {}
     for r in rows:
         code_ref = r['code_ref']
         code = r['code']
-        balance = r['balance']
+        balance = r['beginning_balance']
 
         blocked = _blocked_shares(db, bank_ref, code_ref, cutoff, wd)
         if blocked >= balance:
