@@ -205,6 +205,26 @@ def main():
                         (rec["transactions"] or "").endswith(
                             _expected_ending(incoming["ending"])) if rec else None,
                         True)
+            # A Transfer-Out names where the shares went; a Transfer-In has to
+            # name where they came from, or the receiving page states an arrival
+            # with no counterparty and the two legs cannot be tied together by
+            # eye. Reported 2026-09-06.
+            source_name = db.execute(
+                "SELECT b.bank_name FROM tbl_transaction t "
+                "INNER JOIN tbl_bank_account b ON b.ref_num = t.counter_bank_ref "
+                "WHERE t.bank_ref = ? AND t.code_ref = ? "
+                "AND t.transaction_type = 'Transfer-In' "
+                "AND t.trade_date >= ? AND t.trade_date <= ? LIMIT 1",
+                (incoming["bank_ref"], incoming["code_ref"],
+                 _week_monday(incoming["report_date"]).isoformat(),
+                 incoming["report_date"].isoformat())
+            ).fetchone()
+            ok &= _case("A5 the source account is known", source_name is not None, True)
+            if source_name:
+                ok &= _case("A6 narrative names the source account",
+                            f"(from {source_name['bank_name']})" in
+                            (rec["transactions"] or "") if rec else None,
+                            True)
 
             # --- Case B: the paying leg is unchanged. It held the shares on the
             # AS-OF date, so it was always emitted; this guards the fix against
@@ -247,6 +267,16 @@ def main():
                 ok &= _case("B4 paying narrative total is what remains",
                             (rec["transactions"] or "").endswith(
                                 _expected_ending(expected_close)) if rec else None,
+                            True)
+                # The destination label already worked; this is the regression
+                # guard for it, and the format A6 is matched against.
+                dest_name = db.execute(
+                    "SELECT bank_name FROM tbl_bank_account WHERE ref_num = ?",
+                    (incoming["bank_ref"],)
+                ).fetchone()
+                ok &= _case("B5 paying narrative names the destination account",
+                            f"(to {dest_name['bank_name']})" in
+                            (rec["transactions"] or "") if rec and dest_name else None,
                             True)
 
         # --- Case C: not a transfer. The same disappearance arises when an

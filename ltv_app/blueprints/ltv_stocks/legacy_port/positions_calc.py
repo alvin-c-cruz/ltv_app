@@ -10,6 +10,10 @@ from .term_sheet_calc import build_schedule
 # everything else gets "- ".
 _ADD_TYPES = ('Buy (Accu-KO)', 'Buy (Accu)', 'Buy (Spot)', 'Stock Dividend', 'Transfer-In')
 
+# Transaction types that name the account on the other side of the trade, and
+# the word that reads correctly for each direction.
+_COUNTERPARTY_PREPOSITION = {'Transfer-Out': 'to', 'Transfer-In': 'from'}
+
 
 def _blocked_shares(db, bank_ref, code_ref, cutoff, wd):
     """Port of blocked_shares: sum total_shares of active-DECU periods ending after cutoff."""
@@ -92,12 +96,17 @@ def _transactions_narrative(db, bank_ref, code_ref, report_date):
         qty_str = "{:,.0f}".format(abs(r['quantity']))
         price_str = _format_price(r['price'])
         sign = "" if i == 0 else ("+ " if ttype in _ADD_TYPES else "- ")
-        # A Transfer-Out names its destination account inline, e.g.
-        # "Transfer-Out (to Sun Hung Kai Account No. 2)", using the counterparty
-        # bank on the transaction (tbl_transaction.counter_bank_ref).
+        # Both legs of a transfer name the account on the other side, inline and
+        # in the same shape -- "Transfer-Out (to <bank>)" on the paying page,
+        # "Transfer-In (from <bank>)" on the receiving one -- using the
+        # counterparty bank on the transaction (tbl_transaction.counter_bank_ref).
+        # Only the Out leg was labelled until 2026-09-06, so a receiving page
+        # announced an arrival from nowhere and the two legs could not be tied
+        # together by eye (see server/BUGS.md).
         type_part = ttype
-        if ttype == 'Transfer-Out' and r['counter_name']:
-            type_part = f"{ttype} (to {r['counter_name']})"
+        preposition = _COUNTERPARTY_PREPOSITION.get(ttype)
+        if preposition and r['counter_name']:
+            type_part = f"{ttype} ({preposition} {r['counter_name']})"
         if day != current_day:
             d = date.fromisoformat(day)
             date_part = f"({d.month}/{d.day}) "
