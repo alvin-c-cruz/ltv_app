@@ -78,6 +78,29 @@ _OX_COLS = ('O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 # day as O, AB as P, ... AJ as X).
 _STATUS_COLS = ('AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ')
 _ALL_DATA_COLS = ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N') + _OX_COLS
+
+# Every cell on a contract row that carries a price: spot, strike and ko, plus
+# the ten daily closing prices in the date grid.
+_PRICE_COLS = ('E', 'F', 'G') + _OX_COLS
+
+# A four-figure price renders as "1,234.5678" -- ten characters, against a column
+# E:G width of 8.28 and an O:X width of 6.42. At the normal 10pt it does not fit
+# and Excel shows it clipped or as ####. Rows priced this high drop to 8pt, which
+# does fit. Added 2026-09-06, when a holding first traded above this level; see
+# server/BUGS.md.
+_WIDE_PRICE_THRESHOLD = 1000
+_WIDE_PRICE_FONT_SIZE = 8
+
+
+def _price_font_size(rec):
+    """The point size for a contract row's price cells: 8 when any of spot,
+    strike or ko runs to four figures, otherwise the usual 10. Judged per row and
+    on the contract's own prices, so one expensive stock does not shrink the
+    figures on every other row of the sheet."""
+    for price in (rec.get('spot'), rec.get('strike'), rec.get('ko')):
+        if isinstance(price, (int, float)) and price > _WIDE_PRICE_THRESHOLD:
+            return _WIDE_PRICE_FONT_SIZE
+    return 10
 _ZERO_ROW_COLS = ('A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 
 
@@ -214,9 +237,15 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
 
             ws.row_dimensions[r].height = 17 if rec.get('ccy_id') == 'HKD' else 25.5
 
+            price_size = _price_font_size(rec)
+
             for col in _ALL_DATA_COLS:
                 cell = ws[f'{col}{r}']
-                cell.font = xl_font(10) if col != 'F' else xl_font(10, True)
+                if col in _PRICE_COLS:
+                    # F (strike) is bold whatever the size.
+                    cell.font = xl_font(price_size, col == 'F')
+                else:
+                    cell.font = xl_font(10) if col != 'F' else xl_font(10, True)
                 cell.alignment = xl_align(False) if col != 'A' else xl_align(False, 'left')
 
                 if col in ('E', 'F', 'G'):
