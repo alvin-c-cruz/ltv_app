@@ -1,9 +1,10 @@
 from datetime import date
 
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 
 from .. database import get_db
 from .. auth import login_required
+from ... form_fields import FormFields
 from ...tz import ph_today
 
 bp = Blueprint('holiday', __name__, template_folder="pages", url_prefix="/holiday")
@@ -54,9 +55,15 @@ def add():
     db = get_db()
     ccys = db.execute("SELECT * FROM tbl_currency ORDER BY priority;").fetchall()
     if request.method == "POST":
+        posted = FormFields(request.form)
+        ccy_ref = posted.integer('ccy_ref', 'Currency')
+        holi_date = posted.text('holi_date')
+        if posted.error:
+            flash(posted.error)
+            return render_template('holiday/add.html', ccys=ccys)
         db.execute(
             "INSERT INTO tbl_holiday (ccy_ref, holi_date) VALUES (?, ?)",
-            (int(request.form['ccy_ref']), request.form['holi_date'])
+            (ccy_ref, holi_date)
         )
         db.commit()
         return redirect(url_for('holiday.home'))

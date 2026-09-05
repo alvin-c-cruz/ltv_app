@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from .create_gain_loss import create_file
 from .. auth import login_required
+from ... form_fields import FormFields
 from ...tz import ph_today
 
 bp = Blueprint('gain_loss', __name__, template_folder='pages', url_prefix='/gain-loss')
@@ -12,10 +13,14 @@ bp = Blueprint('gain_loss', __name__, template_folder='pages', url_prefix='/gain
 @login_required
 def home():
     if request.method == 'POST':
-        date_from = request.form['date_from']
-        date_to = request.form['date_to']
-        bank_ref = int(request.form['bank_ref'])
-        code_ref = int(request.form['code_ref'])
+        posted = FormFields(request.form)
+        date_from = posted.text('date_from')
+        date_to = posted.text('date_to')
+        bank_ref = posted.integer('bank_ref', 'Bank')
+        code_ref = posted.integer('code_ref', 'Stock')
+        if posted.error:
+            flash(posted.error)
+            return render_template('gain_loss/home.html', form=posted.values)
 
         try:
             output, download_name = create_file(

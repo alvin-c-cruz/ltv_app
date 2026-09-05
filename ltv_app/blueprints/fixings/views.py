@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, flash, request, redirect, url_for, send_file, abort
 
+from ...form_fields import FormFields
 from .. auth import login_required
 from .. database import get_db
 from .. transactions import Transaction
@@ -103,18 +104,37 @@ def edit(ref_num):
     transaction_types = [(i, i) for i in ['Buy (Accu)', 'Buy (Accu-KO)', 'Sell (Decu)', 'Sell (Decu-KO)']]
 
     if request.method == 'POST':
-        transaction.trade_date = request.form["trade_date"]
-        transaction.value_date = request.form["value_date"]
-        transaction.bank_ref = int(request.form["bank_ref"])
-        transaction.code_ref = int(request.form["code_ref"])
-        transaction.transaction_type = request.form["transaction_type"]
-        transaction.quantity = int(request.form["quantity"])
-        transaction.price = float(request.form["price"])
-        transaction.brokerage = float(request.form["brokerage"])
-        transaction.commission = float(request.form["commission"])
-        transaction.foreign_charge = float(request.form["foreign_charge"])
-        transaction.stamp_duty = float(request.form["stamp_duty"])
-        transaction.misc = float(request.form["misc"])
+        fields = FormFields(request.form)
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
+        brokerage = fields.charge("brokerage")
+        commission = fields.charge("commission")
+        foreign_charge = fields.charge("foreign_charge", "Foreign charge")
+        stamp_duty = fields.charge("stamp_duty", "Stamp duty")
+        misc = fields.charge("misc")
+
+        if fields.error:
+            flash(fields.error)
+            return render_template('fixings/edit.html', form=fields.values,
+                                   transaction_types=transaction_types, ref_num=ref_num)
+
+        transaction.trade_date = trade_date
+        transaction.value_date = value_date
+        transaction.bank_ref = bank_ref
+        transaction.code_ref = code_ref
+        transaction.transaction_type = transaction_type
+        transaction.quantity = quantity
+        transaction.price = price
+        transaction.brokerage = brokerage
+        transaction.commission = commission
+        transaction.foreign_charge = foreign_charge
+        transaction.stamp_duty = stamp_duty
+        transaction.misc = misc
 
         transaction.save()
 
@@ -177,19 +197,31 @@ def unlock(ref_num):
 @login_required
 def add():
     db = get_db()
+    fields = FormFields(request.form)
+    trade_date = fields.text("trade_date")
+    bank_ref = fields.integer("bank_ref", "Bank")
+    code_ref = fields.integer("code_ref", "Stock")
+    quantity = fields.quantity()
+    price = fields.price()
+
+    # Posted from the fixings list, which has no form of its own to re-render.
+    if fields.error:
+        flash(fields.error)
+        return redirect(url_for('fixings.home'))
+
     transaction = Transaction(db=db)
-    transaction.trade_date    = request.form["trade_date"]
-    transaction.value_date    = request.form["value_date"]
-    transaction.bank_ref      = int(request.form["bank_ref"])
-    transaction.code_ref      = int(request.form["code_ref"])
-    transaction.transaction_type = request.form["transaction_type"]
-    transaction.quantity      = int(request.form["quantity"])
-    transaction.price         = float(request.form["price"])
-    transaction.brokerage     = float(request.form.get("brokerage")     or 0)
-    transaction.commission    = float(request.form.get("commission")    or 0)
-    transaction.foreign_charge= float(request.form.get("foreign_charge")or 0)
-    transaction.stamp_duty    = float(request.form.get("stamp_duty")    or 0)
-    transaction.misc          = float(request.form.get("misc")          or 0)
+    transaction.trade_date    = trade_date
+    transaction.value_date    = fields.text("value_date")
+    transaction.bank_ref      = bank_ref
+    transaction.code_ref      = code_ref
+    transaction.transaction_type = fields.text("transaction_type")
+    transaction.quantity      = quantity
+    transaction.price         = price
+    transaction.brokerage     = fields.charge("brokerage")
+    transaction.commission    = fields.charge("commission")
+    transaction.foreign_charge= fields.charge("foreign_charge", "Foreign charge")
+    transaction.stamp_duty    = fields.charge("stamp_duty", "Stamp duty")
+    transaction.misc          = fields.charge("misc")
     transaction.locked        = 0
     transaction.save()
     flash(f"Fixing transaction added for {transaction.trade_date}.")

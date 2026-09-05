@@ -4,6 +4,7 @@ from datetime import timedelta, datetime
 from ...tz import ph_today, add_business_days
 
 from .models import Transaction, TransactionShort
+from ...form_fields import FormFields
 from .. auth import login_required
 from .extensions import TransactionSummary, DownloadTradesDoneWithGainLoss, TradesDoneReport
 
@@ -43,33 +44,27 @@ def add():
     ]]
 
     if request.method == 'POST':
-        error = ""
+        fields = FormFields(request.form)
 
-        trade_date = request.form["trade_date"]
-        value_date = request.form["value_date"]
-        bank_ref = int(request.form["bank_ref"])
-        code_ref = int(request.form["code_ref"])
-        transaction_type = request.form["transaction_type"]
-        quantity = int(request.form["quantity"])
-        price = float(request.form["price"])
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
 
-        form = {
-          "trade_date": trade_date,
-          "value_date": value_date,
-          "bank_ref": bank_ref,
-          "code_ref": code_ref,
-          "transaction_type": transaction_type,
-          "quantity": quantity,
-          "price": price
-        }
+        error = fields.error
+        form = fields.values
 
         # Long book: Sell = negative; Buy = positive
-        if "Sell" in transaction_type or "Out" in transaction_type:
-            if quantity > 0:
-                error = "Sell transaction should have negative quantity."
-        else:
-            if quantity < 0:
-                error = "Buy transaction should have positive quantity."
+        if not error:
+            if "Sell" in transaction_type or "Out" in transaction_type:
+                if quantity > 0:
+                    error = "Sell transaction should have negative quantity."
+            else:
+                if quantity < 0:
+                    error = "Buy transaction should have positive quantity."
 
         if not error:
             from .. database import get_db
@@ -114,33 +109,27 @@ def add_short():
     ]]
 
     if request.method == 'POST':
-        error = ""
+        fields = FormFields(request.form)
 
-        trade_date = request.form["trade_date"]
-        value_date = request.form["value_date"]
-        bank_ref = int(request.form["bank_ref"])
-        code_ref = int(request.form["code_ref"])
-        transaction_type = request.form["transaction_type"]
-        quantity = int(request.form["quantity"])
-        price = float(request.form["price"])
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
 
-        form = {
-          "trade_date": trade_date,
-          "value_date": value_date,
-          "bank_ref": bank_ref,
-          "code_ref": code_ref,
-          "transaction_type": transaction_type,
-          "quantity": quantity,
-          "price": price
-        }
+        error = fields.error
+        form = fields.values
 
         # Short book: Sell Short = negative; Buy Pay Short = positive
-        if "Sell" in transaction_type:
-            if quantity > 0:
-                error = "Sell (Short) should have negative quantity."
-        else:
-            if quantity < 0:
-                error = "Buy (Pay Short) should have positive quantity."
+        if not error:
+            if "Sell" in transaction_type:
+                if quantity > 0:
+                    error = "Sell (Short) should have negative quantity."
+            else:
+                if quantity < 0:
+                    error = "Buy (Pay Short) should have positive quantity."
 
         if not error:
             from .. database import get_db
@@ -181,34 +170,27 @@ def stock_transfer():
     transaction_types = [(i, i) for i in ['Transfer-Out']]
 
     if request.method == 'POST':
-        error = ""
+        fields = FormFields(request.form)
 
-        trade_date = request.form["trade_date"]
-        value_date = request.form["value_date"]
-        bank_ref = int(request.form["bank_ref"])
-        code_ref = int(request.form["code_ref"])
-        transaction_type = request.form["transaction_type"]
-        quantity = int(request.form["quantity"])
-        price = float(request.form["price"])
-        counter_bank_ref = int(request.form["counter_bank_ref"])
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
+        counter_bank_ref = fields.integer("counter_bank_ref", "Counterparty bank")
 
-        form = {
-          "trade_date": trade_date,
-          "value_date": value_date,
-          "bank_ref": bank_ref,
-          "code_ref": code_ref,
-          "transaction_type": transaction_type,
-          "quantity": quantity,
-          "price": price,
-          "counter_bank_ref": counter_bank_ref
-        }
+        error = fields.error
+        form = fields.values
 
-        if "Sell" in transaction_type or "Out" in transaction_type:
-            if quantity > 0:
-                error = "Sell transaction should have negative quantity."
-        else:
-            if quantity < 0:
-                error = "Buy transaction should have position quantity"
+        if not error:
+            if "Sell" in transaction_type or "Out" in transaction_type:
+                if quantity > 0:
+                    error = "Sell transaction should have negative quantity."
+            else:
+                if quantity < 0:
+                    error = "Buy transaction should have position quantity"
 
         if not error:
             from .. database import get_db
@@ -275,62 +257,51 @@ def edit(ref_num):
     ]]
 
     if request.method == 'POST':
-        error = ""
+        fields = FormFields(request.form)
 
-        trade_date = request.form["trade_date"]
-        value_date = request.form["value_date"]
-        bank_ref = int(request.form["bank_ref"])
-        code_ref = int(request.form["code_ref"])
-        transaction_type = request.form["transaction_type"]
-        quantity = int(request.form["quantity"])
-        price = float(request.form["price"])
-        brokerage = float(request.form["brokerage"])
-        commission = float(request.form["commission"])
-        foreign_charge = float(request.form["foreign_charge"])
-        stamp_duty = float(request.form["stamp_duty"])
-        misc = float(request.form["misc"])
-        counter_bank_ref = request.form.get("counter_bank_ref")
-        if counter_bank_ref:
-            counter_bank_ref = int(counter_bank_ref)
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
+        brokerage = fields.charge("brokerage")
+        commission = fields.charge("commission")
+        foreign_charge = fields.charge("foreign_charge", "Foreign charge")
+        stamp_duty = fields.charge("stamp_duty", "Stamp duty")
+        misc = fields.charge("misc")
+        # Only a transfer carries a counterparty, so an absent one is not an error.
+        counter_bank_ref = None
+        if request.form.get("counter_bank_ref"):
+            counter_bank_ref = fields.integer("counter_bank_ref", "Counterparty bank")
 
-        form = {
-            "trade_date": trade_date,
-            "value_date": value_date,
-            "bank_ref": bank_ref,
-            "code_ref": code_ref,
-            "transaction_type": transaction_type,
-            "quantity": quantity,
-            "price": price,
-            "brokerage": brokerage,
-            "commission": commission,
-            "foreign_charge": foreign_charge,
-            "stamp_duty": stamp_duty,
-            "misc": misc,
-            "counter_bank_ref": counter_bank_ref,
-        }
-
-        if "Sell" in transaction_type or "Out" in transaction_type:
-            if quantity > 0:
-                error = "Sell transaction should have negative quantity."
-        else:
-            if quantity < 0:
-                error = "Buy transaction should have position quantity"
+        error = fields.error
+        form = fields.values
 
         if not error:
-            transaction.trade_date = request.form["trade_date"]
-            transaction.value_date = request.form["value_date"]
-            transaction.bank_ref = int(request.form["bank_ref"])
-            transaction.code_ref = int(request.form["code_ref"])
-            transaction.transaction_type = request.form["transaction_type"]
-            transaction.quantity = int(request.form["quantity"])
-            transaction.price = float(request.form["price"])
-            transaction.brokerage = float(request.form["brokerage"])
-            transaction.commission = float(request.form["commission"])
-            transaction.foreign_charge = float(request.form["foreign_charge"])
-            transaction.stamp_duty = float(request.form["stamp_duty"])
-            transaction.misc = float(request.form["misc"])
-            if request.form.get("counter_bank_ref"):
-                transaction.counter_bank_ref = int(request.form["counter_bank_ref"])
+            if "Sell" in transaction_type or "Out" in transaction_type:
+                if quantity > 0:
+                    error = "Sell transaction should have negative quantity."
+            else:
+                if quantity < 0:
+                    error = "Buy transaction should have position quantity"
+
+        if not error:
+            transaction.trade_date = trade_date
+            transaction.value_date = value_date
+            transaction.bank_ref = bank_ref
+            transaction.code_ref = code_ref
+            transaction.transaction_type = transaction_type
+            transaction.quantity = quantity
+            transaction.price = price
+            transaction.brokerage = brokerage
+            transaction.commission = commission
+            transaction.foreign_charge = foreign_charge
+            transaction.stamp_duty = stamp_duty
+            transaction.misc = misc
+            if counter_bank_ref is not None:
+                transaction.counter_bank_ref = counter_bank_ref
 
             transaction.save()
 
@@ -458,46 +429,45 @@ def edit_short(ref_num):
     ]]
 
     if request.method == 'POST':
-        error = ""
+        fields = FormFields(request.form)
 
-        trade_date = request.form["trade_date"]
-        value_date = request.form["value_date"]
-        bank_ref = int(request.form["bank_ref"])
-        code_ref = int(request.form["code_ref"])
-        transaction_type = request.form["transaction_type"]
-        quantity = int(request.form["quantity"])
-        price = float(request.form["price"])
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
+        brokerage = fields.charge("brokerage")
+        commission = fields.charge("commission")
+        foreign_charge = fields.charge("foreign_charge", "Foreign charge")
+        stamp_duty = fields.charge("stamp_duty", "Stamp duty")
+        misc = fields.charge("misc")
 
-        form = {
-          "trade_date": trade_date,
-          "value_date": value_date,
-          "bank_ref": bank_ref,
-          "code_ref": code_ref,
-          "transaction_type": transaction_type,
-          "quantity": quantity,
-          "price": price
-        }
-
-        if "Sell" in transaction_type:
-            if quantity > 0:
-                error = "Sell transaction should have negative quantity."
-        else:
-            if quantity < 0:
-                error = "Buy transaction should have position quantity"
+        error = fields.error
+        form = fields.values
 
         if not error:
-            transaction.trade_date = request.form["trade_date"]
-            transaction.value_date = request.form["value_date"]
-            transaction.bank_ref = int(request.form["bank_ref"])
-            transaction.code_ref = int(request.form["code_ref"])
-            transaction.transaction_type = request.form["transaction_type"]
-            transaction.quantity = int(request.form["quantity"])
-            transaction.price = float(request.form["price"])
-            transaction.brokerage = float(request.form["brokerage"])
-            transaction.commission = float(request.form["commission"])
-            transaction.foreign_charge = float(request.form["foreign_charge"])
-            transaction.stamp_duty = float(request.form["stamp_duty"])
-            transaction.misc = float(request.form["misc"])
+            if "Sell" in transaction_type:
+                if quantity > 0:
+                    error = "Sell transaction should have negative quantity."
+            else:
+                if quantity < 0:
+                    error = "Buy transaction should have position quantity"
+
+        if not error:
+            transaction.trade_date = trade_date
+            transaction.value_date = value_date
+            transaction.bank_ref = bank_ref
+            transaction.code_ref = code_ref
+            transaction.transaction_type = transaction_type
+            transaction.quantity = quantity
+            transaction.price = price
+            transaction.brokerage = brokerage
+            transaction.commission = commission
+            transaction.foreign_charge = foreign_charge
+            transaction.stamp_duty = stamp_duty
+            transaction.misc = misc
 
             transaction.save()
 
@@ -671,13 +641,22 @@ def borrow_return_shares():
     Borrow Shares: long qty = +N, short qty = -N  (adds holding, opens borrow)
     """
     if request.method == 'POST':
-        trade_date = request.form['trade_date']
-        value_date = request.form['value_date']
-        bank_ref = int(request.form['bank_ref'])
-        code_ref = int(request.form['code_ref'])
-        transaction_type = request.form['transaction_type']
-        quantity = abs(int(request.form['quantity']))
-        price = float(request.form['price'])
+        fields = FormFields(request.form)
+        trade_date = fields.text('trade_date')
+        value_date = fields.text('value_date')
+        bank_ref = fields.integer('bank_ref', 'Bank')
+        code_ref = fields.integer('code_ref', 'Stock')
+        transaction_type = fields.text('transaction_type')
+        quantity = fields.quantity()
+        price = fields.price()
+
+        # This route posts from a modal with no form of its own to re-render, so
+        # a rejected value flashes and returns to the list rather than echoing.
+        if fields.error:
+            flash(fields.error)
+            return redirect(url_for('transactions.home', trade_date=trade_date))
+
+        quantity = abs(quantity)
 
         if transaction_type not in ('Return Shares', 'Borrow Shares'):
             flash('Invalid transaction type.')
@@ -721,32 +700,26 @@ def add_stock_dividends():
                         ]
 
     if request.method == 'POST':
-        error = ""
+        fields = FormFields(request.form)
 
-        trade_date = request.form["trade_date"]
-        value_date = request.form["value_date"]
-        bank_ref = int(request.form["bank_ref"])
-        code_ref = int(request.form["code_ref"])
-        transaction_type = request.form["transaction_type"]
-        quantity = int(request.form["quantity"])
-        price = float(request.form["price"])
+        trade_date = fields.text("trade_date")
+        value_date = fields.text("value_date")
+        bank_ref = fields.integer("bank_ref", "Bank")
+        code_ref = fields.integer("code_ref", "Stock")
+        transaction_type = fields.text("transaction_type")
+        quantity = fields.quantity()
+        price = fields.price()
 
-        form = {
-          "trade_date": trade_date,
-          "value_date": value_date,
-          "bank_ref": bank_ref,
-          "code_ref": code_ref,
-          "transaction_type": transaction_type,
-          "quantity": quantity,
-          "price": price
-        }
+        error = fields.error
+        form = fields.values
 
-        if "Sell" in transaction_type or "Out" in transaction_type:
-            if quantity > 0:
-                error = "Sell transaction should have negative quantity."
-        else:
-            if quantity < 0:
-                error = "Buy transaction should have position quantity"
+        if not error:
+            if "Sell" in transaction_type or "Out" in transaction_type:
+                if quantity > 0:
+                    error = "Sell transaction should have negative quantity."
+            else:
+                if quantity < 0:
+                    error = "Buy transaction should have position quantity"
 
         if not error:
             from .. database import get_db

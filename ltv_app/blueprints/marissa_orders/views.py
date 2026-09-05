@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, send_file
+from flask import Blueprint, render_template, request, send_file, redirect, url_for, flash
 
 from ..auth import login_required
 from ..database import get_db
+from ...form_fields import FormFields
 from ...tz import ph_now
 
 bp = Blueprint('marissa_orders', __name__, template_folder='pages', url_prefix='/maris')
@@ -27,7 +28,13 @@ def home():
     if request.method == 'POST':
         cmd_button = request.form['cmd_button']
         if cmd_button == "Download Stock Posting":
-            path = download_posting(db, int(request.form['posting_month']), int(request.form['posting_year']))
+            posted = FormFields(request.form)
+            posting_month = posted.integer('posting_month', 'Month')
+            posting_year = posted.integer('posting_year', 'Year')
+            if posted.error:
+                flash(posted.error)
+                return redirect(url_for('marissa_orders.home'))
+            path = download_posting(db, posting_month, posting_year)
             return send_file(path, as_attachment=True)
         elif cmd_button == "Download Daily Transaction":
             path = download_daily_transactions(db, request.form['trade_date'])

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from datetime import datetime
 from .. auth import login_required
 from .. database import get_db
+from ... form_fields import FormFields
 from ... tz import ph_today
 
 bp = Blueprint('review', __name__, template_folder='pages', url_prefix='/review')
@@ -218,6 +219,26 @@ def data(ref_num):
 @login_required
 def edit(ref_num):
     db = get_db()
+    # These went into the UPDATE as raw strings. A quantity of '-12,345' is not
+    # a well-formed integer, so SQLite stored it as TEXT in an INTEGER column,
+    # where SUM() reads it as -44 -- no error anywhere, every derived balance
+    # quietly wrong. See server/BUGS.md (2026-09-04).
+    fields = FormFields(request.form)
+    trade_date = fields.text('trade_date')
+    value_date = fields.text('value_date')
+    transaction_type = fields.text('transaction_type')
+    quantity = fields.quantity()
+    price = fields.price()
+    charges = [fields.charge(name) for name in
+               ('brokerage', 'commission', 'foreign_charge', 'stamp_duty', 'misc')]
+
+    if fields.error:
+        flash(fields.error)
+        return redirect(url_for('review.home', **_filter_args(
+            request.form.get('date_from'),
+            request.form.get('date_to'),
+        )))
+
     db.execute(
         "UPDATE tbl_transaction SET "
         "  trade_date = ?, value_date = ?, transaction_type = ?, "
@@ -225,12 +246,9 @@ def edit(ref_num):
         "  brokerage = ?, commission = ?, foreign_charge = ?, stamp_duty = ?, misc = ? "
         "WHERE ref_num = ?",
         (
-            request.form['trade_date'], request.form['value_date'],
-            request.form['transaction_type'],
-            request.form['quantity'], request.form['price'],
-            request.form.get('brokerage', 0), request.form.get('commission', 0),
-            request.form.get('foreign_charge', 0), request.form.get('stamp_duty', 0),
-            request.form.get('misc', 0),
+            trade_date, value_date, transaction_type,
+            quantity, price,
+            *charges,
             ref_num,
         )
     )

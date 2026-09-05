@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 
 from .. auth import login_required, superuser_required
 from .. database import get_db
+from ... form_fields import FormFields
 from ... tz import ph_today
 
 bp = Blueprint('workflow', __name__, template_folder='pages', url_prefix='/workflow')
@@ -438,13 +439,12 @@ def edit_charges(source, ref_num):
     db = get_db()
     table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
 
-    fields = {
-        'brokerage': float(request.form.get('brokerage', 0) or 0),
-        'commission': float(request.form.get('commission', 0) or 0),
-        'foreign_charge': float(request.form.get('foreign_charge', 0) or 0),
-        'stamp_duty': float(request.form.get('stamp_duty', 0) or 0),
-        'misc': float(request.form.get('misc', 0) or 0)
-    }
+    posted = FormFields(request.form)
+    fields = {name: posted.charge(name) for name in _CHARGE_FIELDS}
+
+    if posted.error:
+        flash(posted.error)
+        return redirect(url_for('workflow.home'))
 
     db.execute(
         f"UPDATE {table} SET brokerage=?, commission=?, foreign_charge=?, stamp_duty=?, misc=? WHERE ref_num=?",
@@ -534,23 +534,24 @@ def save_edit(source, ref_num):
     """Save edited transaction data."""
     db = get_db()
 
-    trade_date = request.form.get('trade_date')
-    value_date = request.form.get('value_date')
-    bank_ref = int(request.form.get('bank_ref'))
-    code_ref = int(request.form.get('code_ref'))
-    transaction_type = request.form.get('transaction_type')
-    quantity = float(request.form.get('quantity', 0))
-    price = float(request.form.get('price', 0))
+    posted = FormFields(request.form)
+    trade_date = posted.text('trade_date')
+    value_date = posted.text('value_date')
+    bank_ref = posted.integer('bank_ref', 'Bank')
+    code_ref = posted.integer('code_ref', 'Stock')
+    transaction_type = posted.text('transaction_type')
+    quantity = posted.quantity()
+    price = posted.price()
 
     table = 'tbl_transaction' if source == 'spot' else 'tbl_transaction_short'
 
-    fields = {
-        'brokerage': float(request.form.get('brokerage', 0) or 0),
-        'commission': float(request.form.get('commission', 0) or 0),
-        'foreign_charge': float(request.form.get('foreign_charge', 0) or 0),
-        'stamp_duty': float(request.form.get('stamp_duty', 0) or 0),
-        'misc': float(request.form.get('misc', 0) or 0)
-    }
+    fields = {name: posted.charge(name) for name in _CHARGE_FIELDS}
+
+    if posted.error:
+        flash(posted.error)
+        return redirect(url_for('workflow.home',
+                                date_from=request.args.get('date_from', ''),
+                                date_to=request.args.get('date_to', '')))
 
     db.execute(
         f"UPDATE {table} SET trade_date=?, value_date=?, bank_ref=?, code_ref=?, "

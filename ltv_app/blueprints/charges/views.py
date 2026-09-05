@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 
 from .. auth import login_required
 from .. database import get_db
+from ... form_fields import FormFields
 from ... tz import ph_today
 
 bp = Blueprint('charges', __name__, template_folder='pages', url_prefix='/charges')
@@ -120,7 +121,11 @@ def edit(source, ref_num):
         return redirect(url_for('charges.home'))
 
     if request.method == 'POST':
-        fields = {f: float(request.form.get(f, 0) or 0) for f in _CHARGE_FIELDS}
+        posted = FormFields(request.form)
+        fields = {f: posted.charge(f) for f in _CHARGE_FIELDS}
+        if posted.error:
+            flash(posted.error)
+            return redirect(url_for('charges.home'))
         db.execute(
             f"UPDATE {table} SET brokerage=?, commission=?, foreign_charge=?, stamp_duty=?, misc=? WHERE ref_num=?",
             (*fields.values(), ref_num)
