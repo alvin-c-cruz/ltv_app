@@ -1,6 +1,6 @@
 # Group A Bug Fixes Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix five independent, low-risk bugs in `ltv_app` (Unlock 405, Fixings redirect target, missing Bank Reference indicator, unreliable Print Trades Done popup, and a stale per-row period total) per the approved design at `docs/superpowers/specs/2026-07-14-group-a-bug-fixes-design.md`.
 

@@ -1,6 +1,6 @@
 # Dividends Bug Fixes Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix four open `dividends` bugs — a hardcoded-2022 date filter, missing
 Record/Declaration Date columns, no Excel export, and no visual cue for
@@ -1236,7 +1236,7 @@ user (since it needs a real login), confirm on the live site:
 
 - [ ] **Step 5: Update BUGS.md**
 
-Follow the `bug-tracker` skill: move all four dividends entries (year
+Per the BUGS.md section convention: move all four dividends entries (year
 hardcode, missing Record/Declaration Date columns, no Excel export,
 Estimate→Actual manual step) from their current sections to `## Fixed`,
 each with `**Status:** Fixed (<today's date>)` and a short note referencing

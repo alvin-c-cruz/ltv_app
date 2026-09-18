@@ -1,6 +1,6 @@
 # Group D Confirm-Modal Migration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace every remaining native `confirm()`/`prompt()` dialog in `ltv_app` (~26 call sites across 16 files, one shared Jinja macro) with the shared `showConfirmModal` component Group A introduced, extending that component's API only as far as real call sites require.
 

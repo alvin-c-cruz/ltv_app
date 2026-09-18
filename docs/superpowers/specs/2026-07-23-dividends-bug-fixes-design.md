@@ -6,7 +6,7 @@ Status: Approved, pending implementation
 ## Context
 
 `BUGS.md` tracks four open issues in the `dividends` blueprint, all found in the
-same 2026-07-15 session while scoping the `dividends-analysis` skill:
+same 2026-07-15 session while scoping the `dividends_analysis/` pipeline:
 
 1. Home page hardcodes `year = "2022"`, so no dividend recorded since then is
    ever visible without editing source code.
@@ -20,7 +20,7 @@ All four are small and live in the same blueprint, and #1/#3 share the same
 date-range plumbing, so they're handled as one spec rather than split up.
 Bug #4's recommendation has two parts — (a) auto-create Estimate rows from
 fetched dividend declarations, and (b) a visible "pending Actual" indicator.
-Part (a) depends on wiring in the separate `dividends-analysis` skill's fetch
+Part (a) depends on wiring in the separate `dividends_analysis/` fetch
 pipeline (a real integration project, not a bug fix) and is explicitly
 **out of scope** here; only part (b) is built.
 

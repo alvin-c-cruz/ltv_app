@@ -8,7 +8,7 @@ Status: Approved, pending implementation
 `BUGS.md`'s "No automated path from a fetched dividend declaration to an in-app
 Estimate row" entry (split out earlier today from the dividends bug-fixes work)
 carries a full mapping study against all 97 files in `dividends_analysis/json/`
-(outside `server/`, produced by the `dividends-analysis` skill). Key findings that
+(outside `server/`, produced by the dividends sweep). Key findings that
 shape this design:
 
 - One JSON file = one declaration, with an `entitlement[]` array of one entry per
@@ -23,7 +23,7 @@ shape this design:
   are a perfect 1:1 match to 12 of the JSON files — all still flagged `false`. That
   data was entered independently of the sweep tooling. An importer must check the DB
   directly, not the flag.
-- No WHT/tax source in the JSON (skill's own Excel export uses a `0` placeholder);
+- No WHT/tax source in the JSON (the sweep's own Excel export uses a `0` placeholder);
   no stored "actual HKD credited" field to map `hkd_amount_actual` into (always
   `null` in every file today anyway).
 
@@ -49,7 +49,7 @@ files and no mechanism to run this script — a separate, later, explicit step i
 needed), a `--year`/file filter (YAGNI — dry-run already shows everything, 97 small
 local files process instantly), promoting Estimate→Actual (existing manual Edit-form
 flow already handles that, per the 2026-07-23 dividends bug-fixes work), and any
-change to the `dividends-analysis` skill itself or its JSON-writing behavior.
+change to the `dividends_analysis/` pipeline itself or its JSON-writing behavior.
 
 ## 1. Lookup resolution
 

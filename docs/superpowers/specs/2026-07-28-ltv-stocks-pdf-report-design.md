@@ -36,8 +36,8 @@ Office or arbitrary system packages). This rules out:
   (no such binary exists on the server to shell out to).
 - An HTML→PDF renderer that needs a real browser (Playwright/Chromium) — heavy
   to install and run reliably on PythonAnywhere's account tiers, and this app
-  has no existing browser-rendering dependency to build on (the `email-analysis`
-  skill's Playwright usage is a separate, local-only admin workspace, not part
+  has no existing browser-rendering dependency to build on (the Playwright usage in
+  the email-triage workspace is separate and local-only, not part
   of this Flask app's own dependencies).
 
 **Decision: use `reportlab`**, a pure-Python PDF-generation library (no

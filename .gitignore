@@ -24,11 +24,6 @@
 # public -- they must never be committed. Regenerate locally with --save.
 /scripts/_*_snapshot.txt
 
-# Keep Claude Code skills only (not worktrees, venvs, or local settings)
-!/.claude/
-/.claude/*
-!/.claude/skills/
-
 # Keep design specs (no client data belongs here — see BUGS.md for that,
 # which stays out of this public repo on purpose)
 !/docs/

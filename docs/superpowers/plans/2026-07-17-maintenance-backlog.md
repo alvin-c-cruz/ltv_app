@@ -1,6 +1,6 @@
 # ltv_app Maintenance Backlog Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close five small, risk-ranked gaps found in a codebase analysis of `ltv_app`: a committed secret key, a LAN-exposed dev-server debugger, dead/unsafe request-logging code, an orphaned migrations tree, and a missing regression harness for the app's buggiest module.
 

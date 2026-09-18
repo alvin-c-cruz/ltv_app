@@ -1,6 +1,6 @@
 # LTV Stocks PDF Report Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a `POST /ltv-stocks/download-pdf` route that generates a PDF
 version of the LTV Stocks report (same ACCU/DECU contract tables, KO/D status

@@ -1,6 +1,6 @@
 # Status / Knock-out Tracking Grid Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a per-instrument, per-day knock-out/strike status grid (columns Z:AJ) to every ACCU/DECU contract block on every generated `ltv-stocks` sheet.
 

@@ -1,6 +1,6 @@
 # Decumulator / Accumulator Period-Schedule Fix — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `CreateSchedules` regenerate a Decumulator/Accumulator's bi-weekly period schedule so it matches the counterparty bank's termsheet exactly, instead of drifting.
 

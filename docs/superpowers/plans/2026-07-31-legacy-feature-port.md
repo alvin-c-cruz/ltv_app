@@ -1,6 +1,6 @@
 # Legacy Feature Port (stock_position fix / cash_margin / maris) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Bring three `localhost` (legacy) features up to parity in `ltv_app` (the canonical app): fix `ltv_app`'s existing `/stock-position/download` (currently wrong — conflates long/short quantities and omits blocked/unblocked + DECU strike-list columns), add a faithful `/cash-margin` port of legacy `forecast/cash_margin` producing the byte-for-byte-same `cash_margin.xlsx` layout/formulas, and add a net-new `/maris` blueprint porting the 3 Marissa_Orders Excel exports.
 
