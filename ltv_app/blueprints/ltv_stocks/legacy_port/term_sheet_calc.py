@@ -84,17 +84,47 @@ def build_schedule(db, contract_ref, wd):
     return sched
 
 
-def contract_records(db, bank_ref, transaction_type):
+def contract_records(db, bank_ref, transaction_type, date_from=None, date_to=None):
+    """Contracts to show on one bank/product block of the LTV Stocks sheet.
+
+    Always 'active'. 'inactive' is a closed-out historical record and never
+    appears. 'KO' appears only when the knock-out settled inside this report's
+    date window: the whole point of the window is to show the week's events,
+    and a knock-out is the most significant one.
+
+    The contract is NOT still 'active' while the report is being built -- the
+    status flips to 'KO' as soon as the settlement is recorded, which in
+    practice is the same day. So selecting on status alone drops exactly the
+    knock-outs the report exists to show. Membership is decided by the
+    settlement row instead.
+
+    `tbl_transaction.contract_ref` is NULL on these rows, so the settlement is
+    matched on bank + stock + a '-KO)' transaction type within the window -- the
+    type reads 'Sell (Decu-KO)', so the pattern has to carry the closing
+    parenthesis; '%-KO' matches nothing. Two
+    contracts on the same bank and stock that both knocked out in the window
+    both qualify, which is correct -- each has its own settlement row.
+
+    Without both dates this falls back to 'active' only.
+    """
+    if date_from is None or date_to is None:
+        where = "AND c.status = 'active'"
+        params = (transaction_type, bank_ref)
+    else:
+        where = """AND (c.status = 'active'
+                        OR (c.status = 'KO' AND EXISTS (
+                              SELECT 1 FROM tbl_transaction t
+                              WHERE t.bank_ref = c.bank_ref
+                                AND t.code_ref = c.code_ref
+                                AND t.transaction_type LIKE '%-KO)'
+                                AND t.trade_date BETWEEN ? AND ?)))"""
+        params = (transaction_type, bank_ref, str(date_from), str(date_to))
+
     ref_rows = db.execute(
         "SELECT c.ref_num FROM tbl_stock_contract c "
         "INNER JOIN tbl_bank_account b ON c.bank_ref = b.ref_num "
-        # 'active' only: 'inactive' is a closed-out historical record, and 'KO'
-        # is a contract that knocked out in an earlier week -- the report drops
-        # both. A contract that knocks out during *this* report's window is
-        # still 'active' in the DB (it gets flagged afterwards), so it stays on
-        # the sheet and excel_writer marks it up -- see find_ko_day.
-        "WHERE c.transaction_type = ? AND b.ref_num = ? AND c.status = 'active'",
-        (transaction_type, bank_ref)
+        "WHERE c.transaction_type = ? AND b.ref_num = ? " + where,
+        params
     ).fetchall()
 
     records = []

@@ -922,8 +922,15 @@ def build_workbook(db, report_date, bank_ids):
                 continue
             bank_ref = bank_row[0]
 
-            accu = [r for r in contract_records(db, bank_ref, 'ACCU') if r['ccy_id'] == ccy]
-            decu = [r for r in contract_records(db, bank_ref, 'DECU') if r['ccy_id'] == ccy]
+            # date_range[0]/[-1] bound this report's 10-day window, so a
+            # contract that knocked out inside it is selected even though its
+            # status has already flipped to 'KO'.
+            accu = [r for r in contract_records(db, bank_ref, 'ACCU',
+                                                date_range[0], date_range[-1])
+                    if r['ccy_id'] == ccy]
+            decu = [r for r in contract_records(db, bank_ref, 'DECU',
+                                                date_range[0], date_range[-1])
+                    if r['ccy_id'] == ccy]
             positions = position_records(db, bank_ref, bank_id, ccy, report_date, hkd_wd=hkd_wd)
             positions = inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date)
 
