@@ -88,7 +88,12 @@ def contract_records(db, bank_ref, transaction_type):
     ref_rows = db.execute(
         "SELECT c.ref_num FROM tbl_stock_contract c "
         "INNER JOIN tbl_bank_account b ON c.bank_ref = b.ref_num "
-        "WHERE c.transaction_type = ? AND b.ref_num = ? AND c.status != 'inactive'",
+        # 'active' only: 'inactive' is a closed-out historical record, and 'KO'
+        # is a contract that knocked out in an earlier week -- the report drops
+        # both. A contract that knocks out during *this* report's window is
+        # still 'active' in the DB (it gets flagged afterwards), so it stays on
+        # the sheet and excel_writer marks it up -- see find_ko_day.
+        "WHERE c.transaction_type = ? AND b.ref_num = ? AND c.status = 'active'",
         (transaction_type, bank_ref)
     ).fetchall()
 

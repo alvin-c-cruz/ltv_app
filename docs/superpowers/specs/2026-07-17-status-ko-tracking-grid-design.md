@@ -111,6 +111,17 @@ design adds that capability back (not necessarily identical to whatever the
 original legacy version had — this is a fresh design against the formula
 given in this spec).
 
+## Resolved Conventions
+
+| Decision point | Resolved default | Confirmed |
+|---|---|---|
+| Must the report generate before the close? | Yes. It has to work at both moments: a live `=INDEX(closing_price!...)` lookup in the report date's O:X cell before the Yahoo Finance price is uploaded, and the actual stored close afterwards | 2026-09-17 |
+| The grid can show `KO` on the report date while the contract row does not — is that a defect? | **No.** `find_ko_day` runs in Python against stored prices, so before the close there is no price server-side and the row cannot mark a knock-out. Excel evaluates the grid from the live formula, so it can. The grid knowing more than the row *is* the grid's value intraday; after the close both read the same number and agree. Do not suppress the grid to hide the difference | 2026-09-17 |
+| A past report date | Never takes a live lookup. Stored close if there is one, blank if not — an old report is a fixed record | 2026-09-17 |
+| USD contracts before the close | No live lookup; the cell stays blank until the close is stored, because `closing_price` is quoted in the local currency. No active USD contracts today, so this is latent | 2026-09-17 |
+
+Pinned by `scripts/verify_report_date_price_cell.py`.
+
 ## Verification
 
 No automated test currently covers `excel_writer.py`'s cell-level output

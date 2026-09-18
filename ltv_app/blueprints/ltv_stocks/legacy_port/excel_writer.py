@@ -31,7 +31,7 @@ from .positions_calc import position_records, _average, _transactions_narrative
 from .working_day import WorkingDay, position_start_date
 from .stock_price import get_stock_price
 from .report_data import (
-    week_dates, compute_status_flags, inject_accu_only_positions,
+    week_dates, compute_status_flags, find_ko_day, inject_accu_only_positions,
     PRIMARY_BANK_ACCOUNT, PRIMARY_SHEET_NAME, _CCYS,
     _BANK_NAME, _SUB_TITLE, _POSITION_COLOR, _ACCOUNT_LABEL,
     _CODE_FILLS, _SMALL_FONT_CODES,
@@ -67,6 +67,9 @@ def xl_fill(fill_color):
 
 
 _GREY_FILL = '00C0C0C0'
+
+# A knocked-out contract's whole row is recoloured this red, A:AJ.
+_KO_FONT_COLOR = 'FFFF0000'
 
 # O-X column -> offset into the 10-date range.
 _COL_DATE_OFFSET = {
@@ -104,8 +107,29 @@ def _price_font_size(rec):
 _ZERO_ROW_COLS = ('A', 'B', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X')
 
 
+def _ko_offsets(records, date_range, wd, price_lookup):
+    """{record index -> index into date_range of its knock-out day} for the
+    records that knocked out inside this report's window."""
+    return {i: k for i, rec in enumerate(records)
+            if (k := find_ko_day(rec, date_range, wd, price_lookup)) is not None}
+
+
+def _redden(ws, cols, row):
+    """Recolour a run of cells red, keeping each one's own size and boldness.
+
+    Marks a knocked-out contract. Applied per-column rather than as a blanket
+    font, because the row's sizes are already meaningful by then -- 8pt on
+    four-figure price cells (_price_font_size), 9pt on the date columns, bold
+    on F (strike) and on the KO cells.
+    """
+    for col in cols:
+        cell = ws[f'{col}{row}']
+        f = cell.font
+        cell.font = xl_font_color(f.sz, _KO_FONT_COLOR, bool(f.b), f.name)
+
+
 def _write_contracts(ws, records, product, row, report_date, date_range, wd, price_lookup,
-                      bank_id=None):
+                      bank_id=None, ko_days=None):
     """Write one ACCU/DECU contract table starting at `row`. Returns the next free row.
 
     `wd` supplies `.is_holiday(date) -> bool` for the O-X grid (a `WorkingDay`
@@ -123,9 +147,26 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
     first_data_row = count_row + 4
     last_data_row = first_data_row + n - 1
 
-    # Head Count
+    # Which rows knocked out inside this report's window, by record index.
+    # build_workbook passes the same mapping it gives _write_status_grid, so the
+    # contract table's red marking and the grid's cannot drift apart, and
+    # find_ko_day -- up to ten uncached price lookups per contract -- runs once.
+    # Computed here when a caller supplies none.
+    if ko_days is None:
+        ko_days = _ko_offsets(records, date_range, wd, price_lookup)
+
+    # Head Count -- a knocked-out contract is finished, so it no longer counts
+    # as a live contract, the same way a DONE one doesn't. A contract can be
+    # both: it carries DONE in column N and still appears in ko_days, so only
+    # the ones the COUNTIF does not already remove belong in this term.
+    # Counting both ways subtracts it twice and the cell can go negative, which
+    # then propagates -- hkd_count[bank_id][product] points at this cell.
+    ko_not_done = sum(1 for i in ko_days
+                      if records[i]['received'] != records[i]['total'])
     cell = ws[f'A{count_row}']
     cell.value = f'={n}-COUNTIF(N{first_data_row}:N{last_data_row},"*DONE*")'
+    if ko_not_done:
+        cell.value += f'-{ko_not_done}'
     cell.font = xl_font(7)
     cell.number_format = '0'
     cell.alignment = xl_align(False, 'left')
@@ -211,9 +252,10 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
             ws[f'{col}{row}'].border = xl_box()
         ws.row_dimensions[row].height = 17
     else:
-        for rec in records:
+        for idx, rec in enumerate(records):
             r = row
             done = False
+            ko_idx = ko_days.get(idx)
             divisor = _FREQ_DIV.get(rec.get('frequency'), 2)
 
             cols = {
@@ -274,11 +316,20 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
                         cell.value = 'DONE'
                         cell.font = xl_font(10, True)
                 elif col in _OX_COLS:
-                    d = date_range[_COL_DATE_OFFSET[col]]
-                    if d < rec['start_date']:
+                    k = _COL_DATE_OFFSET[col]
+                    d = date_range[k]
+                    if ko_idx is not None and k > ko_idx:
+                        # Dead from the knock-out day on. The day right after it
+                        # carries the "KO" marker; everything past that is
+                        # greyed out like any other out-of-contract day.
+                        if k == ko_idx + 1:
+                            cell.value = 'KO'
+                            cell.font = xl_font(price_size, True)
+                        else:
+                            cell.fill = xl_fill(_GREY_FILL)
+                    elif d < rec['start_date']:
                         cell.fill = xl_fill(_GREY_FILL)
                     elif d > rec['end_date']:
-                        k = _COL_DATE_OFFSET[col]
                         if k == 4:
                             if d == rec['end_date'] + timedelta(days=3):
                                 cell.value = 'Done'
@@ -334,13 +385,25 @@ def _write_contracts(ws, records, product, row, report_date, date_range, wd, pri
             elif rec['code'] in _SMALL_FONT_CODES:
                 cell_a.font = xl_font(9)
 
+            if ko_idx is not None:
+                # The breaching close itself is bold, then the whole row goes
+                # red. A:N and O:X here; Z:AJ is reddened by _write_status_grid,
+                # which writes those cells after this function returns.
+                ko_cell = ws[f'{_OX_COLS[ko_idx]}{r}']
+                ko_cell.font = xl_font(price_size, True)
+                _redden(ws, _ALL_DATA_COLS, r)
+
             row += 1
 
     return row + 2
 
 
-def _write_status_grid(ws, count_row, n, date_range):
+def _write_status_grid(ws, count_row, n, date_range, ko_offsets=()):
     """Writes the Z:AJ knock-out/strike tracking grid for one contract block.
+
+    `ko_offsets` is the same {record index -> KO day} mapping `_write_contracts`
+    built for this block (only its keys are read here) -- those rows get the
+    red KO font across Z:AJ too.
 
     `count_row`/`n` match the same block's `_write_contracts` call (the row
     passed in, and `len(records)`) -- this reproduces `_write_contracts`'
@@ -381,14 +444,22 @@ def _write_status_grid(ws, count_row, n, date_range):
         z_cell.border = xl_box()
 
         for col, price_col in zip(_STATUS_COLS, _OX_COLS):
+            # ISTEXT first: _write_contracts writes the literal "KO" into the
+            # O:X cell after a knock-out day, and Excel ranks text above every
+            # number, so an unguarded comparison misreads it -- a knocked-out
+            # decumulator printed "D" ("strike breached, still alive"). The =0
+            # and ="" guards don't catch text. A text cell is a marker, not a
+            # price, so there is nothing for this formula to say about it.
             formula = (
-                f'=IF($E{r}>$F{r},'
+                f'=IF(ISTEXT({price_col}{r}),"",'
+                f'IF($E{r}>$F{r},'
                 f'IF({price_col}{r}=0,"xxx",IF({price_col}{r}="","",'
                 f'IF($Z{r}=2,IF($G{r}<={price_col}{r},"KO",IF($F{r}>={price_col}{r},"D",".")),'
                 f'IF($G{r}<={price_col}{r},"KO",".")))),'
                 f'IF({price_col}{r}=0,"xxx",IF({price_col}{r}="","",'
                 f'IF($Z{r}=2,IF($G{r}>={price_col}{r},"KO",IF($F{r}<={price_col}{r},"D",".")),'
                 f'IF($G{r}>={price_col}{r},"KO",".")))))'
+                f')'
             )
             cell = ws[f'{col}{r}']
             cell.value = formula
@@ -396,9 +467,16 @@ def _write_status_grid(ws, count_row, n, date_range):
             cell.alignment = xl_align(True)
             cell.border = xl_box()
 
+    # Carry _write_contracts' red KO marking across the rest of the row. Done
+    # here rather than there because these cells don't exist until now.
+    for offset in ko_offsets:
+        _redden(ws, ('Z',) + _STATUS_COLS, first_data_row + offset)
 
-# column_width() (298-339). Z-AJ intentionally omitted — those are widths for
-# the out-of-scope reconciliation helper columns.
+
+# column_width() (298-339). Y and Z are omitted — the dropped reconciliation
+# helper and the literal direction flag, both hidden by _set_column_widths.
+# AA:AJ get _STATUS_COL_WIDTH there rather than a literal each.
+_STATUS_COL_WIDTH = 3 + 0.71  # fits "KO"; same +0.71 padding as the rest
 _COLUMN_WIDTHS = {
     'A': 27.57 + 0.71, 'B': 4.86 + 0.71, 'D': 11.71 + 0.71, 'E': 7.57 + 0.71,
     'F': 7.57 + 0.71, 'G': 7.57 + 0.71, 'H': 9.14 + 0.71, 'I': 9.14 + 0.71,
@@ -410,10 +488,18 @@ _COLUMN_WIDTHS = {
 
 
 def _set_column_widths(ws):
-    """Port of column_width() (298-339), minus the Z-AJ helper-column widths."""
+    """Port of column_width() (298-339), plus the printed AA:AJ status columns."""
     for col, width in _COLUMN_WIDTHS.items():
         ws.column_dimensions[col].width = width
-    for col in ('C', 'M'):
+    # AA:AJ hold one or two characters -- ".", "D", "KO" -- so they are sized to
+    # fit "KO" and no more, keeping the widened print area cheap.
+    for col in _STATUS_COLS:
+        ws.column_dimensions[col].width = _STATUS_COL_WIDTH
+    # C and M are data the sheet doesn't show. Y is the dropped reconciliation
+    # helper and Z the literal direction flag (always 2) -- neither means
+    # anything to a reader, and hiding them keeps both off the printed page now
+    # that the print area runs through AJ.
+    for col in ('C', 'M', 'Y', 'Z'):
         ws.column_dimensions[col].hidden = True
 
 
@@ -865,15 +951,23 @@ def build_workbook(db, report_date, bank_ids):
             r = 1
             r = report_header(ws, bank_id, ccy, report_date, r, date_range)
 
+            # One mapping per block, shared by the contract table and the
+            # tracking grid -- they mark the same rows red, so deriving it twice
+            # left two call sites that had to stay argument-identical.
+            accu_ko = _ko_offsets(accu, date_range, wd, price_lookup)
+            decu_ko = _ko_offsets(decu, date_range, wd, price_lookup)
+
             accu_count_row = r
             r = _write_contracts(ws, accu, 'ACCU', r, report_date, date_range, wd,
-                                  price_lookup=price_lookup, bank_id=bank_id)
-            _write_status_grid(ws, accu_count_row, len(accu), date_range)
+                                  price_lookup=price_lookup, bank_id=bank_id,
+                                  ko_days=accu_ko)
+            _write_status_grid(ws, accu_count_row, len(accu), date_range, accu_ko)
 
             decu_count_row = r
             r = _write_contracts(ws, decu, 'DECU', r, report_date, date_range, wd,
-                                  price_lookup=price_lookup, bank_id=bank_id)
-            _write_status_grid(ws, decu_count_row, len(decu), date_range)
+                                  price_lookup=price_lookup, bank_id=bank_id,
+                                  ko_days=decu_ko)
+            _write_status_grid(ws, decu_count_row, len(decu), date_range, decu_ko)
 
             sheet_circles = (
                 compute_status_flags(accu, accu_count_row + 4, date_range, report_date, wd, price_lookup)
@@ -891,7 +985,17 @@ def build_workbook(db, report_date, bank_ids):
             r = _write_positions(ws, positions, report_date, r, wd, price_lookup,
                                   bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
 
-            ws.print_area = f'A1:X{r}'
+            # Through AJ, so the Z:AJ tracking grid prints. A knock-out on the
+            # last day of the window has no O:X cell after it to carry the "KO"
+            # marker, and that day -- the report date -- is both the likeliest
+            # day to find a fresh knock-out and the only chance the sheet gets,
+            # since the contract drops out of later reports once flagged
+            # status='KO'. The grid's final column already evaluates to "KO"
+            # from the real breaching close; it just wasn't on the page.
+            # Unconditional: the printed range never depends on whether
+            # anything knocked out. Y and Z are hidden (see _set_column_widths),
+            # so the range widens by the ten one-character status columns only.
+            ws.print_area = f'A1:{_STATUS_COLS[-1]}{r}'
 
             if ccy == 'HKD':
                 hkd_count.setdefault(bank_id, {})

@@ -33,6 +33,42 @@ def _today_for_inherit():
     return ph_today()
 
 
+def _day_status(rec, px):
+    """Classify one day's closing price for one contract: 'KO' (barrier
+    crossed), 'D' (strike breached, still alive) or '.' (neither).
+
+    `rec['spot'] > rec['strike']` is the accumulator shape and inverts every
+    comparison -- the same `above` branch the AA:AJ grid formula encodes.
+    """
+    e, f, g = rec['spot'], rec['strike'], rec['ko']
+    if e > f:
+        return 'KO' if g <= px else ('D' if f >= px else '.')
+    return 'KO' if g >= px else ('D' if f <= px else '.')
+
+
+def find_ko_day(rec, date_range, wd, price_lookup):
+    """The index into `date_range` of the day this contract knocked out, or
+    None if it did not knock out inside the window.
+
+    Knock-out is the *first* day whose recorded closing price crosses the
+    contract's K/O barrier -- at or above `ko` for an accumulator, at or below
+    it for a decumulator. Skips exactly what compute_status_flags skips: days
+    outside the contract's own start/end window, holidays, and days with no
+    real nonzero numeric price (a gap is not a breach). No inheritance rule
+    here, unlike compute_status_flags: a knock-out is a discrete event on a
+    day that actually has a price, so an unpriced report_date cannot be one.
+    """
+    for i, d in enumerate(date_range):
+        if d < rec['start_date'] or d > rec['end_date'] or wd.is_holiday(d):
+            continue
+        px = price_lookup(rec['code_ref'], d)
+        if not isinstance(px, (int, float)) or isinstance(px, bool) or px == 0:
+            continue
+        if _day_status(rec, px) == 'KO':
+            return i
+    return None
+
+
 def compute_status_flags(records, first_row, date_range, report_date, wd, price_lookup):
     """Returns [(col_letter, row), ...] for every date-column cell that is in
     "D" status (strike breached, not yet knocked out) for the given contract
@@ -59,13 +95,15 @@ def compute_status_flags(records, first_row, date_range, report_date, wd, price_
       today, a missing price there is skipped like any other gap.
     - every other date: skipped unless price_lookup returns a real, nonzero
       number.
+
+    A row stops being classified at its knock-out day (see find_ko_day): from
+    there on excel_writer blanks the O:X cells out, so there is no cell left to
+    circle.
     """
     today = _today_for_inherit()
     cells = []
     for i, rec in enumerate(records):
         r = first_row + i
-        e, f, g = rec['spot'], rec['strike'], rec['ko']
-        above = e > f
         last_status = None  # most recent real-priced day's status for this row
         for col, d in zip(_OX_COLS, date_range):
             if d < rec['start_date'] or d > rec['end_date'] or wd.is_holiday(d):
@@ -77,13 +115,16 @@ def compute_status_flags(records, first_row, date_range, report_date, wd, price_
                     continue  # no data and nothing to inherit -- skip
                 status = last_status  # report_date inherits the last known day
             else:
-                if above:
-                    status = 'KO' if g <= px else ('D' if f >= px else '.')
-                else:
-                    status = 'KO' if g >= px else ('D' if f <= px else '.')
+                status = _day_status(rec, px)
                 last_status = status
             if status == 'D':
                 cells.append((col, r))
+            if status == 'KO':
+                # The contract is dead from here on: its later days are blanked
+                # out in the sheet (see excel_writer's KO rendering), so there
+                # is nothing left to circle even if a later close would breach
+                # the strike again.
+                break
     return cells
 
 
