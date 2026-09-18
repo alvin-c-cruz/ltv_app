@@ -376,7 +376,10 @@ def download_transaction_range(db, start_date, end_date):
       INNER JOIN tbl_currency on tbl_currency.ref_num = tbl_code.ccy_ref
       INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = tbl_transaction.transaction_type
       WHERE tbl_transaction.trade_date >= ? AND tbl_transaction.trade_date <= ?
-      ORDER BY tbl_transaction.trade_date, tbl_currency.priority, tbl_bank_account.priority, tbl_code.code, tbl_transaction_type.priority
+      -- Grouped for reading: account, then stock, then chronological within
+      -- the stock. Currency is not a sort term any more -- a stock belongs to
+      -- exactly one currency, so ordering by code already groups it.
+      ORDER BY tbl_bank_account.priority, tbl_code.code, tbl_transaction.trade_date, tbl_transaction_type.priority
       ;
     """
     result = db.execute(sql, (start_date, end_date)).fetchall()
@@ -416,8 +419,19 @@ def download_transaction_range(db, start_date, end_date):
         cell.border = border
         cell.alignment = Alignment(horizontal='center')
 
+    # One blank, still-bordered row between stock groups, so each account/stock
+    # block reads as its own band. The gap carries the border like every other
+    # cell -- an unbordered gap breaks the grid rather than dividing it.
     row_num = 2
+    prev_group = None
     for t in list_transaction:
+        group = (t['bank_name'], t['code'])
+        if prev_group is not None and group != prev_group:
+            for col in 'ABCDEFG':
+                ws[f'{col}{row_num}'].border = border
+            row_num += 1
+        prev_group = group
+
         ws[f'A{row_num}'].value = t['trade_date']
         ws[f'A{row_num}'].number_format = r'dd\-mmm\-yyyy'
         ws[f'B{row_num}'].value = t['bank_name']
