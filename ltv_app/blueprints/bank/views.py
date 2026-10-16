@@ -372,18 +372,8 @@ def short_transaction_list(bank_id, code):
         (bank_ref, code_ref, date_from)
     ).fetchall()
 
-    def _update_short_cost(balance, cost_to_date, qty, price, charges):
-        amount = abs(qty) * price + charges
-        if qty < 0:  # opening/deepening short
-            if balance <= 0:
-                cost_to_date += amount
-        else:  # closing short
-            if balance < 0:
-                if abs(balance) - qty > 0:
-                    cost_to_date -= cost_to_date * qty / abs(balance)
-                else:
-                    cost_to_date = 0.0
-        return cost_to_date
+    # The short book's one cost engine, shared with the reports
+    from ..transactions.models import _update_short_cost
 
     balance = 0
     cost_to_date = 0.0

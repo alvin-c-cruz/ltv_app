@@ -169,10 +169,12 @@ def get_transactions(db, bank_ref, code_ref, date_from, date_to):
 
 
 def _update_short_cost(balance, cost_to_date, qty, price, charges):
-    amount = abs(qty) * price + charges
+    """Running cost basis of a short position. A short sale's charges come off its
+    proceeds, as a Sell (Spot)'s do, so the short average is the net price received
+    (price - charges/qty). Until 2026-10-16 they were added, the way a buy's are."""
     if qty < 0:  # opening/deepening short
         if balance <= 0:
-            cost_to_date += amount
+            cost_to_date += abs(qty) * price - charges
     else:  # closing short
         if balance < 0:
             if abs(balance) - qty > 0:
