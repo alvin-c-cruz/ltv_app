@@ -35,6 +35,9 @@ class DownloadFixings:
         self.trade_date = trade_date
         self.fixing_data = fixing_data
 
+        # The close that knocked a contract out is the previous HK business day's
+        self.ko_date = get_previous_business_day(db, trade_date)
+
         self.template_file = os.path.join(current_app.instance_path, "excel_templates", "fixings.xlsx")
         self.filename = os.path.join(current_app.instance_path, "temp", f"{trade_date} Fixings.xlsx")
 
@@ -92,6 +95,10 @@ class DownloadFixings:
         code_row = {}
         for _type in ("ACCU", "DECU"):
             if fixings[_type]:
+                # DECU has no Average column, so N carries the KO closing price instead
+                show_closing = _type == "DECU" and any('KO' in f["reference"] for f in fixings[_type])
+                closing_codes = set()
+
                 #  Header
                 cell = ws[f"A{row_num}"]
                 cell.value = _type
@@ -117,6 +124,8 @@ class DownloadFixings:
                 }
                 if _type == "ACCU":
                     cols["N"] = "Average"
+                elif show_closing:
+                    cols["N"] = "Closing"
 
                 for col, value in cols.items():
                     cell = ws[f"{col}{row_num}"]
@@ -150,6 +159,7 @@ class DownloadFixings:
                     #  Gather knockouts
                     if 'KO' in fixing["reference"]:
                         fixing["account_code"] = account_code
+                        fixing["ko_closing"] = get_closing_price(self.db, fixing["code"], self.ko_date)
                         self.knockouts.append(fixing)
 
                     cols = {
@@ -182,6 +192,12 @@ class DownloadFixings:
                     }
                     if _type == "ACCU":
                         cols["N"] = None
+                    elif show_closing:
+                        # One closing per stock: on its first KO row only
+                        cols["N"] = None
+                        if 'KO' in fixing["reference"] and fixing["code"] not in closing_codes:
+                            closing_codes.add(fixing["code"])
+                            cols["N"] = fixing["ko_closing"]
 
                     for col, value in cols.items():
                         cell = ws[f"{col}{row_num}"]
@@ -228,7 +244,9 @@ class DownloadFixings:
                             cell.alignment = Alignment(horizontal="center", vertical="center")
 
                         # Number format
-                        if col in ("D", "E", "F", "N"):
+                        if col == "N" and _type == "DECU":  # Closing
+                            cell.number_format = "#,##0.00"
+                        elif col in ("D", "E", "F", "N"):
                             cell.number_format = "#,##0.0000"
                         elif col in ("H",):
                             cell.number_format = "#,##0.00"
@@ -410,6 +428,51 @@ def get_balance(db, account_code, code, trade_date):
         return 0
 
 
+def get_previous_business_day(db, date_str):
+    """Get the previous HK business day, accounting for holidays"""
+    d = datetime.datetime.strptime(str(date_str)[:10], '%Y-%m-%d') - datetime.timedelta(days=1)
+
+    # Load holidays
+    holidays = {
+        str(r['holi_date'])[:10]
+        for r in db.execute(
+            "SELECT holi_date FROM tbl_holiday "
+            "INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_holiday.ccy_ref "
+            "WHERE tbl_currency.ccy_id = 'HKD'"
+        ).fetchall()
+    }
+
+    # Skip weekends and holidays
+    while str(d)[:10] in holidays or d.isoweekday() in (6, 7):
+        d -= datetime.timedelta(days=1)
+
+    return str(d)[:10]
+
+
+def get_closing_price(db, code, trade_date):
+    """Get closing price for a stock on a given date, with fallback to previous date"""
+    code_ref = db.execute("SELECT ref_num FROM tbl_code WHERE code=?", (code,)).fetchone()[0]
+    d = str(trade_date)[:10]
+
+    # Try to get closing price for the date
+    result = db.execute(
+        "SELECT closing_price FROM tbl_stock_price WHERE code_ref=? AND trade_date=?",
+        (code_ref, d)
+    ).fetchone()
+
+    if result:
+        return result[0]
+
+    # Fallback: get most recent price before this date
+    result = db.execute(
+        "SELECT closing_price FROM tbl_stock_price WHERE code_ref=? AND trade_date<? "
+        "ORDER BY trade_date DESC LIMIT 1",
+        (code_ref, d)
+    ).fetchone()
+
+    return result[0] if result else None
+
+
 class WriteKnockouts:
     def __init__(self, db, wb, knockouts, trade_date):
         if knockouts:
@@ -424,26 +487,6 @@ class WriteKnockouts:
             self.write_details()
             self.format_columns()
 
-    def get_previous_business_day(self, date_str):
-        """Get the previous HK business day, accounting for holidays"""
-        d = datetime.datetime.strptime(str(date_str)[:10], '%Y-%m-%d') - datetime.timedelta(days=1)
-
-        # Load holidays
-        holidays = {
-            str(r['holi_date'])[:10]
-            for r in self.db.execute(
-                "SELECT holi_date FROM tbl_holiday "
-                "INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_holiday.ccy_ref "
-                "WHERE tbl_currency.ccy_id = 'HKD'"
-            ).fetchall()
-        }
-
-        # Skip weekends and holidays
-        while str(d)[:10] in holidays or d.isoweekday() in (6, 7):
-            d -= datetime.timedelta(days=1)
-
-        return str(d)[:10]
-
     def write_headers(self):
         # Title row
         self.row_num += 1
@@ -453,7 +496,7 @@ class WriteKnockouts:
 
         # Date row - use previous business day
         self.row_num += 1
-        prev_business_day = self.get_previous_business_day(self.trade_date)
+        prev_business_day = get_previous_business_day(self.db, self.trade_date)
         date_obj = datetime.datetime.strptime(prev_business_day, '%Y-%m-%d')
         cell = self.ws[f"A{self.row_num}"]
         cell.value = f"Date: {date_obj.strftime('%B %d, %Y')}"
@@ -489,39 +532,13 @@ class WriteKnockouts:
             if column_letter in ("I", "J"):
                 cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor="00FFC7CE")
 
-    def get_closing_price(self, code_ref, trade_date):
-        """Get closing price for a stock on a given date, with fallback to previous date"""
-        d = str(trade_date)[:10]
-
-        # Try to get closing price for the date
-        result = self.db.execute(
-            "SELECT closing_price FROM tbl_stock_price WHERE code_ref=? AND trade_date=?",
-            (code_ref, d)
-        ).fetchone()
-
-        if result:
-            return result[0]
-
-        # Fallback: get most recent price before this date
-        result = self.db.execute(
-            "SELECT closing_price FROM tbl_stock_price WHERE code_ref=? AND trade_date<? "
-            "ORDER BY trade_date DESC LIMIT 1",
-            (code_ref, d)
-        ).fetchone()
-
-        return result[0] if result else None
-
     def write_details(self):
-        prev_business_day = self.get_previous_business_day(self.trade_date)
-
         for idx, fixing in enumerate(self.knockouts, start=1):
             account = self.db.execute("SELECT bank_name FROM tbl_bank_account WHERE bank_id=?;",
                                       (fixing["account_code"], )).fetchone()[0]
 
-            # Get code_ref for closing price lookup
-            code_ref = self.db.execute("SELECT ref_num FROM tbl_code WHERE code=?",
-                                       (fixing["code"],)).fetchone()[0]
-            closing_price = self.get_closing_price(code_ref, prev_business_day)
+            # Same closing as the account sheet's Closing column
+            closing_price = fixing["ko_closing"]
 
             self.row_num += 1
             columns = {
