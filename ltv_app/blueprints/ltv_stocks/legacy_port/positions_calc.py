@@ -169,11 +169,16 @@ def _average(db, bank_id, code, as_of_date):
     footer is left unset, the prior-month-end beginning_balance.
 
     trades_done_average runs the engine over the month window [1st-of-month ..
-    as_of], keyed on the bank's transaction_basis. Its footer loop breaks on the
-    first current-window row whose value_date settles in a LATER month
-    (value_date[:7] > as_of[:7]); if that break fires before any current row is
-    recorded, the footer stays unset and the function falls through to
-    beginning_balance (the moving-cost state at the last row before 1st-of-month)."""
+    as_of], keyed on the bank's transaction_basis.
+
+    BUG FIX (diverges from legacy, 2026-09-30): the legacy footer loop broke on the
+    first current-window row whose value_date settles in a LATER month, so on a
+    month-end report date a row traded that day but settling next month moved the
+    narrative's share total and not the average printed beside it (found on a
+    2026-09-30 accumulator fixing; see BUGS.md). Alvin: "/ltv-stocks should always show
+    the most updated average." Every row traded up to as_of now counts -- the same
+    running average the bank ledger page and /trades/average_price show. Pinned by
+    scripts/verify_average_latest.py."""
     basis = db.execute(
         "SELECT transaction_basis FROM tbl_bank_account WHERE bank_id = ?", (bank_id,)
     ).fetchone()[0]
@@ -182,7 +187,6 @@ def _average(db, bank_id, code, as_of_date):
         return None
     eng = _moving_average_engine(rows)
     date_from = _first_of_month(as_of_date)
-    to_month = as_of_date.isoformat()[:7]
 
     beginning = None   # last row with basis < 1st-of-month
     footer = None      # last processed current-window row (basis >= 1st-of-month)
@@ -194,8 +198,6 @@ def _average(db, bank_id, code, as_of_date):
         if basis_val < date_from:
             beginning = (bal, cost, last_nonzero)
         else:
-            if basis == 'value_date' and str(r['value_date'])[:7] > to_month:
-                break
             footer = (bal, cost, last_nonzero)
 
     sel = footer if footer is not None else beginning
