@@ -118,6 +118,7 @@ def add_short():
         transaction_type = fields.text("transaction_type")
         quantity = fields.quantity()
         price = fields.price()
+        interest_rate = fields.optional_number("interest_rate", "Interest rate")
 
         error = fields.error
         form = fields.values
@@ -140,7 +141,8 @@ def add_short():
               code_ref=code_ref,
               transaction_type=transaction_type,
               quantity=quantity,
-              price=price
+              price=price,
+              interest_rate=interest_rate,
               )
             new_transaction.save()
 
@@ -443,6 +445,7 @@ def edit_short(ref_num):
         foreign_charge = fields.charge("foreign_charge", "Foreign charge")
         stamp_duty = fields.charge("stamp_duty", "Stamp duty")
         misc = fields.charge("misc")
+        interest_rate = fields.optional_number("interest_rate", "Interest rate")
 
         error = fields.error
         form = fields.values
@@ -468,6 +471,7 @@ def edit_short(ref_num):
             transaction.foreign_charge = foreign_charge
             transaction.stamp_duty = stamp_duty
             transaction.misc = misc
+            transaction.interest_rate = interest_rate
 
             transaction.save()
 
@@ -493,6 +497,7 @@ def edit_short(ref_num):
             "foreign_charge":transaction.foreign_charge,
             "stamp_duty": transaction.stamp_duty,
             "misc": transaction.misc,
+            "interest_rate": transaction.interest_rate,
         }
 
     context = {

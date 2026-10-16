@@ -655,8 +655,8 @@ def _write_short_positions(ws, shorts, report_date, row, wd, price_lookup, bank_
     the next free row; writes nothing when the account has no short-book activity.
 
     Shares are the negative AS-OF balance from tbl_transaction_short. Interest Rate is
-    the stock-borrowing fee the bank quotes with each short sale; the ledger does not
-    record it, so the cell is left for entry. % Inc. / Dec. is inverted -- a short gains
+    the stock-borrowing fee the bank quotes with each short sale (entered on the short
+    sale, % p.a.); blank until it is entered. % Inc. / Dec. is inverted -- a short gains
     as the price falls -- with the legacy formula kept as-is."""
     if not shorts:
         return row
@@ -686,7 +686,7 @@ def _write_short_positions(ws, shorts, report_date, row, wd, price_lookup, bank_
             'B': code,
             'C': pos['yahoo_ticker'],
             'D': pos['shares'] or None,
-            'G': None,
+            'G': pos['interest_rate'] / 100 if pos['interest_rate'] is not None else None,
             'I': pos['average'],
             'J': f'=IF(G{r}>=0,(L{r}/I{r})-1,1-(L{r}/I{r}))*-1',
             'L': closing_price,

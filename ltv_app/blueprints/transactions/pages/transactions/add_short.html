@@ -59,6 +59,11 @@
             <label for="price">Price</label>
             <input type="text" name="price" id="price" value="{{ form.price }}" autocomplete="off" required>
         </div>
+        <div class="form-group">
+            <label for="interest_rate">Interest Rate (% p.a.)</label>
+            <input type="text" name="interest_rate" id="interest_rate" value="{{ form.interest_rate or '' }}"
+                   autocomplete="off" placeholder="borrow fee, e.g. 8.00">
+        </div>
     </div>
     <div class="form-actions">
         <button type="submit" class="btn btn-success">Save</button>

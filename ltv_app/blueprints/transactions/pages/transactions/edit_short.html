@@ -97,6 +97,15 @@
             </div>
         </div>
         {{ row("Price", "price", form.price) }}
+        <!-- Interest Rate: optional, the borrow fee is sometimes quoted later -->
+        <div class="row p-1">
+            <div class="col-6">
+                <label for="interest_rate">Interest Rate (% p.a.)</label>
+            </div>
+            <div class="col-6">
+                <input type="text" name="interest_rate" id="interest_rate" value="{{ form.interest_rate if form.interest_rate is not none else '' }}" class="form-control" autocomplete="off">
+            </div>
+        </div>
         {{ row("Brokerage", "brokerage", form.brokerage) }}
         {{ row("Commission", "commission", form.commission) }}
         {{ row("Foreign Charge", "foreign_charge", form.foreign_charge) }}

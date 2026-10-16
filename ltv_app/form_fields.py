@@ -108,6 +108,14 @@ class FormFields:
         self.values[name] = value
         return value
 
+    def optional_number(self, name, label=None):
+        """A decimal field that may be left blank, for a figure not known yet: blank
+        returns None rather than zero."""
+        if clean_number(self._form.get(name, '')) == '':
+            self.values[name] = ''
+            return None
+        return self.number(name, label)
+
     def quantity(self, name='quantity'):
         return self.integer(name, 'Quantity')
 

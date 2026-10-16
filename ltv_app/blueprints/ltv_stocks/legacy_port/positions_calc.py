@@ -406,12 +406,20 @@ def short_position_records(db, bank_ref, ccy_id, report_date: date, hkd_wd=None)
 
     result = {}
     for r in rows:
+        # The borrow fee the bank quoted with the latest short sale that carries one
+        rate_row = db.execute(
+            "SELECT interest_rate FROM tbl_transaction_short "
+            "WHERE bank_ref = ? AND code_ref = ? AND trade_date <= ? AND interest_rate IS NOT NULL "
+            "ORDER BY trade_date DESC, ref_num DESC LIMIT 1",
+            (bank_ref, r['code_ref'], report_date.isoformat())
+        ).fetchone()
         result[r['code']] = {
             'stock_name': r['stock_name'],
             'code': r['code'],
             'code_ref': r['code_ref'],
             'yahoo_ticker': r['yahoo_ticker'],
             'shares': r['beginning_balance'],
+            'interest_rate': rate_row['interest_rate'] if rate_row else None,
             'average': get_short_average(db, bank_ref, r['code_ref'], report_date.isoformat()),
             'transactions': _short_transactions_narrative(db, bank_ref, r['code_ref'], report_date),
         }

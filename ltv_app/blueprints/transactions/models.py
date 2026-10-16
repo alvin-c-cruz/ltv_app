@@ -296,6 +296,7 @@ class TransactionShort(Model):
     misc: float = 0.0
     locked: int = 0
     no_charges: int = 0
+    interest_rate: float = None  # stock-borrowing fee, % p.a.; None until entered
 
     def __post_init__(self):
         self.table_name = "tbl_transaction_short"

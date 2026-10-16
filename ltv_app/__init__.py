@@ -4,6 +4,7 @@ from flask_login import LoginManager, current_user
 import os
 import secrets
 import sqlite3
+import sys
 
 
 def _get_version():
@@ -85,6 +86,48 @@ def _ensure_report_indexes(db_path):
         con.close()
 
 
+# Columns added after the live database was built, as (table, column, type). Same
+# reasoning as _REPORT_INDEXES: there is no migration tooling, so the app adds them
+# itself on start.
+_ADDED_COLUMNS = (
+    # Stock-borrowing fee, % per annum, as the bank quotes it with each short sale
+    ("tbl_transaction_short", "interest_rate", "REAL"),
+)
+
+
+def _ensure_added_columns(db_path):
+    """Add any column in _ADDED_COLUMNS that its table lacks. Idempotent. Like
+    _ensure_report_indexes it never creates the database or a missing table.
+
+    Best-effort, so a locked database cannot stop the app booting; the next start
+    retries. A failure is written to stderr (PythonAnywhere's error log), because until
+    the column exists every save into its table fails -- Model.save writes every
+    dataclass field."""
+    if not os.path.exists(db_path):
+        return
+
+    try:
+        con = sqlite3.connect(db_path, timeout=30)
+    except sqlite3.Error as e:
+        print(f"_ensure_added_columns: cannot open {db_path}: {e}", file=sys.stderr)
+        return
+
+    try:
+        tables = {row[0] for row in
+                  con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        for table, column, column_type in _ADDED_COLUMNS:
+            if table not in tables:
+                continue
+            existing = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type};")
+        con.commit()
+    except sqlite3.Error as e:
+        print(f"_ensure_added_columns: {e}", file=sys.stderr)
+    finally:
+        con.close()
+
+
 def create_app(test_config=None):
     # instance/ (live DB, excel_templates, temp) sits beside this package, as a
     # sibling of ltv_app/ — matching PythonAnywhere's deployed tree, which is
@@ -117,6 +160,7 @@ def create_app(test_config=None):
 
     _ensure_instance_dirs(app.instance_path)
     _ensure_report_indexes(app.config["DATABASE"])
+    _ensure_added_columns(app.config["DATABASE"])
 
     app.jinja_env.globals['app_version'] = VERSION
 
