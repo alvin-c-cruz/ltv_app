@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from ltv_app.blueprints.transactions.extensions.trades_done_average import get_transactions
+from ltv_app.blueprints.transactions.models import get_short_average
 
 from .working_day import WorkingDay, position_start_date
 from .term_sheet_calc import build_schedule
@@ -325,6 +326,94 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
             'unblocked': unblocked_v,
             'average': _average(db, bank_id, code, average_date),
             'transactions': transactions,
+        }
+
+    return dict(sorted(result.items()))
+
+
+def format_short_shares(quantity):
+    """A short balance the way the home page and the SHORT POSITION column show it: (1,000)."""
+    text = "{:,.0f}".format(abs(quantity))
+    return f"({text})" if quantity < 0 else text
+
+
+def _short_transactions_narrative(db, bank_ref, code_ref, report_date):
+    """_transactions_narrative for the short book (tbl_transaction_short): the week's
+    short sales and covers, e.g. `(10/13) Sell (Short) 2,500 @ 894.50 = (2,500)`. A
+    sale deepens the short and a cover reduces it, so the sign follows the quantity."""
+    week_monday = narrative_week_start(report_date)
+    rows = db.execute(
+        "SELECT trade_date, transaction_type, quantity, price FROM tbl_transaction_short "
+        "WHERE bank_ref = ? AND code_ref = ? AND trade_date >= ? AND trade_date <= ? "
+        "ORDER BY trade_date, ref_num",
+        (bank_ref, code_ref, week_monday.isoformat(), report_date.isoformat())
+    ).fetchall()
+    if not rows:
+        return ''
+
+    entry = ""
+    current_day = None
+    for i, r in enumerate(rows):
+        day = str(r['trade_date'])[:10]
+        sign = "" if i == 0 else ("+ " if r['quantity'] > 0 else "- ")
+        if day != current_day:
+            d = date.fromisoformat(day)
+            date_part = f"({d.month}/{d.day}) "
+            current_day = day
+        else:
+            date_part = ""
+        entry += (f"{sign}{date_part}{r['transaction_type']} "
+                  f"{'{:,.0f}'.format(abs(r['quantity']))} @ {_format_price(r['price'])} ")
+
+    ending_balance = db.execute(
+        "SELECT COALESCE(SUM(quantity), 0) FROM tbl_transaction_short "
+        "WHERE bank_ref = ? AND code_ref = ? AND trade_date <= ?",
+        (bank_ref, code_ref, report_date.isoformat())
+    ).fetchone()[0]
+    return entry.rstrip() + " = " + format_short_shares(ending_balance)
+
+
+def short_position_records(db, bank_ref, ccy_id, report_date: date, hkd_wd=None) -> dict:
+    """Short-book counterpart of position_records, for the SHORT POSITION table.
+
+    Short sales are kept in tbl_transaction_short, not in the long book, so
+    position_records never sees them. Same selection rule: a code is emitted when it
+    carried a short balance on the AS-OF date (the previous week's Friday) or had a
+    short-book trade during the reported week. Shares are the AS-OF balance (negative),
+    as the long table's are; the average and the narrative run to report_date."""
+    wd = WorkingDay(db, ccy_id)
+    if hkd_wd is None:
+        hkd_wd = wd if ccy_id == 'HKD' else WorkingDay(db, 'HKD')
+    beginning_date = hkd_wd.previous_day(position_start_date(report_date, hkd_wd))
+    week_start = narrative_week_start(report_date)
+
+    rows = db.execute(
+        "SELECT s.ref_num AS code_ref, s.code, s.stock_name, s.yahoo_ticker, "
+        "       COALESCE(SUM(CASE WHEN t.trade_date <= :as_of THEN t.quantity END), 0) "
+        "           AS beginning_balance "
+        "FROM tbl_transaction_short t "
+        "INNER JOIN tbl_code s ON s.ref_num = t.code_ref "
+        "INNER JOIN tbl_currency cy ON cy.ref_num = s.ccy_ref "
+        "WHERE t.bank_ref = :bank_ref AND cy.ccy_id = :ccy_id "
+        "AND t.trade_date <= :report_date "
+        "GROUP BY s.ref_num "
+        "HAVING COALESCE(SUM(CASE WHEN t.trade_date <= :as_of THEN t.quantity END), 0) != 0 "
+        "    OR COUNT(CASE WHEN t.trade_date >= :week_start THEN 1 END) > 0",
+        {'as_of': beginning_date.isoformat(), 'week_start': week_start.isoformat(),
+         'bank_ref': bank_ref, 'ccy_id': ccy_id,
+         'report_date': report_date.isoformat()}
+    ).fetchall()
+
+    result = {}
+    for r in rows:
+        result[r['code']] = {
+            'stock_name': r['stock_name'],
+            'code': r['code'],
+            'code_ref': r['code_ref'],
+            'yahoo_ticker': r['yahoo_ticker'],
+            'shares': r['beginning_balance'],
+            'average': get_short_average(db, bank_ref, r['code_ref'], report_date.isoformat()),
+            'transactions': _short_transactions_narrative(db, bank_ref, r['code_ref'], report_date),
         }
 
     return dict(sorted(result.items()))

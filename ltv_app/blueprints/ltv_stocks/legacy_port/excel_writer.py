@@ -27,7 +27,7 @@ from openpyxl.styles.fills import PatternFill
 from openpyxl.utils import column_index_from_string
 
 from .term_sheet_calc import _FREQ_DIV, contract_records
-from .positions_calc import position_records, _average, _transactions_narrative
+from .positions_calc import position_records, short_position_records, _average, _transactions_narrative
 from .working_day import WorkingDay, position_start_date
 from .stock_price import get_stock_price
 from .report_data import (
@@ -575,6 +575,167 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
     """
     ws.column_dimensions['C'].hidden = True
 
+    labels2 = {
+        'D': 'UNBLOCKED',
+        'E': 'BLOCKED',
+        'G': 'TOTAL SHARES',
+        'I': 'Ave. Price',
+    }
+    r = _write_position_header(ws, report_date, row, wd, bank_id, ccy, hkd_wd,
+                               labels2, merges2=(('E', 'F'), ('G', 'H')))
+
+    # Stock Positions
+    for code, pos in positions.items():
+        if ccy == 'USD':
+            trade_date = wd.previous_day(report_date)
+            closing_price = price_lookup(pos['code_ref'], trade_date)
+        else:
+            closing_price = f'=INDEX(closing_price!A:C,MATCH(C{r},closing_price!A:A,),3)'
+
+        cols = {
+            'A': pos['stock_name'],
+            'B': code,
+            'C': pos['yahoo_ticker'],
+            'D': pos['unblocked'],
+            'E': pos['blocked'],
+            'G': f'=D{r}+E{r}',
+            'I': pos['average'],
+            'J': f'=(L{r}/I{r})-1',
+            'L': closing_price,
+            'O': pos.get('transactions'),
+        }
+
+        for col, value in cols.items():
+            cell = ws[f'{col}{r}']
+            if col in ('D', 'E', 'G'):
+                if value:
+                    cell.value = value
+            else:
+                cell.value = value
+
+            cell.font = xl_font(10)
+
+            if col == 'A':
+                cell.alignment = xl_align(True, 'left')
+            elif col == 'O':
+                cell.alignment = xl_align(True, 'left', 'top')
+            else:
+                cell.alignment = xl_align(True)
+
+            if col != 'O':
+                cell.border = xl_box()
+
+            if col in ('D', 'E', 'G'):
+                cell.number_format = '#,##0'
+            elif col == 'I':
+                cell.number_format = '#,##0.0000'
+            elif col == 'L':
+                cell.number_format = '#,##0.00'
+            elif col == 'J':
+                cell.number_format = '0.00%'
+
+        ws.merge_cells(f'E{r}:F{r}')
+        ws.merge_cells(f'G{r}:H{r}')
+        ws.merge_cells(f'J{r}:K{r}')
+        ws.merge_cells(f'L{r}:N{r}')
+        ws.merge_cells(f'O{r}:X{r}')
+
+        ws.row_dimensions[r].height = 50
+
+        r += 1
+
+    r += 2
+    return r
+
+
+def _write_short_positions(ws, shorts, report_date, row, wd, price_lookup, bank_id=None, ccy='HKD',
+                           hkd_wd=None):
+    """Write the SHORT POSITION table under the positions table, as the legacy weekend
+    report laid it out (Weekenders/LTV Stocks/2023-03-24 "with short position"). Returns
+    the next free row; writes nothing when the account has no short-book activity.
+
+    Shares are the negative AS-OF balance from tbl_transaction_short. Interest Rate is
+    the stock-borrowing fee the bank quotes with each short sale; the ledger does not
+    record it, so the cell is left for entry. % Inc. / Dec. is inverted -- a short gains
+    as the price falls -- with the legacy formula kept as-is."""
+    if not shorts:
+        return row
+
+    cell = ws[f'A{row}']
+    cell.value = 'SHORT POSITION'
+    cell.font = xl_font(11, True)
+    cell.fill = xl_fill('00FFFF00')
+    row += 1
+
+    labels2 = {
+        'D': 'SHARES',
+        'G': 'Interest Rate',
+        'I': 'Ave. Price',
+    }
+    r = _write_position_header(ws, report_date, row, wd, bank_id, ccy, hkd_wd,
+                               labels2, merges2=(('D', 'F'), ('G', 'H')))
+
+    for code, pos in shorts.items():
+        if ccy == 'USD':
+            closing_price = price_lookup(pos['code_ref'], wd.previous_day(report_date))
+        else:
+            closing_price = f'=INDEX(closing_price!A:C,MATCH(C{r},closing_price!A:A,),3)'
+
+        cols = {
+            'A': pos['stock_name'],
+            'B': code,
+            'C': pos['yahoo_ticker'],
+            'D': pos['shares'] or None,
+            'G': None,
+            'I': pos['average'],
+            'J': f'=IF(G{r}>=0,(L{r}/I{r})-1,1-(L{r}/I{r}))*-1',
+            'L': closing_price,
+            'O': pos['transactions'],
+        }
+
+        for col, value in cols.items():
+            cell = ws[f'{col}{r}']
+            cell.value = value
+
+            cell.font = xl_font_color(10, '00FF0000') if col == 'D' else xl_font(10)
+
+            if col == 'A':
+                cell.alignment = xl_align(True, 'left')
+            elif col == 'O':
+                cell.alignment = xl_align(True, 'left', 'top')
+            else:
+                cell.alignment = xl_align(True)
+
+            if col != 'O':
+                cell.border = xl_box()
+
+            if col == 'D':
+                cell.number_format = r'#,##0;\(#,##0\)'
+            elif col == 'I':
+                cell.number_format = '#,##0.0000'
+            elif col == 'L':
+                cell.number_format = '#,##0.00'
+            elif col in ('G', 'J'):
+                cell.number_format = '0.00%'
+
+        ws.merge_cells(f'D{r}:F{r}')
+        ws.merge_cells(f'G{r}:H{r}')
+        ws.merge_cells(f'J{r}:K{r}')
+        ws.merge_cells(f'L{r}:N{r}')
+        ws.merge_cells(f'O{r}:X{r}')
+
+        ws.row_dimensions[r].height = 50
+
+        r += 1
+
+    r += 2
+    return r
+
+
+def _write_position_header(ws, report_date, row, wd, bank_id, ccy, hkd_wd, labels2, merges2):
+    """The two header lines shared by the positions and SHORT POSITION tables: account,
+    CODE, AS OF <previous Friday>, the report date, % Inc. / Dec. and the price date on
+    the first; `labels2` (merged per `merges2`) on the second. Returns the first data row."""
     account_label = _ACCOUNT_LABEL.get(bank_id)
     if isinstance(account_label, dict):
         account_label = account_label.get(ccy)
@@ -640,12 +801,6 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
 
     # Head Line 2
     row2 = row1 + 1
-    labels2 = {
-        'D': 'UNBLOCKED',
-        'E': 'BLOCKED',
-        'G': 'TOTAL SHARES',
-        'I': 'Ave. Price',
-    }
     for col, value in labels2.items():
         cell = ws[f'{col}{row2}']
         cell.value = value
@@ -653,73 +808,11 @@ def _write_positions(ws, positions, report_date, row, wd, price_lookup, bank_id=
         cell.alignment = xl_align(True)
         cell.border = xl_box()
 
-    ws.merge_cells(f'E{row2}:F{row2}')
-    ws.merge_cells(f'G{row2}:H{row2}')
+    for first, last in merges2:
+        ws.merge_cells(f'{first}{row2}:{last}{row2}')
     ws.row_dimensions[row2].height = 16
 
-    # Stock Positions
-    r = row2 + 1
-    for code, pos in positions.items():
-        if ccy == 'USD':
-            trade_date = wd.previous_day(report_date)
-            closing_price = price_lookup(pos['code_ref'], trade_date)
-        else:
-            closing_price = f'=INDEX(closing_price!A:C,MATCH(C{r},closing_price!A:A,),3)'
-
-        cols = {
-            'A': pos['stock_name'],
-            'B': code,
-            'C': pos['yahoo_ticker'],
-            'D': pos['unblocked'],
-            'E': pos['blocked'],
-            'G': f'=D{r}+E{r}',
-            'I': pos['average'],
-            'J': f'=(L{r}/I{r})-1',
-            'L': closing_price,
-            'O': pos.get('transactions'),
-        }
-
-        for col, value in cols.items():
-            cell = ws[f'{col}{r}']
-            if col in ('D', 'E', 'G'):
-                if value:
-                    cell.value = value
-            else:
-                cell.value = value
-
-            cell.font = xl_font(10)
-
-            if col == 'A':
-                cell.alignment = xl_align(True, 'left')
-            elif col == 'O':
-                cell.alignment = xl_align(True, 'left', 'top')
-            else:
-                cell.alignment = xl_align(True)
-
-            if col != 'O':
-                cell.border = xl_box()
-
-            if col in ('D', 'E', 'G'):
-                cell.number_format = '#,##0'
-            elif col == 'I':
-                cell.number_format = '#,##0.0000'
-            elif col == 'L':
-                cell.number_format = '#,##0.00'
-            elif col == 'J':
-                cell.number_format = '0.00%'
-
-        ws.merge_cells(f'E{r}:F{r}')
-        ws.merge_cells(f'G{r}:H{r}')
-        ws.merge_cells(f'J{r}:K{r}')
-        ws.merge_cells(f'L{r}:N{r}')
-        ws.merge_cells(f'O{r}:X{r}')
-
-        ws.row_dimensions[r].height = 50
-
-        r += 1
-
-    r += 2
-    return r
+    return row2 + 1
 
 
 _NS_CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
@@ -933,8 +1026,9 @@ def build_workbook(db, report_date, bank_ids):
                     if r['ccy_id'] == ccy]
             positions = position_records(db, bank_ref, bank_id, ccy, report_date, hkd_wd=hkd_wd)
             positions = inject_accu_only_positions(positions, accu, db, bank_ref, bank_id, report_date)
+            shorts = short_position_records(db, bank_ref, ccy, report_date, hkd_wd=hkd_wd)
 
-            if not (accu or decu or positions):
+            if not (accu or decu or positions or shorts):
                 continue
 
             sheet_name = f'{bank_id}-{ccy}'
@@ -991,6 +1085,8 @@ def build_workbook(db, report_date, bank_ids):
 
             r = _write_positions(ws, positions, report_date, r, wd, price_lookup,
                                   bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
+            r = _write_short_positions(ws, shorts, report_date, r, wd, price_lookup,
+                                       bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
 
             # Through AJ, so the Z:AJ tracking grid prints. A knock-out on the
             # last day of the window has no O:X cell after it to carry the "KO"

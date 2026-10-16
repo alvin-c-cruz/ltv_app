@@ -7,6 +7,8 @@ from openpyxl.styles.borders import Border, Side
 from datetime import datetime
 
 from .trades_done_average import TradesDoneAverage
+from .trades_done_report import SHORT_BOOK_TYPES
+from ..models import get_short_average
 
 HEADER_HEIGHT = 18.75
 DETAIL_HEIGHT = 45
@@ -61,6 +63,15 @@ class DownloadTradesDoneWithGainLoss:
 
         if self.trade_summary.transactions:
             row_num = self.write_transactions(ws, row_num, self.trade_summary.transactions)
+            row_num += 2
+
+        short_transactions = {
+            ccy: {t: by_bank for t, by_bank in types.items() if t in SHORT_BOOK_TYPES}
+            for ccy, types in self.trade_summary.short_transactions.items()
+        }
+        short_transactions = {ccy: types for ccy, types in short_transactions.items() if types}
+        if short_transactions:
+            row_num = self.write_transactions(ws, row_num, short_transactions, short_book=True)
             row_num += 2
 
         if self.trade_summary.transfers:
@@ -145,11 +156,21 @@ class DownloadTradesDoneWithGainLoss:
 
         return row_num
 
-    def write_transactions(self, ws, row_num, transactions):
+    def write_transactions(self, ws, row_num, transactions, short_book=False):
+        """Long-book blocks, or with short_book the short-book blocks: a short sale shows
+        the new short average, as a buy shows its new long average, and a cover's gain is
+        the covered shares at the short average less what the cover cost."""
         for ccy in transactions:
             for transaction_type in transactions[ccy]:
                 if "Transfer" in transaction_type:
                     continue
+
+                if short_book:
+                    show_average = transaction_type == "Sell (Short)"
+                    show_gain = transaction_type == "Buy (Pay Short)"
+                else:
+                    show_average = "Buy" in transaction_type
+                    show_gain = transaction_type == "Sell (Spot)"
 
                 start_row = row_num
                 trade_total = False
@@ -162,10 +183,10 @@ class DownloadTradesDoneWithGainLoss:
                     "H": "Total"
                 }
 
-                if "Buy" in transaction_type:
+                if show_average:
                     cols["J"] = "Average"
-                elif transaction_type == "Sell (Spot)":
-                    cols["L"] = f"Cost {ccy}"
+                elif show_gain:
+                    cols["L"] = f"Short Sale {ccy}" if short_book else f"Cost {ccy}"
                     cols["M"] = f"Lost {ccy}"
                     cols["N"] = "% Lost"
 
@@ -215,19 +236,17 @@ class DownloadTradesDoneWithGainLoss:
                                 "H": f'=E{row_num}*G{row_num}'
                             }
 
-                            if "Buy" in transaction_type:
+                            if show_average:
                                 if i_trade + 1 == trade_count:
-                                    average = TradesDoneAverage(db=self.db, trade_date=self.trade_date,
-                                                                code=code, bank_id=bank_id).average
+                                    average = self.average(trade, short_book)
                                 else:
                                     average = None
 
                                 cols["J"] = average
-                            elif transaction_type == "Sell (Spot)":
-                                average = TradesDoneAverage(db=self.db, trade_date=self.trade_date,
-                                                            code=code, bank_id=bank_id).average
+                            elif show_gain:
+                                average = self.average(trade, short_book)
                                 cols["L"] = f'=G{row_num}*O{row_num}'
-                                cols["M"] = f'=H{row_num}-L{row_num}'
+                                cols["M"] = f'=L{row_num}-H{row_num}' if short_book else f'=H{row_num}-L{row_num}'
                                 cols["N"] = f'=M{row_num}/L{row_num}'
                                 cols["O"] = average
 
@@ -255,11 +274,11 @@ class DownloadTradesDoneWithGainLoss:
                                 elif col == "J":
                                     cell.number_format = "#,##0.0000"
                                 elif col in ("L", "M"):
-                                    if "Sell" in transaction_type:
+                                    if show_gain:
                                         cell.number_format = f"[${ccy}]* #,##0.00; ([${ccy}]* #,##0.00)"
                                         cell.alignment = Alignment(horizontal="right", vertical="center")
                                 elif col in ("N", ):
-                                    if "Sell" in transaction_type:
+                                    if show_gain:
                                         cell.number_format = "0.00%;( 0.00% )"
 
                             if "Buy" in transaction_type:
@@ -275,7 +294,7 @@ class DownloadTradesDoneWithGainLoss:
                     if i != bank_name_count:
                         # Bank divider
                         cols = ["A", "B", "C", "D", "E", "F", "G", "H"]
-                        if "Buy" in transaction_type:
+                        if show_average:
                             cols += ["J", "K"]
 
                         for col in cols:
@@ -283,7 +302,7 @@ class DownloadTradesDoneWithGainLoss:
                             cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor=DIVIDER_COLOR)
 
                         # Cost totals
-                        if transaction_type == "Sell (Spot)":
+                        if show_gain:
                             cols = {
                                 "J": f'=SUM(H{account_start_row}:H{row_num - 1})',
                                 "L": f"=SUBTOTAL(9,L{account_start_row}:L{row_num - 1})",
@@ -314,7 +333,7 @@ class DownloadTradesDoneWithGainLoss:
                         row_num += 1
 
                 # Fix the Gain/Loss Ccy Header
-                if transaction_type == "Sell (Spot)":
+                if show_gain:
                     cell = ws[f"M{start_row}"]
                     cell.value = f'=IF(COUNTIF(M{start_row+1}:M{row_num-1},">=0")<>0,' \
                                  f'IF(COUNTIF(M{start_row+1}:M{row_num-1},"<0")<>0,"Gain / Loss", "Gain"),' \
@@ -334,7 +353,7 @@ class DownloadTradesDoneWithGainLoss:
                         "H": f"=SUM(H{start_row}:H{end_row})"
                     }
 
-                    if transaction_type == "Sell (Spot)":
+                    if show_gain:
                         # SUBTOTAL(9,...) ignores any nested SUBTOTAL cells inside its range,
                         # so this picks up the detail rows only and never double-counts the
                         # per-bank subtotal rows written above.
@@ -365,6 +384,12 @@ class DownloadTradesDoneWithGainLoss:
                 row_num += 2
 
         return row_num
+
+    def average(self, trade, short_book):
+        if short_book:
+            return get_short_average(self.db, trade["bank_ref"], trade["code_ref"], self.trade_date)
+        return TradesDoneAverage(db=self.db, trade_date=self.trade_date,
+                                 code=trade["code"], bank_id=trade["bank_id"]).average
 
     def write_transfers(self, ws, row_num, transfers):
         # Section header

@@ -180,13 +180,13 @@ function setOrientation(o) {
 {# ── BUY / SELL blocks ──────────────────────────────────────────────────── #}
 {% for block in report.blocks %}
 <table>
-    {% if block.is_buy %}
+    {% if block.show_average %}
     <colgroup>
         <col style="width:20%"><col style="width:14%"><col style="width:10%">
         <col style="width:10%"><col style="width:10%"><col style="width:16%">
         <col style="width:10%">
     </colgroup>
-    {% elif block.is_sell_spot %}
+    {% elif block.show_gain %}
     <colgroup>
         <col style="width:14%"><col style="width:10%"><col style="width:9%">
         <col style="width:8%"><col style="width:8%"><col style="width:13%">
@@ -206,10 +206,10 @@ function setOrientation(o) {
             <th class="col">Price</th>
             <th class="col">Shares</th>
             <th class="col">Total</th>
-            {% if block.is_buy %}<th class="col">Average</th>{% endif %}
-            {% if block.is_sell_spot %}
+            {% if block.show_average %}<th class="col">Average</th>{% endif %}
+            {% if block.show_gain %}
             <th class="sec"></th>
-            <th class="col">Cost {{ block.ccy }}</th>
+            <th class="col">{{ block.basis_label }}</th>
             <th class="col">{{ block.gain_header }}</th>
             <th class="col">{{ block.pct_header }}</th>
             {% endif %}
@@ -225,10 +225,10 @@ function setOrientation(o) {
             <td class="ctr">{{ '{:,.4f}'.format(row.price) }}</td>
             <td class="ctr">{{ '{:,.0f}'.format(row.quantity) }}</td>
             <td class="rt">{{ money(row.amount, block.ccy) }}</td>
-            {% if block.is_buy %}
+            {% if block.show_average %}
             <td class="ctr">{% if row.average %}{{ '{:,.4f}'.format(row.average) }}{% endif %}</td>
             {% endif %}
-            {% if block.is_sell_spot %}
+            {% if block.show_gain %}
             <td class="nb"></td>
             <td class="rt">{{ money(row.cost, block.ccy) }}</td>
             <td class="rt">{{ money(row.gain_loss, block.ccy) }}</td>
@@ -256,8 +256,8 @@ function setOrientation(o) {
         <td class="ctr">TOTAL</td>
         <td class="ctr">{{ '{:,.0f}'.format(block.total_shares) }}</td>
         <td class="rt">{{ money(block.total_amount, block.ccy) }}</td>
-        {% if block.is_buy %}<td class="nb"></td>{% endif %}
-        {% if block.is_sell_spot %}<td class="nb"></td><td class="nb"></td><td class="nb"></td><td class="nb"></td>{% endif %}
+        {% if block.show_average %}<td class="nb"></td>{% endif %}
+        {% if block.show_gain %}<td class="nb"></td><td class="nb"></td><td class="nb"></td><td class="nb"></td>{% endif %}
     </tr>
     {% endif %}
     </tbody>

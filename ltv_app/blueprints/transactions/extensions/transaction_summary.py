@@ -15,7 +15,8 @@ class TransactionSummary:
         self.transfers = self.get_transfers(db, trade_date)
 
     def is_empty(self):
-        return False if self.accus or self.decus or self.transactions or self.transfers else True
+        return False if (self.accus or self.decus or self.transactions or self.short_transactions
+                         or self.transfers) else True
 
     def get_transactions(self, db, trade_date):
         sql = """
@@ -98,7 +99,9 @@ class TransactionSummary:
             t.quantity,
             t.price,
             t.brokerage, t.commission, t.foreign_charge, t.stamp_duty, t.misc,
-            t.locked
+            t.locked,
+            t.bank_ref,
+            t.code_ref
           FROM tbl_transaction_short AS t
           INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref
           INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref
@@ -142,7 +145,9 @@ class TransactionSummary:
             self.short_transactions[ccy_id][transaction_type][bank_name][stock].append({
                 "ref_num":    ref_num,
                 "bank_id":    row["bank_id"],
+                "bank_ref":   row["bank_ref"],
                 "code":       row["code"],
+                "code_ref":   row["code_ref"],
                 "quantity":   quantity,
                 "price":      price,
                 "amount":     '{:,.2f}'.format(amt),

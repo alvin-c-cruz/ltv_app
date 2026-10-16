@@ -1,19 +1,27 @@
 from datetime import datetime
 
 from .trades_done_average import TradesDoneAverage
+from ..models import get_short_average
+
+# Short-book types that exist only in tbl_transaction_short. Borrow/Return Shares are
+# double-booked into the long book and already print from there.
+SHORT_BOOK_TYPES = ("Sell (Short)", "Buy (Pay Short)")
 
 
 class TradesDoneReport:
     """Builds the data for the printable Trades Done page — the HTML
     equivalent of DownloadTradesDoneWithGainLoss, with the Excel formulas
-    computed in Python. Gain/loss applies only to Sell (Spot) blocks."""
+    computed in Python. Gain/loss applies to Sell (Spot) blocks and to short
+    covers (Buy (Pay Short)), measured against the short average."""
 
     def __init__(self, db, trade_date, trade_summary):
         self.trade_date = trade_date
         self.date_label = datetime.strptime(trade_date, "%Y-%m-%d").strftime("%B %d, %Y")
         self.accus = self._term_sheet_rows(trade_summary.accus)
         self.decus = self._term_sheet_rows(trade_summary.decus)
-        self.blocks = self._transaction_blocks(db, trade_date, trade_summary.transactions)
+        self.blocks = (self._transaction_blocks(db, trade_date, trade_summary.transactions)
+                       + self._transaction_blocks(db, trade_date, trade_summary.short_transactions,
+                                                  short_book=True))
         self.transfers = self._transfer_rows(db, trade_date, trade_summary.transfers)
 
     def _term_sheet_rows(self, term_sheets):
@@ -22,19 +30,29 @@ class TradesDoneReport:
             rows.extend(term_sheets[ccy])
         return rows
 
-    def _transaction_blocks(self, db, trade_date, transactions):
+    def _transaction_blocks(self, db, trade_date, transactions, short_book=False):
         blocks = []
         for ccy in transactions:
             for transaction_type in transactions[ccy]:
                 if "Transfer" in transaction_type:
                     continue
+                if short_book and transaction_type not in SHORT_BOOK_TYPES:
+                    continue
                 blocks.append(self._build_block(db, trade_date, ccy, transaction_type,
-                                                transactions[ccy][transaction_type]))
+                                                transactions[ccy][transaction_type],
+                                                short_book=short_book))
         return blocks
 
-    def _build_block(self, db, trade_date, ccy, transaction_type, by_bank):
+    def _build_block(self, db, trade_date, ccy, transaction_type, by_bank, short_book=False):
         is_buy = "Buy" in transaction_type or transaction_type == "Borrow Shares"
-        is_sell_spot = transaction_type == "Sell (Spot)"
+        if short_book:
+            # Opening a short shows the new short average, as a buy shows its new long
+            # average; a cover is where a short's gain or loss is realised.
+            show_average = transaction_type == "Sell (Short)"
+            show_gain = transaction_type == "Buy (Pay Short)"
+        else:
+            show_average = is_buy
+            show_gain = transaction_type == "Sell (Spot)"
 
         banks = []
         block_shares = 0.0
@@ -67,17 +85,15 @@ class TradesDoneReport:
                         "pct": None,
                     }
 
-                    if is_buy:
+                    if show_average:
                         if i_trade + 1 == trade_count:
-                            row["average"] = TradesDoneAverage(
-                                db=db, trade_date=trade_date,
-                                code=trade["code"], bank_id=trade["bank_id"]).average
-                    elif is_sell_spot:
-                        average = TradesDoneAverage(
-                            db=db, trade_date=trade_date,
-                            code=trade["code"], bank_id=trade["bank_id"]).average
+                            row["average"] = self._average(db, trade_date, trade, short_book)
+                    elif show_gain:
+                        average = self._average(db, trade_date, trade, short_book)
+                        # Cost of a long sale; for a cover, what the covered shares were
+                        # sold short at
                         cost = quantity * average
-                        gain = amount - cost
+                        gain = cost - amount if short_book else amount - cost
                         row["cost"] = cost
                         row["gain_loss"] = gain
                         row["pct"] = gain / cost if cost else None
@@ -91,7 +107,7 @@ class TradesDoneReport:
                     block_amount += amount
 
             bank = {"bank_name": bank_name, "rows": rows, "subtotal": None}
-            if is_sell_spot and rows:
+            if show_gain and rows:
                 bank["subtotal"] = {
                     "proceeds": bank_proceeds,
                     "cost": bank_cost,
@@ -104,8 +120,9 @@ class TradesDoneReport:
             "ccy": ccy,
             "label": "BUY" if is_buy else "SELL",
             "transaction_type": transaction_type,
-            "is_buy": is_buy,
-            "is_sell_spot": is_sell_spot,
+            "show_average": show_average,
+            "show_gain": show_gain,
+            "basis_label": f"Short Sale {ccy}" if short_book else f"Cost {ccy}",
             "banks": banks,
             "show_total": len(by_bank) > 1 or trade_total,
             "total_shares": block_shares,
@@ -114,7 +131,7 @@ class TradesDoneReport:
             "pct_header": None,
         }
 
-        if is_sell_spot and gain_values:
+        if show_gain and gain_values:
             has_gain = any(v >= 0 for v in gain_values)
             has_loss = any(v < 0 for v in gain_values)
             label = "Gain / Loss" if (has_gain and has_loss) else ("Gain" if has_gain else "Loss")
@@ -122,6 +139,13 @@ class TradesDoneReport:
             block["pct_header"] = f"% {label}"
 
         return block
+
+    @staticmethod
+    def _average(db, trade_date, trade, short_book):
+        if short_book:
+            return get_short_average(db, trade["bank_ref"], trade["code_ref"], trade_date)
+        return TradesDoneAverage(db=db, trade_date=trade_date,
+                                 code=trade["code"], bank_id=trade["bank_id"]).average
 
     def _transfer_rows(self, db, trade_date, transfers):
         rows = []
