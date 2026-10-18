@@ -34,7 +34,7 @@ DEMO_PASSWORD = "demo1234"
 SCHEMA = """
 CREATE TABLE dividends_declaration (id INTEGER NOT NULL, ex_date DATETIME, pay_out_date DATETIME, ccy_ref INTEGER, dividends_per_share FLOAT, comment VARCHAR, PRIMARY KEY (id));
 CREATE TABLE tbl_bank_account (ref_num INTEGER PRIMARY KEY, bank_id TEXT, bank_name TEXT, indicative TEXT, priority INTEGER, transaction_basis text, report_label TEXT, is_active INTEGER DEFAULT 1);
-CREATE TABLE tbl_cash_dividends (ref_num INTEGER PRIMARY KEY AUTOINCREMENT, bank_id INT, stock_id INT, ex_date TIMESTAMP, pay_out TIMESTAMP, nominal REAL, ccy_id INT, dividends_per_share REAL, tax REAL, charges REAL, status text default '', declaration_date TIMESTAMP, record_date TIMESTAMP);
+CREATE TABLE tbl_cash_dividends (ref_num INTEGER PRIMARY KEY AUTOINCREMENT, bank_id INT, stock_id INT, ex_date TIMESTAMP, pay_out TIMESTAMP, nominal REAL, ccy_id INT, dividends_per_share REAL, tax REAL, charges REAL, status text default '', declaration_date TIMESTAMP, record_date TIMESTAMP, fx_rate REAL);
 CREATE TABLE tbl_cash_transfer (ref_num INTEGER PRIMARY KEY, bank_ref INTEGER, counter_bank_ref INTEGER, ccy_ref INTEGER, trade_date TIMESTAMP, value_date TIMESTAMP, amount DOUBLE);
 CREATE TABLE tbl_code (ref_num INTEGER PRIMARY KEY, code TEXT, company_name TEXT, stock_name TEXT, yahoo_ticker TEXT, security_code TEXT, ccy_ref INTEGER);
 CREATE TABLE tbl_commodity_contract (ref_num INTEGER PRIMARY KEY, trade_date timestamp, start_date timestamp, bank_ref integer, code_ref integer, transaction_type text, daily_shares integer, leveraged text, spot real, strike real, ko real, tenor text, frequency text, gtd text, status text);

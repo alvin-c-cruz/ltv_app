@@ -76,6 +76,14 @@ class Form(FlaskForm):
             "class": "form-control"
         }
     )
+    fx_rate = FloatField(
+        validators=[Optional()],
+        label="FX rate to HKD (HKD per 1 unit of Ccy; blank for HKD)",
+        render_kw={
+            "class": "form-control"
+        }
+    )
+
     tax = FloatField(
         label="Tax",
         render_kw={

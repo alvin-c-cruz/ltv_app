@@ -17,6 +17,8 @@ class CashDividends(Model):
     tax: float = None
     charges: float = None
     status: str = None
+    # HKD per 1 unit of ccy, for a dividend paid in a currency other than HKD; None for HKD
+    fx_rate: float = None
 
     def __post_init__(self):
         self.table_name = "tbl_cash_dividends"

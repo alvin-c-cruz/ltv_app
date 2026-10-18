@@ -35,7 +35,8 @@ class CreateExcel:
             tbl_cash_dividends.dividends_per_share,
             tbl_cash_dividends.tax,
             tbl_cash_dividends.charges,
-            tbl_cash_dividends.status
+            tbl_cash_dividends.status,
+            tbl_cash_dividends.fx_rate
         FROM tbl_cash_dividends
         INNER JOIN tbl_code ON tbl_code.ref_num = tbl_cash_dividends.stock_id
         INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_cash_dividends.ccy_id
@@ -49,7 +50,7 @@ class CreateExcel:
         headers = [
             "Pay-Out Date", "Stock Name", "Code", "Quantity", "Declaration Date", "Ex Date",
             "Record Date", "Ccy", "Div/Share", "Gross Amount",
-            "Tax/Charges", "Net Amount", "Status",
+            "Tax/Charges", "Net Amount", "Status", "FX to HKD", "HKD Gross", "HKD Net",
         ]
         for account in self.bank_accounts():
             ws = self.wb.create_sheet(account["bank_id"])
@@ -58,6 +59,8 @@ class CreateExcel:
             for row in self.dividends_for_bank(account["ref_num"]):
                 gross = row["nominal"] * row["dividends_per_share"]
                 net = gross - row["tax"] - row["charges"]
+                # HKD equivalents: the row itself when it is HKD, else at the row's rate
+                fx = 1.0 if row["ccy_code"] == "HKD" else row["fx_rate"]
                 ws.append([
                     row["pay_out"],
                     row["stock_name"],
@@ -72,4 +75,7 @@ class CreateExcel:
                     round(row["tax"] + row["charges"], 2),
                     round(net, 2),
                     row["status"],
+                    row["fx_rate"] or "",
+                    round(gross * fx, 2) if fx else "",
+                    round(net * fx, 2) if fx else "",
                 ])

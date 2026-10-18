@@ -39,7 +39,8 @@ def home():
         tbl_cash_dividends.dividends_per_share,
         tbl_cash_dividends.tax,
         tbl_cash_dividends.charges,
-        tbl_cash_dividends.status
+        tbl_cash_dividends.status,
+        tbl_cash_dividends.fx_rate
     FROM tbl_cash_dividends
     INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_cash_dividends.bank_id
     INNER JOIN tbl_code ON tbl_code.ref_num = tbl_cash_dividends.stock_id
@@ -94,6 +95,7 @@ def add():
             nominal=float(form.nominal.data),
             ccy_id=int(form.ccy_id.data),
             dividends_per_share=float(form.dividends_per_share.data),
+            fx_rate=_optional_float(form.fx_rate.data),
             tax=float(form.tax.data),
             charges=float(form.charges.data),
             status=form.status.data
@@ -128,6 +130,7 @@ def edit(ref_num):
         dividend.nominal = float(form.nominal.data)
         dividend.ccy_id = int(form.ccy_id.data)
         dividend.dividends_per_share = float(form.dividends_per_share.data)
+        dividend.fx_rate = _optional_float(form.fx_rate.data)
         dividend.tax = float(form.tax.data)
         dividend.charges = float(form.charges.data)
         dividend.status = form.status.data
@@ -145,6 +148,7 @@ def edit(ref_num):
         form.nominal.data = dividend.nominal
         form.ccy_id.data = str(dividend.ccy_id)
         form.dividends_per_share.data = dividend.dividends_per_share
+        form.fx_rate.data = dividend.fx_rate
         form.tax.data = dividend.tax
         form.charges.data = dividend.charges
         form.status.data = dividend.status
@@ -165,6 +169,11 @@ def delete(ref_num):
 
     flash("Dividend deleted.")
     return redirect(url_for('dividends.home'))
+
+
+def _optional_float(value):
+    """FloatField with Optional() -> float, or None when left blank."""
+    return float(value) if value not in (None, '') else None
 
 
 def _optional_date(value):
@@ -213,7 +222,8 @@ def create_table():
         dividends_per_share REAL,
         tax REAL,
         charges REAL,
-        status TEXT
+        status TEXT,
+        fx_rate REAL
         )
     ;"""
     db.execute(sql)

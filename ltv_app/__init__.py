@@ -92,6 +92,8 @@ def _ensure_report_indexes(db_path):
 _ADDED_COLUMNS = (
     # Stock-borrowing fee, % per annum, as the bank quotes it with each short sale
     ("tbl_transaction_short", "interest_rate", "REAL"),
+    # HKD per 1 unit of a dividend's currency, for a dividend paid in another currency
+    ("tbl_cash_dividends", "fx_rate", "REAL"),
 )
 
 
