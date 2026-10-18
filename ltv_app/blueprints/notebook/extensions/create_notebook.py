@@ -1,8 +1,12 @@
 from flask import current_app
 import os
+from copy import copy
 from openpyxl import load_workbook
+from openpyxl.formatting.formatting import ConditionalFormattingList
+from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Font, Alignment
 from openpyxl.styles.borders import Border, Side
+from openpyxl.worksheet.cell_range import CellRange
 from datetime import datetime
 
 from ltv_app.blueprints.transactions import TradesDoneAverage
@@ -29,6 +33,9 @@ BORROW_RETURN = ["Return Shares", "Borrow Shares"]
 
 RED_COLOR = "00FF0000"
 
+CLOSING_SHEET = "Closing 4PM"
+CLOSING_CHANGE_RANGE = "E5:F25"
+
 
 class CreateNotebook:
     def __init__(self, db, trade_date, transactions, transfers):
@@ -52,6 +59,9 @@ class CreateNotebook:
         row_num = self.write_transfers(ws, row_num)
 
         ws.print_area = f"A1:Q{row_num}"
+
+        if CLOSING_SHEET in wb.sheetnames:
+            colour_closing_changes(wb[CLOSING_SHEET])
 
         wb.save(self.filename)
         wb.close()
@@ -781,6 +791,30 @@ class CreateNotebook:
 
         counter += 1
         return row_num, counter, cell_reference
+
+
+def colour_closing_changes(ws):
+    # Change columns: green above 0, red below, automatic (black) at 0. The template's
+    # own rules for this range never load (openpyxl discards the block over a malformed
+    # colour scale), leaving its fixed green font on every figure, so set them here.
+    for row in ws[CLOSING_CHANGE_RANGE]:
+        for cell in row:
+            font = copy(cell.font)
+            font.color = None
+            cell.font = font
+
+    target = CellRange(CLOSING_CHANGE_RANGE)
+    kept = ConditionalFormattingList()
+    for cf in ws.conditional_formatting:
+        if all(CellRange(r.coord).isdisjoint(target) for r in cf.sqref.ranges):
+            for rule in cf.rules:
+                kept.add(str(cf.sqref), rule)
+    ws.conditional_formatting = kept
+
+    ws.conditional_formatting.add(CLOSING_CHANGE_RANGE, CellIsRule(
+        operator="greaterThan", formula=["0"], font=Font(color="FF00B050")))
+    ws.conditional_formatting.add(CLOSING_CHANGE_RANGE, CellIsRule(
+        operator="lessThan", formula=["0"], font=Font(color="FFFF0000")))
 
 
 def border_line(ws, row_num):
