@@ -39,21 +39,18 @@ class WorkingDay:
 
 
 def position_start_date(report_date: date, hkd_wd: 'WorkingDay') -> date:
-    """Port of LTV_Stocks.__init__'s self.start_date (ltv_stocks2.py ~121-123):
-    walk back via the **HKD** working day (regardless of the sheet's own currency)
-    until landing on a Monday. This is also the balance-snapshot date used by
-    Gather_Info/stock_position (ltv_stocks2.py:33), not just a header label.
+    """Port of LTV_Stocks.__init__'s self.start_date (ltv_stocks2.py ~121-123): the
+    Monday of report_date's own week. The AS-OF / beginning-balance date is
+    `hkd_wd.previous_day()` of it, which the callers take -- the last HKD working
+    day before the week opens.
 
-    BUG FIX: if report_date is ITSELF a non-holiday Monday, it already IS the
-    correct same-week Monday -- return it directly. Without this special case,
-    the walk-back-then-find-Monday loop below unconditionally steps back one
-    banking day first (to the prior Friday) and then keeps walking to "a
-    Monday", landing a full week early. Every other report_date (any
-    non-Monday weekday) is unaffected -- the existing walk-back-then-find-
-    Monday behavior already lands on that same week's Monday correctly."""
-    if report_date.isoweekday() == 1 and not hkd_wd.is_holiday(report_date):
-        return report_date
-    d = hkd_wd.previous_day(report_date)
-    while d.isoweekday() != 1:
-        d = hkd_wd.previous_day(d)
-    return d
+    BUG FIX (diverges from legacy, 2026-10-20): the legacy walked back HKD working
+    days until it landed on a Monday. A holiday Monday is never landed on, so a
+    report in a week that opens on one (Mon 2026-10-19, Chung Yeung observed;
+    Easter Monday 2026-04-06) went back to the previous week's Monday: the
+    20 Oct report showed balances AS OF 9 Oct, and the 12-16 Oct trades were in
+    neither those balances nor the narrative, which starts at the calendar
+    Monday. The calendar Monday is the same day the walk-back reached in every
+    other week, including the earlier fix for a report dated a working Monday.
+    `hkd_wd` is no longer needed here; the parameter stays for the callers."""
+    return report_date - timedelta(days=report_date.isoweekday() - 1)

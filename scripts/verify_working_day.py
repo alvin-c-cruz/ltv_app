@@ -71,6 +71,35 @@ def main():
             position_start_date(date(2026, 7, 8), hkd_wd),
             date(2026, 7, 6),
         )
+
+        # Case D (holiday Monday): Mon 2026-10-19 is an HKD holiday (Chung Yeung
+        # observed). A Tuesday report must still start that week, AS OF the Friday
+        # before it -- not walk past the holiday into the previous week's Monday.
+        ok &= _case(
+            "D position_start_date(Tue 2026-10-20)",
+            position_start_date(date(2026, 10, 20), hkd_wd),
+            date(2026, 10, 19),
+        )
+        ok &= _case(
+            "D2 previous_day(start_date) = AS-OF/beginning_date",
+            hkd_wd.previous_day(position_start_date(date(2026, 10, 20), hkd_wd)),
+            date(2026, 10, 16),
+        )
+
+        # Case E: a report dated the holiday Monday itself.
+        ok &= _case(
+            "E position_start_date(Mon 2026-10-19, holiday)",
+            position_start_date(date(2026, 10, 19), hkd_wd),
+            date(2026, 10, 19),
+        )
+
+        # Case F: Easter 2026 -- Good Friday 3 Apr, Sat 4 Apr, Mon 6 and Tue 7 Apr
+        # are all HKD holidays. A Wednesday report starts Mon 6 Apr, AS OF Thu 2 Apr.
+        ok &= _case(
+            "F previous_day(position_start_date(Wed 2026-04-08))",
+            hkd_wd.previous_day(position_start_date(date(2026, 4, 8), hkd_wd)),
+            date(2026, 4, 2),
+        )
     finally:
         ctx.pop()
 

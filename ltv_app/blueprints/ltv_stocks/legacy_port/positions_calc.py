@@ -49,8 +49,8 @@ def narrative_week_start(report_date: date) -> date:
     one place so those two windows cannot drift apart -- a code that would print
     a narrative but gets no row is exactly the bug the second caller fixes.
 
-    Deliberately the *calendar* Monday, not position_start_date(); see
-    _transactions_narrative for why."""
+    position_start_date() returns this same Monday since 2026-10-20; before that
+    it walked back past a holiday Monday into the previous week."""
     return report_date - timedelta(days=report_date.isoweekday() - 1)
 
 
@@ -60,11 +60,9 @@ def _transactions_narrative(db, bank_ref, code_ref, report_date):
 
     Enhancement over the legacy get_ranged_transactions and the original port, both
     of which showed only report_date's trades (`WHERE trade_date == report_date`).
-    The window starts at the *calendar* Monday of report_date's week -- deliberately
-    NOT position_start_date(), which walks back a working day first and so returns
-    the *prior* week's Monday when report_date is itself a Monday (that would wrongly
-    fold the previous week into a Monday report). When the week's only trades fall on
-    report_date, output is identical to the old single-date narrative.
+    The window starts at the *calendar* Monday of report_date's week, so it begins
+    the day after the AS-OF date of the balance beside it. When the week's only
+    trades fall on report_date, output is identical to the old single-date narrative.
 
     Format: the first trade is `(m/d) Type qty @ price`; every later trade is
     prefixed with `+ ` / `- ` (add- vs subtract-type) and, when the trade day
@@ -226,8 +224,8 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
     AS-OF date or traded there during the reported week (see the query below).
 
     NOTE (ltv_stocks2.py:33): Gather_Info snapshots the balance/blocked/average as
-    of `start_date` -- the **HKD**-working-day walk-back to the current-week's
-    Monday (`position_start_date`) -- not `report_date` itself. Only the
+    of `start_date` -- the current week's Monday (`position_start_date`) -- not
+    `report_date` itself. Only the
     `transactions` narrative column is computed as of the literal `report_date`
     (`get_ranged_transactions`). `hkd_wd` lets the caller reuse one HKD
     `WorkingDay` across sheets; defaults to a fresh one scoped to this call.
@@ -267,9 +265,9 @@ def position_records(db, bank_ref, bank_id, ccy_id, report_date: date, hkd_wd=No
     # is what the AS-OF column is asking for and is already how
     # inject_accu_only_positions renders an ACCU-only code.
     #
-    # The two CASE windows cannot overlap: beginning_date < start_date <=
-    # week_start for every report_date, since position_start_date() never walks
-    # forward past its own week's Monday.
+    # The two CASE windows cannot overlap: beginning_date < start_date ==
+    # week_start for every report_date. No HKD working day falls between them:
+    # beginning_date is the last HKD working day before week_start.
     # HAVING spells both aggregates out again rather than reusing the SELECT
     # aliases: `tbl_transaction` has its own `balance` column, and a bare name in
     # HAVING binds to the table column in preference to a result alias -- so
