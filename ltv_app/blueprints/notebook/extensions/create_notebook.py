@@ -288,6 +288,26 @@ class CreateNotebook:
         except (TypeError, IndexError):
             return 0
 
+    def _balance_before_transfers(self, bank_name, code):
+        # Day-opening balance plus the day's non-transfer rows of this (bank, stock):
+        # the long balance the trades section leaves, which the transfers start from.
+        row = self.db.execute(
+            "SELECT SUM(tbl_transaction.quantity) AS balance "
+            "FROM tbl_transaction "
+            "INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_transaction.bank_ref "
+            "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_transaction.code_ref "
+            "WHERE tbl_bank_account.bank_name = ? "
+            "  AND tbl_code.code = ? "
+            "  AND tbl_transaction.trade_date = ? "
+            "  AND tbl_transaction.transaction_type NOT IN ('Transfer-Out', 'Transfer-In')",
+            (bank_name, code, self.trade_date)
+        ).fetchone()
+        try:
+            same_day = int(row[0]) if row and row[0] is not None else 0
+        except (TypeError, IndexError):
+            same_day = 0
+        return self._opening_balance(bank_name, code) + same_day
+
     def _opening_short_balance(self, bank_name, code):
         row = self.db.execute(
             "SELECT SUM(tbl_transaction_short.quantity) AS balance "
@@ -460,9 +480,9 @@ class CreateNotebook:
         row_num += 1
 
         counter = 1
-        # Running balances per (account, code): each transfer's opening carries
-        # from the prior same-day transfer of that stock in that account, rather
-        # than re-reading the day-opening balance every time.
+        # Running balances per (account, code): the first transfer of a stock in
+        # an account opens after that day's trades of it (printed above this
+        # section), and each later one carries from the prior same-day transfer.
         running = {}
         for pair in self.transfers:
             out_bank   = pair['out_bank']
@@ -473,9 +493,9 @@ class CreateNotebook:
             qty        = int(pair['quantity'])
 
             if (out_bank, code) not in running:
-                running[(out_bank, code)] = self._opening_balance(out_bank, code)
+                running[(out_bank, code)] = self._balance_before_transfers(out_bank, code)
             if (in_bank, code) not in running:
-                running[(in_bank, code)] = self._opening_balance(in_bank, code)
+                running[(in_bank, code)] = self._balance_before_transfers(in_bank, code)
             opening_out = running[(out_bank, code)]
             opening_in  = running[(in_bank, code)]
 
