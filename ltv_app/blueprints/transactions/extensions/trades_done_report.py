@@ -89,7 +89,7 @@ class TradesDoneReport:
                         if i_trade + 1 == trade_count:
                             row["average"] = self._average(db, trade_date, trade, short_book)
                     elif show_gain:
-                        average = self._average(db, trade_date, trade, short_book)
+                        average = self._average(db, trade_date, trade, short_book, cover=True)
                         # Cost of a long sale; for a cover, what the covered shares were
                         # sold short at
                         cost = quantity * average
@@ -141,9 +141,12 @@ class TradesDoneReport:
         return block
 
     @staticmethod
-    def _average(db, trade_date, trade, short_book):
+    def _average(db, trade_date, trade, short_book, cover=False):
         if short_book:
-            return get_short_average(db, trade["bank_ref"], trade["code_ref"], trade_date)
+            # A cover is measured against the short it closes -- the average carried
+            # just before it -- not the day's closing average after a later short sale.
+            return get_short_average(db, trade["bank_ref"], trade["code_ref"], trade_date,
+                                     before_ref=trade["ref_num"] if cover else None)
         return TradesDoneAverage(db=db, trade_date=trade_date,
                                  code=trade["code"], bank_id=trade["bank_id"]).average
 

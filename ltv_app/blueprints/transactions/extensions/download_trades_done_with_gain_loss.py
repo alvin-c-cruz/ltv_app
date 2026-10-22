@@ -373,7 +373,7 @@ class DownloadTradesDoneWithGainLoss:
 
                                 cols["J"] = average
                             elif show_gain:
-                                average = self.average(trade, short_book)
+                                average = self.average(trade, short_book, cover=True)
                                 cols["L"] = f'=G{row_num}*O{row_num}'
                                 cols["M"] = f'=L{row_num}-H{row_num}' if short_book else f'=H{row_num}-L{row_num}'
                                 cols["N"] = f'=M{row_num}/L{row_num}'
@@ -516,9 +516,12 @@ class DownloadTradesDoneWithGainLoss:
 
         return row_num
 
-    def average(self, trade, short_book):
+    def average(self, trade, short_book, cover=False):
         if short_book:
-            return get_short_average(self.db, trade["bank_ref"], trade["code_ref"], self.trade_date)
+            # A cover is measured against the short it closes -- the average carried
+            # just before it -- not the day's closing average after a later short sale.
+            return get_short_average(self.db, trade["bank_ref"], trade["code_ref"], self.trade_date,
+                                     before_ref=trade["ref_num"] if cover else None)
         return TradesDoneAverage(db=self.db, trade_date=self.trade_date,
                                  code=trade["code"], bank_id=trade["bank_id"]).average
 

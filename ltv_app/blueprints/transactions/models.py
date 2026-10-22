@@ -196,18 +196,25 @@ def accumulate_short_position(rows):
     return balance, cost_to_date
 
 
-def get_short_average(db, bank_ref, code_ref, trade_date):
+def get_short_average(db, bank_ref, code_ref, trade_date, before_ref=None):
     """Average short-sale price (cost / shares short) of a short-book position, counting
     every row traded up to trade_date. A cover removes a proportional slice of cost, so
     it leaves the average unchanged; a position covered to zero keeps the average it was
-    last carried at, which is what a cover's gain is measured against. None when the
-    account never went short in the stock."""
+    last carried at. None when the account never went short in the stock.
+
+    With before_ref, only the rows before that row of trade_date count: the average a
+    cover is measured against. When a short sale follows a cover on the same day
+    (first on 2026-10-22), the day's closing average is not the cover's basis."""
+    if before_ref is None:
+        where, args = "trade_date<=?", (trade_date,)
+    else:
+        where, args = "(trade_date<? OR (trade_date=? AND ref_num<?))", (trade_date, trade_date, before_ref)
     rows = db.execute(
         "SELECT quantity, price, brokerage, commission, foreign_charge, stamp_duty, misc "
         "FROM tbl_transaction_short "
-        "WHERE bank_ref=? AND code_ref=? AND trade_date<=? "
+        f"WHERE bank_ref=? AND code_ref=? AND {where} "
         "ORDER BY trade_date, ref_num",
-        (bank_ref, code_ref, trade_date)
+        (bank_ref, code_ref) + args
     ).fetchall()
 
     balance = 0
