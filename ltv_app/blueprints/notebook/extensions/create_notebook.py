@@ -10,6 +10,7 @@ from openpyxl.worksheet.cell_range import CellRange
 from datetime import datetime
 
 from ltv_app.blueprints.transactions import TradesDoneAverage
+from ltv_app.blueprints.transactions.models import get_short_average
 
 CARD_ROW_HEIGHT = 12
 ROW_HEIGHT = 17.25
@@ -341,7 +342,8 @@ class CreateNotebook:
     def write_short_trades(self, ws, row_num, counter, trades, running_short):
         # Sell (Short) / Buy (Pay Short) for one (bank, stock): the spot-trade
         # lines, then a balance block on the short book (opening short balance,
-        # +/- each trade, remaining) -- no Average, as in the hand-written blocks.
+        # +/- each trade, remaining), and after a short sale the short average
+        # beside it, as Alvin wrote it on the 22 Oct notebook.
         transaction_reference = []
         for transaction_type in SHORT_TRANSACTIONS:
             if transaction_type in trades:
@@ -403,6 +405,20 @@ class CreateNotebook:
         cell.border = Border(top=Side(style='thin'))
         cell.number_format = "#,##0_ ;[Red](#,##0)"
         ws.merge_cells(f"G{row_num}:J{row_num}")
+
+        # Short average -- only after a short sale, as the long Average shows only
+        # after a buy, and only while a short remains
+        if "Sell (Short)" in trades and running_short < 0:
+            row = trades["Sell (Short)"][0]
+            average = get_short_average(self.db, row["bank_ref"], row["code_ref"], self.trade_date)
+            for r, value in ((row_num - 2, "Short"), (row_num - 1, "Average"), (row_num, average)):
+                cell = ws[f"L{r}"]
+                cell.value = value
+                cell.alignment = Alignment(horizontal="center")
+                cell.font = Font(size=13)
+                ws.merge_cells(f"L{r}:N{r}")
+            ws[f"L{row_num}"].number_format = "#,##0.0000"
+
         row_num += 1
         ws.row_dimensions[row_num].height = ROW_HEIGHT
         border_line(ws, row_num)

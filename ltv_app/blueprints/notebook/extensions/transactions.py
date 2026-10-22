@@ -36,7 +36,9 @@ SHORT_SQL = "SELECT " \
             "   tbl_transaction_short.quantity, " \
             "   tbl_transaction_short.price, " \
             "   tbl_transaction_short.spot, " \
-            "   tbl_transaction_short.ko " \
+            "   tbl_transaction_short.ko, " \
+            "   tbl_transaction_short.bank_ref, " \
+            "   tbl_transaction_short.code_ref " \
             "FROM tbl_transaction_short " \
             "INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_transaction_short.bank_ref " \
             "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_transaction_short.code_ref " \

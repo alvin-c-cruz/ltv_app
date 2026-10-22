@@ -8,9 +8,11 @@ Short) never printed and had to be typed in by hand. Found 2026-10-22 on the
 For every date with a Sell (Short) or Buy (Pay Short), each such row must
 print under its own account with Alvin's label, its quantity and its price,
 and the (account, stock) short block must open at the short balance before
-the date and end at the balance after that day's short-book trades. Expected
-figures are derived from the database at runtime; failures never print a
-balance -- the repository is public.
+the date and end at the balance after that day's short-book trades. After a
+short sale that leaves a short, the block carries "Short / Average / <short
+average>" in L, as Alvin added it by hand on the 22 Oct 2026 notebook; any
+other block has none. Expected figures are derived from the database at
+runtime; failures never print a balance -- the repository is public.
 
 Each notebook is generated into instance/temp/ exactly as the /notebook/ route
 does; a file this script created is removed after it is read. The database is
@@ -57,6 +59,31 @@ def _short_dates(db):
     return [str(r[0])[:10] for r in rows]
 
 
+def _short_average(db, bank_name, code, trade_date):
+    # Replays the short book in ledger order: a short sale adds its net proceeds,
+    # a cover takes off its share of the cost, leaving the average unchanged.
+    rows = db.execute(
+        "SELECT s.quantity, s.price, s.brokerage, s.commission, s.foreign_charge, s.stamp_duty, s.misc "
+        "FROM tbl_transaction_short s "
+        "INNER JOIN tbl_bank_account b ON b.ref_num = s.bank_ref "
+        "INNER JOIN tbl_code c ON c.ref_num = s.code_ref "
+        "WHERE b.bank_name = ? AND c.code = ? AND s.trade_date <= ? ORDER BY s.trade_date, s.ref_num",
+        (bank_name, code, trade_date),
+    ).fetchall()
+    balance, cost, average = 0, 0.0, None
+    for r in rows:
+        qty = r["quantity"]
+        charges = sum(r[k] or 0 for k in ("brokerage", "commission", "foreign_charge", "stamp_duty", "misc"))
+        if qty < 0 and balance <= 0:
+            cost += -qty * r["price"] - charges
+        elif qty > 0 and balance < 0:
+            cost = cost * (1 - qty / -balance) if -balance > qty else 0.0
+        balance += qty
+        if balance < 0:
+            average = cost / -balance
+    return average
+
+
 def _expected(db, trade_date):
     rows = db.execute(
         "SELECT s.ref_num, b.bank_name, cy.ccy_id, c.code, c.stock_name, "
@@ -83,9 +110,14 @@ def _expected(db, trade_date):
             ).fetchone()[0]
             before = int(before) if before is not None else 0
             header = r["bank_name"] if r["ccy_id"] == "HKD" else f"{r['bank_name']} ({r['ccy_id']})"
-            blocks[key] = {"header": header, "before": before, "after": before, "rows": []}
+            blocks[key] = {"header": header, "before": before, "after": before, "rows": [],
+                           "short_sale": False}
         blocks[key]["after"] += int(r["quantity"])
         blocks[key]["rows"].append(r)
+        blocks[key]["short_sale"] |= r["transaction_type"] == "Sell (Short)"
+    for (bank_name, code), block in blocks.items():
+        block["average"] = (_short_average(db, bank_name, code, trade_date)
+                            if block["short_sale"] and block["after"] < 0 else None)
     return blocks
 
 
@@ -132,6 +164,7 @@ def _check_date(db, trade_date):
         ws, titles, results = _printed(path)
 
         ok = True
+        averaged = []
         for (bank_name, code), block in blocks.items():
             last = None
             for row in block["rows"]:
@@ -159,10 +192,21 @@ def _check_date(db, trade_date):
             if closing != block["after"]:
                 print(f"  {trade_date} {code}: FAIL  block does not end at the short balance after the date")
                 ok = False
+            printed = [ws[f"L{result_row + i}"].value for i in (-2, -1, 0)]
+            if block["average"] is None:
+                if any(v is not None for v in printed):
+                    print(f"  {trade_date} {code}: FAIL  short average printed without a short sale leaving a short")
+                    ok = False
+            elif (printed[:2] != ["Short", "Average"] or not isinstance(printed[2], (int, float))
+                  or abs(printed[2] - block["average"]) > 1e-6):
+                print(f"  {trade_date} {code}: FAIL  short average missing or not the ledger's")
+                ok = False
+            else:
+                averaged.append(trade_date)
     finally:
         if path and os.path.exists(path):
             os.remove(path)
-    return ok, sum(len(b["rows"]) for b in blocks.values())
+    return ok, sum(len(b["rows"]) for b in blocks.values()), len(averaged)
 
 
 def main():
@@ -177,12 +221,13 @@ def main():
         if "--all" not in sys.argv:
             dates = dates[-RECENT:]
 
-        ok, rows = True, 0
+        ok, rows, averages = True, 0, 0
         for d in dates:
-            date_ok, n = _check_date(db, d)
+            date_ok, n, a = _check_date(db, d)
             ok &= date_ok
             rows += n
-        print(f"  {len(dates)} short-book date(s), {rows} short trade(s) checked")
+            averages += a
+        print(f"  {len(dates)} short-book date(s), {rows} short trade(s) checked, {averages} short average(s)")
     finally:
         ctx.pop()
 
