@@ -6,7 +6,7 @@ from ...tz import ph_today, add_business_days
 from .models import Transaction, TransactionShort
 from ...form_fields import FormFields
 from .. auth import login_required
-from .extensions import TransactionSummary, DownloadTradesDoneWithGainLoss, TradesDoneReport
+from .extensions import TransactionSummary, DownloadTradesDoneWithGainLoss
 
 bp = Blueprint('transactions', __name__, template_folder='pages', url_prefix='/trades')
 
@@ -621,19 +621,6 @@ def average_price(bank_ref, code_ref):
         'average': result.average if result.average else None,
         'balance': result.balance,
     })
-
-
-@bp.route('/print_with_gain_loss/<trade_date>', methods=['GET'])
-@login_required
-def print_with_gain_loss(trade_date):
-    from ..database import get_db
-    db = get_db()
-    summary = TransactionSummary(db, trade_date)
-    if summary.is_empty():
-        flash("No data to print.", category="error")
-        return redirect(url_for("transactions.home"))
-    report = TradesDoneReport(db=db, trade_date=trade_date, trade_summary=summary)
-    return render_template('transactions/print_trades_done.html', report=report)
 
 
 @bp.route('/borrow_return', methods=['GET', 'POST'])

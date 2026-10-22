@@ -2,15 +2,15 @@
 
 A cover (Buy (Pay Short)) realises the gain on shares sold short earlier, so
 its basis is the short average carried just before it. The Trades Done Excel
-and the printable Trades Done page used the day's closing average instead,
+(and the printable Trades Done page, retired 2026-10-23) used the day's
+closing average instead,
 which differs only when a short sale follows the cover on the same day: on
 2026-10-22 a cover closed an earlier short and a new short sale followed, and
 the cover was measured against the new sale's price.
 
-For every date with a cover, every cover row in both reports must carry, as
-its average (Excel column O) and its cost / quantity (printable page), the
-average from replaying the short book in ledger order (trade date, ref_num)
-up to the row before it. Expected figures come from the database at runtime;
+For every date with a cover, every cover row in the Excel must carry, as its
+average (column O), the average from replaying the short book in ledger order
+(trade date, ref_num) up to the row before it. Expected figures come from the database at runtime;
 failures never print an amount -- the repository is public.
 
 Run:   .venv/Scripts/python.exe scripts/verify_short_cover_gain.py [db_path]
@@ -28,7 +28,7 @@ from openpyxl import load_workbook
 
 from ltv_app import create_app
 from ltv_app.blueprints.database.views import get_db
-from ltv_app.blueprints.transactions.extensions import TransactionSummary, TradesDoneReport
+from ltv_app.blueprints.transactions.extensions import TransactionSummary
 from ltv_app.blueprints.transactions.extensions import download_trades_done_with_gain_loss as excel
 
 DB_PATH = os.path.join(SERVER, "instance", "LTV Stocks.db")
@@ -83,7 +83,7 @@ def _expected(db, trade_date):
         key = (r["bank_ref"], r["code_ref"])
         if r["transaction_type"] == COVER:
             stock = f"{r['stock_name']} ({r['code']})"
-            # Both reports carry the price at 4 dp (TransactionSummary formats it)
+            # The Excel carries the price at 4 dp (TransactionSummary formats it)
             expected[(r["bank_name"], stock, abs(r["quantity"]), round(r["price"], 4))].append(
                 _average_before(db, r["bank_ref"], r["code_ref"], trade_date, r["ref_num"]))
             covered.add(key)
@@ -112,17 +112,6 @@ def _excel_averages(db, trade_date, summary):
     return got
 
 
-def _report_averages(db, trade_date, summary):
-    got = defaultdict(list)
-    for block in TradesDoneReport(db, trade_date, summary).blocks:
-        for bank in block.get("banks", []):
-            for row in bank["rows"]:
-                if row["transaction_type"] == COVER:
-                    got[(row["bank_name"], row["stock_name"], row["quantity"], row["price"])].append(
-                        row["cost"] / row["quantity"])
-    return got
-
-
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     db_path = sys.argv[1] if len(sys.argv) > 1 else DB_PATH
@@ -142,13 +131,10 @@ def main():
             if not _same(_excel_averages(db, d, summary), expected):
                 print(f"  {d}: FAIL  Trades Done Excel: a cover's average is not the short it closes")
                 ok = False
-            if not _same(_report_averages(db, d, summary), expected):
-                print(f"  {d}: FAIL  printable Trades Done: a cover's cost is not the short it closes")
-                ok = False
         if not dates:
             print("  FAIL: no date with a short cover")
             ok = False
-        print(f"  {len(dates)} cover date(s), {covers} cover(s) checked in both reports")
+        print(f"  {len(dates)} cover date(s), {covers} cover(s) checked")
         print(f"  short sale after a same-day cover: {', '.join(sale_after_cover) or 'none in this database'}")
     finally:
         excel.fetch_hkd_rate = real_feed

@@ -10,7 +10,6 @@ from openpyxl.styles.borders import Border, Side
 from datetime import datetime
 
 from .trades_done_average import TradesDoneAverage
-from .trades_done_report import SHORT_BOOK_TYPES
 from ..models import get_short_average
 
 HEADER_HEIGHT = 18.75
@@ -18,6 +17,10 @@ DETAIL_HEIGHT = 45
 DIVIDER_HEIGHT = 18.75
 DIVIDER_COLOR = "00000000"
 RATE_COLOR = "00FFFF99"
+
+# Short-book types that exist only in tbl_transaction_short. Borrow/Return Shares are
+# double-booked into the long book and already print from there.
+SHORT_BOOK_TYPES = ("Sell (Short)", "Buy (Pay Short)")
 
 CODE_TO_SHRINK = ('0857', '0981', '0939', '1099', '1288', '2196', '3993')
 
