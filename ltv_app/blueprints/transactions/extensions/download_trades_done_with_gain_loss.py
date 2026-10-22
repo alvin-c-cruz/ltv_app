@@ -1,6 +1,9 @@
 from flask import current_app
+import json
 import os
+from urllib.request import urlopen
 from openpyxl import load_workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Font, Alignment
 from openpyxl.styles.fills import PatternFill, Color
 from openpyxl.styles.borders import Border, Side
@@ -14,8 +17,16 @@ HEADER_HEIGHT = 18.75
 DETAIL_HEIGHT = 45
 DIVIDER_HEIGHT = 18.75
 DIVIDER_COLOR = "00000000"
+RATE_COLOR = "00FFFF99"
 
 CODE_TO_SHRINK = ('0857', '0981', '0939', '1099', '1288', '2196', '3993')
+
+HKD_FORMAT = "[$HKD]* #,##0.00; ([$HKD]* #,##0.00)"
+PERCENT_FORMAT = "0.00%;( 0.00% )"
+
+# Free daily rates, no key; reachable from PythonAnywhere. HKD per one unit of the currency.
+FX_URL = "https://open.er-api.com/v6/latest/{ccy}"
+FX_TIMEOUT = 5
 
 thin_border = Border(left=Side(style='thin'),
                      right=Side(style='thin'),
@@ -23,6 +34,21 @@ thin_border = Border(left=Side(style='thin'),
                      bottom=Side(style='thin'))
 
 # double_rule_border = Border(bottom=Side(style='double'))
+
+
+def fetch_hkd_rate(ccy):
+    """Today's HKD for one unit of ccy and the feed's update time, or None when
+    the feed cannot be read -- the rate is then left for the user to enter."""
+    try:
+        with urlopen(FX_URL.format(ccy=ccy), timeout=FX_TIMEOUT) as response:
+            data = json.load(response)
+        rate = float(data["rates"]["HKD"])
+        if data.get("result") != "success" or rate <= 0:
+            raise ValueError(f"unusable reply: result={data.get('result')!r}, HKD={rate}")
+        return round(rate, 4), data.get("time_last_update_utc", "")
+    except Exception as e:
+        current_app.logger.warning("No %s/HKD rate from %s: %s", ccy, FX_URL.format(ccy=ccy), e)
+        return None
 
 
 class DownloadTradesDoneWithGainLoss:
@@ -61,18 +87,13 @@ class DownloadTradesDoneWithGainLoss:
             row_num = self.write_term_sheet(ws, row_num, self.trade_summary.decus, "DECU")
             row_num += 2
 
-        if self.trade_summary.transactions:
-            row_num = self.write_transactions(ws, row_num, self.trade_summary.transactions)
-            row_num += 2
-
         short_transactions = {
             ccy: {t: by_bank for t, by_bank in types.items() if t in SHORT_BOOK_TYPES}
             for ccy, types in self.trade_summary.short_transactions.items()
         }
         short_transactions = {ccy: types for ccy, types in short_transactions.items() if types}
-        if short_transactions:
-            row_num = self.write_transactions(ws, row_num, short_transactions, short_book=True)
-            row_num += 2
+        if self.trade_summary.transactions or short_transactions:
+            row_num = self.write_currencies(ws, row_num, self.trade_summary.transactions, short_transactions)
 
         if self.trade_summary.transfers:
             row_num = self.write_transfers(ws, row_num, self.trade_summary.transfers)
@@ -155,6 +176,114 @@ class DownloadTradesDoneWithGainLoss:
                 row_num += 1
 
         return row_num
+
+    def write_currencies(self, ws, row_num, transactions, short_transactions):
+        """Long-book then short-book sections, one currency at a time, HKD first.
+
+        When a currency other than HKD has a gain/loss section, its cost and
+        gain/loss are converted to HKD at a rate kept in its own cell (filled
+        from today's feed, typed over by the user), under an HKD sub total, and
+        all of them are added up in HKD at the end. HKD-only days are unchanged."""
+        currencies = self.currency_order(set(transactions) | set(short_transactions))
+        foreign = [ccy for ccy in currencies
+                   if ccy != "HKD" and self.has_gain(ccy, transactions, short_transactions)]
+
+        totals = []
+        self.last_row = row_num
+        for ccy in currencies:
+            first_row = row_num
+            if ccy in transactions:
+                row_num = self.write_transactions(ws, row_num, {ccy: transactions[ccy]})
+                row_num += 2
+            if ccy in short_transactions:
+                row_num = self.write_transactions(ws, row_num, {ccy: short_transactions[ccy]}, short_book=True)
+                row_num += 2
+
+            if not foreign or not self.has_gain(ccy, transactions, short_transactions):
+                continue
+
+            # SUBTOTAL(9,...) skips the bank and TOTAL rows inside the range, so
+            # these add up the currency's detail rows only.
+            last_row = self.last_row
+            cost = f"SUBTOTAL(9,L{first_row}:L{last_row})"
+            gain = f"SUBTOTAL(9,M{first_row}:M{last_row})"
+            if ccy == "HKD":
+                total_row = last_row + 2
+                self.write_label(ws, f"K{total_row}", "HKD Sub Total")
+                self.write_hkd_total(ws, total_row, f"={cost}", f"={gain}")
+            else:
+                total_row = last_row + 1
+                self.write_label(ws, f"J{total_row}", f"{ccy} → HKD")
+                self.write_rate(ws, f"K{total_row}", ccy)
+                self.write_hkd_total(ws, total_row, f"={cost}*$K${total_row}", f"={gain}*$K${total_row}")
+            totals.append((ccy, total_row))
+            self.last_row = total_row
+            row_num = total_row + 2
+
+        if len(totals) > 1:
+            grand_row = self.last_row + 2
+            names = [ccy for ccy, _ in totals]
+            label = ", ".join(names[:-1]) + " and " + names[-1]
+            self.write_label(ws, f"K{grand_row}", f"{label} Grand Total")
+            self.write_hkd_total(ws, grand_row,
+                                 "=" + "+".join(f"L{r}" for _, r in totals),
+                                 "=" + "+".join(f"M{r}" for _, r in totals))
+            self.last_row = grand_row
+            row_num = grand_row + 3
+
+        return row_num
+
+    def currency_order(self, currencies):
+        priority = [row["ccy_id"] for row in self.db.execute("SELECT ccy_id FROM tbl_currency ORDER BY priority")]
+        return sorted(currencies, key=lambda ccy: (ccy != "HKD", priority.index(ccy) if ccy in priority else len(priority)))
+
+    @staticmethod
+    def has_gain(ccy, transactions, short_transactions):
+        # The sections write_transactions gives Cost and Gain / Loss columns.
+        return "Sell (Spot)" in transactions.get(ccy, {}) or "Buy (Pay Short)" in short_transactions.get(ccy, {})
+
+    @staticmethod
+    def write_label(ws, coordinate, label):
+        cell = ws[coordinate]
+        cell.value = label
+        cell.font = Font(size=11, bold=True)
+        cell.alignment = Alignment(horizontal="right", vertical="center")
+
+    @staticmethod
+    def write_rate(ws, coordinate, ccy):
+        # A blank rate would read as 0 and leave a plausible HKD total without the
+        # currency in it; the text makes every total that uses it show #VALUE!.
+        result = fetch_hkd_rate(ccy)
+        cell = ws[coordinate]
+        if result:
+            rate, updated = result
+            cell.value = rate
+            cell.comment = Comment(f"HKD per 1 {ccy}, open.er-api.com, updated {updated}. "
+                                   f"Type over it to change the rate.", "LTV")
+        else:
+            cell.value = "enter rate"
+            cell.comment = Comment(f"No rate could be read from open.er-api.com. "
+                                   f"Type the HKD per 1 {ccy} rate here.", "LTV")
+        cell.number_format = "0.0000"
+        cell.font = Font(size=11, bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+        cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor=Color(RATE_COLOR))
+
+    @staticmethod
+    def write_hkd_total(ws, row_num, cost, gain):
+        for col, value in (("L", cost), ("M", gain), ("N", f"=M{row_num}/L{row_num}")):
+            cell = ws[f"{col}{row_num}"]
+            cell.value = value
+            cell.border = thin_border
+            cell.font = Font(size=11, bold=True)
+            if col == "N":
+                cell.number_format = PERCENT_FORMAT
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.number_format = HKD_FORMAT
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+        ws.row_dimensions[row_num].height = DIVIDER_HEIGHT
 
     def write_transactions(self, ws, row_num, transactions, short_book=False):
         """Long-book blocks, or with short_book the short-book blocks: a short sale shows
@@ -381,6 +510,8 @@ class DownloadTradesDoneWithGainLoss:
                             cell.alignment = Alignment(horizontal="center", vertical="center")
                             cell.font = Font(size=11, bold=True)
 
+                # The last row written: the TOTAL footer, else the last bank divider
+                self.last_row = row_num if (bank_name_count > 1 or trade_total) else row_num - 1
                 row_num += 2
 
         return row_num
