@@ -24,6 +24,32 @@ TRADE_SQL = "SELECT " \
             "   tbl_transaction_type.priority"
 
 
+# Short sales and their covers live in the Short Book. Borrow / Return Shares
+# are double-booked into tbl_transaction and already come in through TRADE_SQL.
+SHORT_SQL = "SELECT " \
+            "   tbl_currency.ccy_id, " \
+            "   tbl_bank_account.bank_id, " \
+            "   tbl_bank_account.bank_name, " \
+            "   tbl_code.stock_name, " \
+            "   tbl_code.code, " \
+            "   tbl_transaction_short.transaction_type, " \
+            "   tbl_transaction_short.quantity, " \
+            "   tbl_transaction_short.price, " \
+            "   tbl_transaction_short.spot, " \
+            "   tbl_transaction_short.ko " \
+            "FROM tbl_transaction_short " \
+            "INNER JOIN tbl_bank_account ON tbl_bank_account.ref_num = tbl_transaction_short.bank_ref " \
+            "INNER JOIN tbl_code ON tbl_code.ref_num = tbl_transaction_short.code_ref " \
+            "INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_code.ccy_ref " \
+            "WHERE tbl_transaction_short.trade_date = ? " \
+            "   AND tbl_transaction_short.transaction_type IN ('Sell (Short)', 'Buy (Pay Short)') " \
+            "ORDER BY " \
+            "   tbl_currency.priority, " \
+            "   tbl_bank_account.priority, " \
+            "   tbl_code.code, " \
+            "   tbl_transaction_short.ref_num"
+
+
 CONTRACT_SQL = "SELECT " \
             "   tbl_currency.ccy_id, " \
             "   tbl_bank_account.bank_id, " \
@@ -55,8 +81,9 @@ def get_transactions(db, trade_date):
 
     contracts = db.execute(CONTRACT_SQL, (trade_date,)).fetchall()
     trades = db.execute(TRADE_SQL, (trade_date,)).fetchall()
+    shorts = db.execute(SHORT_SQL, (trade_date,)).fetchall()
 
-    for group in (trades, contracts):
+    for group in (trades, shorts, contracts):
         for row in group:
             ccy = row["ccy_id"]
             bank_name = row["bank_name"]

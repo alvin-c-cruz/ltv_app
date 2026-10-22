@@ -31,6 +31,17 @@ DERIVATIVES = [
 
 BORROW_RETURN = ["Return Shares", "Borrow Shares"]
 
+# Short Book trades, printed as Alvin wrote them by hand (13 Oct 2026 notebook)
+SHORT_TRANSACTIONS = [
+    "Sell (Short)",
+    "Buy (Pay Short)"
+]
+
+SHORT_LABELS = {
+    "Sell (Short)": "Sell Short (Spot)",
+    "Buy (Pay Short)": "Pay Short (Spot)"
+}
+
 RED_COLOR = "00FF0000"
 
 CLOSING_SHEET = "Closing 4PM"
@@ -250,6 +261,9 @@ class CreateNotebook:
                         # total so a following Borrow/Return begins from it.
                         running_long = shares_remaining
 
+                    row_num, counter, running_short = self.write_short_trades(
+                        ws, row_num, counter, trades, running_short)
+
                     for transaction_type in BORROW_RETURN:
                         if transaction_type in trades:
                             for row in trades[transaction_type]:
@@ -323,6 +337,82 @@ class CreateNotebook:
             return int(row[0]) if row and row[0] is not None else 0
         except (TypeError, IndexError):
             return 0
+
+    def write_short_trades(self, ws, row_num, counter, trades, running_short):
+        # Sell (Short) / Buy (Pay Short) for one (bank, stock): the spot-trade
+        # lines, then a balance block on the short book (opening short balance,
+        # +/- each trade, remaining) -- no Average, as in the hand-written blocks.
+        transaction_reference = []
+        for transaction_type in SHORT_TRANSACTIONS:
+            if transaction_type in trades:
+                for row in trades[transaction_type]:
+                    row_num, counter, cell_reference = self.write_line(ws, row_num, counter, row)
+                    transaction_reference.append((cell_reference, row["quantity"]))
+                    border_line(ws, row_num)
+
+                    row_num += 1
+                    ws.row_dimensions[row_num].height = ROW_HEIGHT
+                    border_line(ws, row_num)
+
+        if not transaction_reference:
+            return row_num, counter, running_short
+
+        row_num -= 1
+        # Short balance beginning
+        balance_formula = f"=G{row_num}"
+        cell = ws[f"G{row_num}"]
+        cell.value = int(running_short)
+        cell.font = Font(size=13)
+        cell.number_format = "#,##0_ ;[Red](#,##0)"
+        ws.merge_cells(f"G{row_num}:J{row_num}")
+        row_num += 1
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        border_line(ws, row_num)
+
+        # Quantities
+        for cell_reference, quantity in transaction_reference:
+            running_short += quantity
+            sign = "+" if quantity >= 0 else "-"
+
+            cell = ws[f"F{row_num}"]
+            cell.value = sign
+            cell.alignment = Alignment(horizontal="right")
+            cell.font = Font(size=13, name="AR JULIAN")
+
+            cell = ws[f"G{row_num}"]
+            cell.value = f"={cell_reference}"
+            cell.font = Font(size=13)
+            cell.number_format = "#,##0_ ;[Red](#,##0)"
+            ws.merge_cells(f"G{row_num}:J{row_num}")
+
+            balance_formula += f"{sign}G{row_num}"
+
+            row_num += 1
+            ws.row_dimensions[row_num].height = ROW_HEIGHT
+            border_line(ws, row_num)
+
+        # Remaining short
+        cell = ws[f"F{row_num}"]
+        cell.value = f'=IF(G{row_num}>=0,"shares","short")'
+        cell.font = Font(size=13)
+        cell.alignment = Alignment(horizontal="right")
+
+        cell = ws[f"G{row_num}"]
+        cell.value = balance_formula
+        cell.font = Font(size=13)
+        cell.border = Border(top=Side(style='thin'))
+        cell.number_format = "#,##0_ ;[Red](#,##0)"
+        ws.merge_cells(f"G{row_num}:J{row_num}")
+        row_num += 1
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        border_line(ws, row_num)
+
+        # Extra line after remaining shares
+        row_num += 1
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+        border_line(ws, row_num)
+
+        return row_num, counter, running_short
 
     def write_borrow_return(self, ws, row_num, counter, row, bank_name, bank_id,
                             prior_long, prior_short):
@@ -653,7 +743,9 @@ class CreateNotebook:
         code = row["code"]
         cell_reference = None
 
-        if transaction_type in STOCK_TRANSACTIONS:
+        if transaction_type in STOCK_TRANSACTIONS or transaction_type in SHORT_TRANSACTIONS:
+            transaction_type = SHORT_LABELS.get(transaction_type, transaction_type)
+
             # Stock line
             cell = ws[f"B{row_num}"]
             cell.value = counter
