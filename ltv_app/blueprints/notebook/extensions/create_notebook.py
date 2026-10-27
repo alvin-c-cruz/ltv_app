@@ -1,4 +1,5 @@
 from flask import current_app
+import math
 import os
 from copy import copy
 from openpyxl import load_workbook
@@ -15,6 +16,14 @@ from ltv_app.blueprints.transactions.models import get_short_average
 CARD_ROW_HEIGHT = 12
 ROW_HEIGHT = 17.25
 ROW_NUM_START = 24
+
+# Alvin prints the notebook on 5.5 x 8.5 paper, ruled to the bottom of the last page.
+# Rows 1-73 fill the first two pages (rows 5-23 are the 12 pt card); each later page
+# holds 32 more rows under the repeated title rows 1:2. His October closing files end
+# their print area on 73, 105, 137 or 169 (BUGS.md 2026-10-26).
+FIRST_PAGES_END = 73
+PAGE_ROWS = 32
+LINE_COLUMNS = "ABCDEFGHIJKLMNOPQ"
 STOCK_TRANSACTIONS = [
     "Buy (Accu)",
     "Buy (Accu-KO)",
@@ -68,9 +77,9 @@ class CreateNotebook:
         self.write_date(ws)
         self.write_stock_card(ws)
         row_num = self.write_transactions(ws=ws, row_num=ROW_NUM_START)
-        row_num = self.write_transfers(ws, row_num)
+        self.write_transfers(ws, row_num)
 
-        ws.print_area = f"A1:Q{row_num}"
+        ws.print_area = f"A1:Q{rule_to_page_end(ws)}"
 
         if CLOSING_SHEET in wb.sheetnames:
             colour_closing_changes(wb[CLOSING_SHEET])
@@ -945,8 +954,27 @@ def colour_closing_changes(ws):
         operator="lessThan", formula=["0"], font=Font(color="FFFF0000")))
 
 
+def rule_to_page_end(ws):
+    """Rule every row after the last one with content down to the end of its printed
+    page, take the ruling off any row below that, and return that end row."""
+    last = max((r for r in range(1, ws.max_row + 1)
+                if any(ws[f"{c}{r}"].value is not None for c in LINE_COLUMNS)), default=0)
+    last = max([last] + [rng.max_row for rng in ws.merged_cells.ranges])
+    end = FIRST_PAGES_END
+    if last > FIRST_PAGES_END:
+        end += PAGE_ROWS * math.ceil((last - FIRST_PAGES_END) / PAGE_ROWS)
+
+    for row_num in range(last + 1, end + 1):
+        border_line(ws, row_num)
+        ws.row_dimensions[row_num].height = ROW_HEIGHT
+    for row_num in range(end + 1, ws.max_row + 1):
+        for column in LINE_COLUMNS:
+            ws[f"{column}{row_num}"].border = Border()
+    return end
+
+
 def border_line(ws, row_num):
-    for column in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"):
+    for column in LINE_COLUMNS:
         cell = ws[f'{column}{row_num}']
         cell.border = Border(
             top=Side(style='thin', color='00C0C0C0'),
