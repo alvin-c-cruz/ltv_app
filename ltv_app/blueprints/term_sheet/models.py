@@ -381,8 +381,8 @@ class CreateSchedules:
                 start_date = self.__next_start_date(end_date_on_record)
         else:
             # bi-weekly / bi-monthly / weekly: fixed grid anchored at start_date,
-            # each end rolled forward independently (no cascade), N periods to
-            # span the tenor including the final period.
+            # each end rolled independently (no cascade) by __roll_period_end,
+            # N periods to span the tenor including the final period.
             step = 7 if self.frequency == "weekly" else 14
             anchor = datetime.strptime(str(self.start_date)[:10], "%Y-%m-%d")
             maturity = datetime.strptime(str(self.end_date)[:10], "%Y-%m-%d")
@@ -390,7 +390,7 @@ class CreateSchedules:
             start_date = self.start_date
             for i in range(1, num_periods + 1):
                 grid_end = str((anchor + timedelta(days=step * i - 1)).date())
-                end_date = self.check_date(grid_end)
+                end_date = self.__roll_period_end(grid_end)
                 days = Counter(self.db, start_date, end_date, self.code_ref).count
                 FixingSchedule(
                     db=self.db, contract_ref=contract_ref, start_date=start_date,
@@ -447,6 +447,24 @@ class CreateSchedules:
                 day -= 1
 
         return self.check_date(end_date)
+
+    def __roll_period_end(self, grid_end):
+        # bi-weekly / weekly only. A grid end on a weekend -- every period of a
+        # Monday-anchored contract, since Monday + 14i - 1 is a Sunday -- goes BACK
+        # to the last trading day before it: DB ends those periods on the Friday,
+        # or the Thursday when that Friday is a holiday (contracts 1503, 1346). A
+        # grid end on a weekday holiday still rolls FORWARD (1449, 1441). Not
+        # check_date(), which the monthly branch and the maturity share.
+        # BUGS.md 2026-09-17.
+        end_date_on_record = datetime.strptime(grid_end, '%Y-%m-%d')
+
+        if end_date_on_record.isoweekday() not in (6, 7):
+            return self.check_date(grid_end)
+
+        while self.is_holiday(end_date_on_record) or end_date_on_record.isoweekday() in (6, 7):
+            end_date_on_record -= timedelta(days=1)
+
+        return str(end_date_on_record)[:10]
 
     def __next_start_date(self, previous_end_date):
         year = int(previous_end_date[:4])

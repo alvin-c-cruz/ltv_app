@@ -19,8 +19,13 @@ from ltv_app.blueprints.term_sheet.models import CreateSchedules
 # ref -> pinned period count. The count is hardcoded (not just read from the DB)
 # so that a *corrupted golden* — e.g. someone regenerating a contract's stored
 # schedule with buggy code, dropping it to 25 — can't silently make actual==expected
-# and false-pass. All current goldens are 12m bi-weekly/bi-monthly => 26 periods.
-GOLDEN = {1449: 26, 1444: 26, 1441: 26}
+# and false-pass.
+#
+# 1449/1444/1441 (Tue/Thu starts) pin a weekday-holiday end rolling FORWARD.
+# 1503/1346 (Monday starts) pin a weekend end rolling BACK: their grid ends are all
+# Sundays, and DB ends those periods on the Friday before, or the Thursday when that
+# Friday is a holiday (1503 P8 at Christmas, 1346 P2 and P4). 1346 is a 9m contract.
+GOLDEN = {1449: 26, 1444: 26, 1441: 26, 1503: 26, 1346: 20}
 SRC = os.path.join(SERVER, "instance", "LTV Stocks.db")
 
 
