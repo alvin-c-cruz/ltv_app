@@ -98,12 +98,17 @@ def contract_records(db, bank_ref, transaction_type, date_from=None, date_to=Non
     knock-outs the report exists to show. Membership is decided by the
     settlement row instead.
 
-    `tbl_transaction.contract_ref` is NULL on these rows, so the settlement is
-    matched on bank + stock + a '-KO)' transaction type within the window -- the
-    type reads 'Sell (Decu-KO)', so the pattern has to carry the closing
-    parenthesis; '%-KO' matches nothing. Two
-    contracts on the same bank and stock that both knocked out in the window
-    both qualify, which is correct -- each has its own settlement row.
+    `tbl_transaction.contract_ref` is NULL on these rows, so the settlement has
+    to be recognised as the contract's own: the knock-out type of its product
+    ('Buy (Accu-KO)' / 'Sell (Decu-KO)'), on or after its start, and carrying its
+    strike as price and its KO price as ko -- record_fixings writes both from the
+    contract. Matching on bank + stock alone (until 2026-10-27) let any other
+    knock-out on that stock, or one from before the contract existed, put a KO
+    contract back on the report. A row with no ko (none since 2022; the trade
+    form never writes one) is matched on type and start alone. Two contracts on
+    the same bank and stock that both knocked out in the window both qualify,
+    which is correct -- each has its own settlement row.
+    scripts/verify_ko_membership.py.
 
     Without both dates this falls back to 'active' only.
     """
@@ -116,7 +121,13 @@ def contract_records(db, bank_ref, transaction_type, date_from=None, date_to=Non
                               SELECT 1 FROM tbl_transaction t
                               WHERE t.bank_ref = c.bank_ref
                                 AND t.code_ref = c.code_ref
-                                AND t.transaction_type LIKE '%-KO)'
+                                AND t.transaction_type = CASE c.transaction_type
+                                        WHEN 'ACCU' THEN 'Buy (Accu-KO)'
+                                        ELSE 'Sell (Decu-KO)' END
+                                AND t.trade_date >= c.start_date
+                                AND (t.ko IS NULL OR (
+                                     ABS(t.price - ROUND(c.strike_rate*c.spot/100, 4)) < 1e-6
+                                     AND ABS(t.ko - ROUND(c.ko_rate*c.spot/100, 4)) < 1e-6))
                                 AND t.trade_date BETWEEN ? AND ?)))"""
         params = (transaction_type, bank_ref, str(date_from), str(date_to))
 
