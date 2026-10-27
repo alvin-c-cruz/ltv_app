@@ -1,13 +1,9 @@
-import os
 from datetime import datetime, timedelta
 
-from flask import current_app
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side
 
-
-def _instance_temp_path(filename):
-    return os.path.join(current_app.instance_path, 'temp', filename)
+from ...workbook_download import in_memory
 
 
 def _posting_transactions(db, start_date, end_date):
@@ -235,10 +231,9 @@ def download_posting(db, posting_month, posting_year):
             ws = wb[f'{bank_id}-{ccy_id}']
             _posting_write_sheet(db, ws, transactions[bank_id][ccy_id], date_ref[bank_id])
 
-    path = _instance_temp_path(f'stock_posting_{posting_year}_{posting_month:02d}.xlsx')
-    wb.save(path)
+    output = in_memory(wb)
     wb.close()
-    return path
+    return output, f'stock_posting_{posting_year}_{posting_month:02d}.xlsx'
 
 
 def download_daily_transactions(db, trade_date):
@@ -350,10 +345,9 @@ def download_daily_transactions(db, trade_date):
 
         row_num += 1
 
-    path = _instance_temp_path(f'daily_transactions_{trade_date}.xlsx')
-    wb.save(path)
+    output = in_memory(wb)
     wb.close()
-    return path
+    return output, f'daily_transactions_{trade_date}.xlsx'
 
 
 def download_transaction_range(db, start_date, end_date):
@@ -447,7 +441,6 @@ def download_transaction_range(db, start_date, end_date):
             ws[f'{col}{row_num}'].border = border
         row_num += 1
 
-    path = _instance_temp_path(f'transaction_range_{start_date}_{end_date}.xlsx')
-    wb.save(path)
+    output = in_memory(wb)
     wb.close()
-    return path
+    return output, f'transaction_range_{start_date}_{end_date}.xlsx'

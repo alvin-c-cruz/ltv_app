@@ -1,17 +1,18 @@
 from openpyxl import Workbook
-import os
 from dataclasses import dataclass, field
+
+from ....workbook_download import in_memory
 
 
 class CreateExcel:
-    def __init__(self, path: str, report_date: str, db):
-        self.filename = os.path.join(path, f"{report_date} portfolio.xlsx")
+    def __init__(self, report_date: str, db):
+        self.download_name = f"{report_date} portfolio.xlsx"
         self.wb = Workbook()
 
         self.data = GetData(db=db, report_date=report_date).position
         self.create()
 
-        self.wb.save(self.filename)
+        self.output = in_memory(self.wb)
         self.wb.close()
 
     def create(self):

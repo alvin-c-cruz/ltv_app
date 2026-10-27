@@ -10,6 +10,8 @@ from openpyxl.utils.cell import get_column_letter
 from openpyxl.cell.rich_text import TextBlock, CellRichText
 from openpyxl.cell.text import InlineFont
 
+from ....workbook_download import in_memory
+
 from .fixing_average import FixingAverage
 
 FILL_COLOR = {
@@ -39,7 +41,7 @@ class DownloadFixings:
         self.ko_date = get_previous_business_day(db, trade_date)
 
         self.template_file = os.path.join(current_app.instance_path, "excel_templates", "fixings.xlsx")
-        self.filename = os.path.join(current_app.instance_path, "temp", f"{trade_date} Fixings.xlsx")
+        self.download_name = f"{trade_date} Fixings.xlsx"
 
         self.account_ccy = ['Sheet']
 
@@ -53,7 +55,7 @@ class DownloadFixings:
         self.process_fixings(wb)
         WriteKnockouts(self.db, wb, self.knockouts, self.trade_date)
 
-        wb.save(self.filename)
+        self.output = in_memory(wb)
         wb.close()
 
     def process_fixings(self, wb):

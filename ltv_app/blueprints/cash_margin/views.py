@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, send_file, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, current_app
 
 from ..auth import login_required
 from ..database import get_db
+from ...workbook_download import send_workbook
 from .extensions import build_cash_margin_file
 
 bp = Blueprint('cash_margin', __name__, template_folder='pages', url_prefix='/cash-margin')
@@ -34,5 +35,5 @@ def home():
 def download(ccy, observation_month):
     """observation_month is 'YYYY-MM' — matches legacy's forecast/cash_margin form field."""
     db = get_db()
-    filename = build_cash_margin_file(db, ccy, observation_month, current_app.instance_path)
-    return send_file(filename, as_attachment=True)
+    output, download_name = build_cash_margin_file(db, ccy, observation_month, current_app.instance_path)
+    return send_workbook(output, download_name)

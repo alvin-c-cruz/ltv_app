@@ -1,10 +1,11 @@
 from openpyxl import Workbook
-import os
+
+from ....workbook_download import in_memory
 
 
 class CreateExcel:
-    def __init__(self, path: str, start_date: str, end_date: str, db):
-        self.filename = os.path.join(path, f"{start_date}_to_{end_date} dividends.xlsx")
+    def __init__(self, start_date: str, end_date: str, db):
+        self.download_name = f"{start_date}_to_{end_date} dividends.xlsx"
         self.wb = Workbook()
         self.wb.remove(self.wb.active)  # drop the default blank sheet
 
@@ -14,7 +15,7 @@ class CreateExcel:
 
         self.create()
 
-        self.wb.save(self.filename)
+        self.output = in_memory(self.wb)
         self.wb.close()
 
     def bank_accounts(self):

@@ -126,16 +126,10 @@ def _check_date(db, trade_date):
         return True, 0
     expected = _expected(db, trade_date, transfers)
 
-    path = None
-    existed = False
-    try:
-        transactions = get_transactions(db=db, trade_date=trade_date)
-        path = CreateNotebook(db=db, trade_date=trade_date,
-                              transactions=transactions, transfers=transfers).filename
-        printed = _printed_openings(path)
-    finally:
-        if path and os.path.exists(path):
-            os.remove(path)
+    transactions = get_transactions(db=db, trade_date=trade_date)
+    output = CreateNotebook(db=db, trade_date=trade_date,
+                            transactions=transactions, transfers=transfers).output
+    printed = _printed_openings(output)
 
     ok = len(printed) == len(expected)
     if not ok:

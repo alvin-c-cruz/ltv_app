@@ -25,8 +25,8 @@ def _ensure_instance_dirs(instance_path):
     """Create the instance subdirectories the app writes into but never creates.
 
     `instance/` is gitignored wholesale, so a fresh clone has none of these.
-    `temp/` in particular is written to by the fixings, gain_loss, forecasts,
-    block_unblock, notebook and trades_done exports.
+    The report downloads no longer write to `temp/` (they send from memory,
+    ltv_app/workbook_download.py); only the forecasts export still does.
     """
     for path in (instance_path,
                  os.path.join(instance_path, "test_database"),

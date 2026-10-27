@@ -6,6 +6,7 @@ from openpyxl.styles.fills import PatternFill
 
 from .. term_sheet import StockContract
 from ...tz import ph_today
+from ...workbook_download import in_memory
 
 
 # Per-bank fill color used to mark the "live" (E or G) shares-per-day column --
@@ -286,9 +287,8 @@ def build_cash_margin_file(db, ccy, observation_month, instance_path):
     """Port of legacy localhost/modules/cash_margin.py::update_file's
     template-walking loop (lines ~107-225), minus the NAS-share load/save
     branches (this is a download-on-demand report, not legacy's
-    scheduled-file-refresh flow -- always load the packaged template and
-    save to the instance temp/ dir, matching every other ltv_app Excel
-    export).
+    scheduled-file-refresh flow -- always load the packaged template).
+    Returns the workbook in memory and its download name.
 
     Four real discrepancies were found and fixed versus the plan's draft
     pseudocode, by reading legacy's actual update_file() source rather than
@@ -415,7 +415,6 @@ def build_cash_margin_file(db, ccy, observation_month, instance_path):
 
             row_num += 1
 
-    temp_path = os.path.join(instance_path, 'temp', f'cash_margin_{ccy}_{observation_month}.xlsx')
-    wb.save(temp_path)
+    output = in_memory(wb)
     wb.close()
-    return temp_path
+    return output, f'cash_margin_{ccy}_{observation_month}.xlsx'

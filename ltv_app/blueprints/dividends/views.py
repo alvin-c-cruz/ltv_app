@@ -1,10 +1,10 @@
-from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file, abort
+from flask import Blueprint, render_template, flash, redirect, url_for, request, abort
 from datetime import datetime
-import os
 
 from ..auth import login_required
 from ..database import get_db
 from ...tz import ph_today
+from ...workbook_download import send_workbook
 
 from .models import CashDividends
 from .forms import Form
@@ -68,12 +68,11 @@ def export():
     end_date = request.args.get('end_date') or f"{today.year}-12-31"
 
     excel_file = CreateExcel(
-        path=os.path.join(current_app.instance_path, "temp"),
         start_date=start_date,
         end_date=end_date,
         db=db
     )
-    return send_file(excel_file.filename, as_attachment=True)
+    return send_workbook(excel_file.output, excel_file.download_name)
 
 
 @bp.route("/add", methods=["GET", "POST"])

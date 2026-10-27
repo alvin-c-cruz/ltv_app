@@ -1,11 +1,11 @@
-from flask import Blueprint, jsonify, send_file, current_app
+from flask import Blueprint, jsonify
 from dataclasses import dataclass
 from openpyxl import Workbook
-import os
 
 from .. auth import login_required
 from .. database import get_db
 from .. term_sheet import StockContract
+from ...workbook_download import in_memory, send_workbook
 
 bp = Blueprint('hkd_margin', __name__, template_folder='pages', url_prefix='/hkd-margin')
 
@@ -45,16 +45,14 @@ def home():
     hkd_margin = single_double(db=db, hkd_margin=hkd_margin)
 
     # Generate excel file
-    filename = os.path.join(current_app.instance_path, 'temp', 'hkd_margin.xlsx')
-    HKDMarginToExcel(data=hkd_margin, filename=filename, db=db)
+    excel_file = HKDMarginToExcel(data=hkd_margin, db=db)
 
-    return send_file('{}'.format(filename), as_attachment=True)
+    return send_workbook(excel_file.output, 'hkd_margin.xlsx')
 
 
 @dataclass
 class HKDMarginToExcel:
     data: any
-    filename: str = None
     db: any = None
 
     def __post_init__(self):
@@ -67,7 +65,7 @@ class HKDMarginToExcel:
         self.create_sheets(wb)
         self.write_entries(wb)
 
-        wb.save(self.filename)
+        self.output = in_memory(wb)
         wb.close()
 
     def _get_bank_accounts(self):

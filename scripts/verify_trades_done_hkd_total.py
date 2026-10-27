@@ -130,11 +130,8 @@ def _generate(db, trade_date, summary, rate):
         return None if rate is None else (rate, "test feed")
 
     module.fetch_hkd_rate = feed
-    path = module.DownloadTradesDoneWithGainLoss(db=db, trade_date=trade_date, trade_summary=summary).filename
-    try:
-        ws = load_workbook(path).active
-    finally:
-        os.remove(path)
+    ws = load_workbook(module.DownloadTradesDoneWithGainLoss(
+        db=db, trade_date=trade_date, trade_summary=summary).output).active
     return ws, calls
 
 

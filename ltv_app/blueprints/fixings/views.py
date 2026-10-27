@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, flash, request, redirect, url_for, send_file, abort
+from flask import Blueprint, render_template, flash, request, redirect, url_for, abort
 
 from ...form_fields import FormFields
+from ...workbook_download import send_workbook
 from .. auth import login_required
 from .. database import get_db
 from .. transactions import Transaction
@@ -234,8 +235,7 @@ def generate(trade_date):
     db = get_db()
     fixing_data = GenerateFixings(trade_date).fixings
     fixings = DownloadFixings(db, trade_date, fixing_data)
-    filename = fixings.filename
-    return send_file('{}'.format(filename), as_attachment=True)
+    return send_workbook(fixings.output, fixings.download_name)
 
 
 @bp.route('/record/<trade_date>')

@@ -155,57 +155,52 @@ def _evaluate(ws, formula):
 
 def _check_date(db, trade_date):
     blocks = _expected(db, trade_date)
-    path = None
-    try:
-        transactions = get_transactions(db=db, trade_date=trade_date)
-        transfers = get_transfers(db=db, trade_date=trade_date)
-        path = CreateNotebook(db=db, trade_date=trade_date,
-                              transactions=transactions, transfers=transfers).filename
-        ws, titles, results = _printed(path)
+    transactions = get_transactions(db=db, trade_date=trade_date)
+    transfers = get_transfers(db=db, trade_date=trade_date)
+    output = CreateNotebook(db=db, trade_date=trade_date,
+                            transactions=transactions, transfers=transfers).output
+    ws, titles, results = _printed(output)
 
-        ok = True
-        averaged = []
-        for (bank_name, code), block in blocks.items():
-            last = None
-            for row in block["rows"]:
-                want = f"{LABELS[row['transaction_type']]} {row['stock_name']} ({code})"
-                hit = next((t for t in titles
-                            if t[1] == block["header"] and t[2] == want
-                            and t[3] == abs(row["quantity"]) and t[4] == row["price"]), None)
-                if hit is None:
-                    print(f"  {trade_date} short #{row['ref_num']} {code}: FAIL  not printed under its account")
-                    ok = False
-                    continue
-                titles.remove(hit)
-                last = max(last or 0, hit[0])
-            if last is None:
-                continue
-            result_row = next((r for r in results if r > last), None)
-            if result_row is None:
-                print(f"  {trade_date} {code}: FAIL  no balance block after the short trades")
+    ok = True
+    averaged = []
+    for (bank_name, code), block in blocks.items():
+        last = None
+        for row in block["rows"]:
+            want = f"{LABELS[row['transaction_type']]} {row['stock_name']} ({code})"
+            hit = next((t for t in titles
+                        if t[1] == block["header"] and t[2] == want
+                        and t[3] == abs(row["quantity"]) and t[4] == row["price"]), None)
+            if hit is None:
+                print(f"  {trade_date} short #{row['ref_num']} {code}: FAIL  not printed under its account")
                 ok = False
                 continue
-            opening, closing = _evaluate(ws, ws[f"G{result_row}"].value)
-            if opening != block["before"]:
-                print(f"  {trade_date} {code}: FAIL  block does not open at the short balance before the date")
+            titles.remove(hit)
+            last = max(last or 0, hit[0])
+        if last is None:
+            continue
+        result_row = next((r for r in results if r > last), None)
+        if result_row is None:
+            print(f"  {trade_date} {code}: FAIL  no balance block after the short trades")
+            ok = False
+            continue
+        opening, closing = _evaluate(ws, ws[f"G{result_row}"].value)
+        if opening != block["before"]:
+            print(f"  {trade_date} {code}: FAIL  block does not open at the short balance before the date")
+            ok = False
+        if closing != block["after"]:
+            print(f"  {trade_date} {code}: FAIL  block does not end at the short balance after the date")
+            ok = False
+        printed = [ws[f"L{result_row + i}"].value for i in (-2, -1, 0)]
+        if block["average"] is None:
+            if any(v is not None for v in printed):
+                print(f"  {trade_date} {code}: FAIL  short average printed without a short sale leaving a short")
                 ok = False
-            if closing != block["after"]:
-                print(f"  {trade_date} {code}: FAIL  block does not end at the short balance after the date")
-                ok = False
-            printed = [ws[f"L{result_row + i}"].value for i in (-2, -1, 0)]
-            if block["average"] is None:
-                if any(v is not None for v in printed):
-                    print(f"  {trade_date} {code}: FAIL  short average printed without a short sale leaving a short")
-                    ok = False
-            elif (printed[:2] != ["Short", "Average"] or not isinstance(printed[2], (int, float))
-                  or abs(printed[2] - block["average"]) > 1e-6):
-                print(f"  {trade_date} {code}: FAIL  short average missing or not the ledger's")
-                ok = False
-            else:
-                averaged.append(trade_date)
-    finally:
-        if path and os.path.exists(path):
-            os.remove(path)
+        elif (printed[:2] != ["Short", "Average"] or not isinstance(printed[2], (int, float))
+              or abs(printed[2] - block["average"]) > 1e-6):
+            print(f"  {trade_date} {code}: FAIL  short average missing or not the ledger's")
+            ok = False
+        else:
+            averaged.append(trade_date)
     return ok, sum(len(b["rows"]) for b in blocks.values()), len(averaged)
 
 

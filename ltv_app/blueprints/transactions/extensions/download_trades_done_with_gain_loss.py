@@ -10,6 +10,7 @@ from openpyxl.styles.borders import Border, Side
 from datetime import datetime, time
 
 from ....tz import ph_now
+from ....workbook_download import in_memory
 from .trades_done_average import TradesDoneAverage
 from ..models import get_short_average
 
@@ -67,11 +68,7 @@ class DownloadTradesDoneWithGainLoss:
             "trades_done_with_gain_loss.xlsx"
         )
 
-        self.filename = os.path.join(
-            current_app.instance_path,
-            "temp",
-            f"{trade_date} Trades Done with gain loss.xlsx"
-        )
+        self.download_name = f"{trade_date} Trades Done with gain loss.xlsx"
 
         self.create_file()
 
@@ -105,7 +102,7 @@ class DownloadTradesDoneWithGainLoss:
             row_num += 2
 
         ws.print_area = f"A1:N{row_num}"
-        wb.save(self.filename)
+        self.output = in_memory(wb)
         wb.close()
 
     def time_made(self):

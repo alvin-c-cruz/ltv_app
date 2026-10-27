@@ -1,9 +1,10 @@
-from flask import Blueprint, render_template, request, send_file, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 
 from ..auth import login_required
 from ..database import get_db
 from ...form_fields import FormFields
 from ...tz import ph_now
+from ...workbook_download import send_workbook
 
 bp = Blueprint('marissa_orders', __name__, template_folder='pages', url_prefix='/maris')
 
@@ -34,14 +35,11 @@ def home():
             if posted.error:
                 flash(posted.error)
                 return redirect(url_for('marissa_orders.home'))
-            path = download_posting(db, posting_month, posting_year)
-            return send_file(path, as_attachment=True)
+            return send_workbook(*download_posting(db, posting_month, posting_year))
         elif cmd_button == "Download Daily Transaction":
-            path = download_daily_transactions(db, request.form['trade_date'])
-            return send_file(path, as_attachment=True)
+            return send_workbook(*download_daily_transactions(db, request.form['trade_date']))
         elif cmd_button == "Download Transaction Range":
-            path = download_transaction_range(db, request.form['range_start'], request.form['range_end'])
-            return send_file(path, as_attachment=True)
+            return send_workbook(*download_transaction_range(db, request.form['range_start'], request.form['range_end']))
 
     return render_template(
         'marissa_orders/home.html',

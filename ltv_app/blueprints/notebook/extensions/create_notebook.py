@@ -12,6 +12,7 @@ from datetime import datetime
 
 from ltv_app.blueprints.transactions import TradesDoneAverage
 from ltv_app.blueprints.transactions.models import get_short_average
+from ltv_app.workbook_download import in_memory
 
 CARD_ROW_HEIGHT = 12
 ROW_HEIGHT = 17.25
@@ -66,7 +67,7 @@ class CreateNotebook:
         self.transfers = transfers
 
         self.template_file = os.path.join(current_app.instance_path, "excel_templates", "notebook.xlsx")
-        self.filename = os.path.join(current_app.instance_path, "temp", f"{trade_date} notebook.xlsx")
+        self.download_name = f"{trade_date} notebook.xlsx"
 
         self.create_file()
 
@@ -84,7 +85,7 @@ class CreateNotebook:
         if CLOSING_SHEET in wb.sheetnames:
             colour_closing_changes(wb[CLOSING_SHEET])
 
-        wb.save(self.filename)
+        self.output = in_memory(wb)
         wb.close()
 
     def write_date(self, ws):

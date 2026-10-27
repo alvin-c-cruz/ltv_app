@@ -41,7 +41,7 @@ def main():
     app.config['LOGIN_DISABLED'] = True
     with app.app_context():
         db = get_db()
-        path = download_transaction_range(db, START, END)
+        output, _ = download_transaction_range(db, START, END)
         bank_pri = {r['bank_name']: r['priority']
                     for r in db.execute('SELECT bank_name, priority FROM tbl_bank_account')}
         type_pri = {r['transaction_type']: r['priority']
@@ -50,7 +50,7 @@ def main():
             'SELECT COUNT(*) c FROM tbl_transaction WHERE trade_date >= ? AND trade_date <= ?',
             (START, END)).fetchone()['c']
 
-    ws = openpyxl.load_workbook(path).active
+    ws = openpyxl.load_workbook(output).active
 
     data, blanks = [], []
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):

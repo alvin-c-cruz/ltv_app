@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, flash, redirect, url_for, send_file
+from flask import Blueprint, render_template, flash, redirect, url_for
 
 from .. auth import login_required
 from .. database import get_db
+from ...workbook_download import send_workbook
 
 from .forms import DateForm
 from .extensions import get_transactions, get_transfers, CreateNotebook
@@ -35,4 +36,4 @@ def generate(trade_date):
         transactions=transactions, transfers=transfers
     )
 
-    return send_file('{}'.format(notebook.filename), as_attachment=True)
+    return send_workbook(notebook.output, notebook.download_name)

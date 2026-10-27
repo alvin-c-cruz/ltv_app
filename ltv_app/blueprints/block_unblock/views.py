@@ -1,6 +1,6 @@
 import re
 
-from flask import Blueprint, render_template, request, send_file, current_app
+from flask import Blueprint, render_template, request
 from datetime import timedelta
 from .. transactions.models import get_balance
 from ...tz import ph_today
@@ -8,6 +8,7 @@ from ...tz import ph_today
 from .. auth import login_required
 from .. database import get_db
 from .. term_sheet import StockContract
+from ...workbook_download import send_workbook
 
 from .extensions import CreateFile
 
@@ -66,9 +67,9 @@ def home():
             data[bank_name][stock_name]["cost-to-date"] = cost_to_date
             
     if request.method == "POST":
-        excel_file = CreateFile(data=data, instance_path=current_app.instance_path)
+        excel_file = CreateFile(data=data)
         
-        return send_file('{}'.format(excel_file.filename), as_attachment=True)
+        return send_workbook(excel_file.output, excel_file.download_name)
         
         
         

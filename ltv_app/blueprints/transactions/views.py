@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, g, jsonify, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, g, jsonify, abort
 from flask_login import current_user
 from datetime import timedelta, datetime
 from ...tz import ph_today, add_business_days
+from ...workbook_download import send_workbook
 
 from .models import Transaction, TransactionShort
 from ...form_fields import FormFields
@@ -594,12 +595,12 @@ def download_with_gain_loss(trade_date):
         flash("No data to download.", category="error")
         return redirect(url_for("transactions.home"))
     else:
-        filename = DownloadTradesDoneWithGainLoss(
+        trades_done = DownloadTradesDoneWithGainLoss(
             db=db,
             trade_date=trade_date,
             trade_summary=summary
-        ).filename
-        return send_file('{}'.format(filename))
+        )
+        return send_workbook(trades_done.output, trades_done.download_name, as_attachment=False)
 
 
 @bp.route('/average_price/<int:bank_ref>/<int:code_ref>', methods=['GET'])

@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template, flash, current_app, send_file
-import os
+from flask import Blueprint, render_template, flash
 
 from .. database import get_db
 from .. auth import login_required
+from ...workbook_download import send_workbook
 
 from .forms import Form
 from .extensions import CreateExcel
@@ -18,11 +18,10 @@ def home():
     if form.validate_on_submit():
         report_date = form.report_date.data.strftime("%Y-%m-%d")
         excel_file = CreateExcel(
-            path=os.path.join(current_app.instance_path, "temp"),
             report_date=report_date,
             db=get_db()
         )
-        return send_file(excel_file.filename, as_attachment=True)
+        return send_workbook(excel_file.output, excel_file.download_name)
 
     context = {
         "form": form,

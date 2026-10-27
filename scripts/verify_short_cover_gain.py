@@ -100,11 +100,8 @@ def _same(got, want):
 
 def _excel_averages(db, trade_date, summary):
     excel.fetch_hkd_rate = lambda ccy: (1.0, "test")
-    path = excel.DownloadTradesDoneWithGainLoss(db=db, trade_date=trade_date, trade_summary=summary).filename
-    try:
-        ws = load_workbook(path).active
-    finally:
-        os.remove(path)
+    ws = load_workbook(excel.DownloadTradesDoneWithGainLoss(
+        db=db, trade_date=trade_date, trade_summary=summary).output).active
     got = defaultdict(list)
     for r in range(1, ws.max_row + 1):
         if ws[f"D{r}"].value == COVER:

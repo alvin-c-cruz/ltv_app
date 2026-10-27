@@ -1,17 +1,18 @@
 from dataclasses import dataclass
-from pathlib import Path
 import openpyxl
+
+from ...workbook_download import in_memory
 
 
 @dataclass
 class CreateFile:
-    instance_path: str = None
     data: any = None
+    download_name = "blocked_shares.xlsx"
     
     def __post_init__(self):
         wb = openpyxl.Workbook()
         self.write_data(wb)
-        wb.save(self.filename)
+        self.output = in_memory(wb)
         wb.close()
         
     def write_data(self, wb):
@@ -45,7 +46,3 @@ class CreateFile:
             row += 1
             
     
-    @property
-    def filename(self):
-        path = Path(self.instance_path) / "temp" / "blocked_shares.xlsx"
-        return path
