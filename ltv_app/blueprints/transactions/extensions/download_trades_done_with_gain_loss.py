@@ -7,8 +7,9 @@ from openpyxl.comments import Comment
 from openpyxl.styles import Font, Alignment
 from openpyxl.styles.fills import PatternFill, Color
 from openpyxl.styles.borders import Border, Side
-from datetime import datetime
+from datetime import datetime, time
 
+from ....tz import ph_now
 from .trades_done_average import TradesDoneAverage
 from ..models import get_short_average
 
@@ -80,6 +81,7 @@ class DownloadTradesDoneWithGainLoss:
         ws.title = f"{int(self.trade_date[-2:])}"
 
         ws["A2"].value = "Date: " + datetime.strptime(self.trade_date, "%Y-%m-%d").strftime("%B %d, %Y")
+        ws["E2"].value = self.time_made()
 
         row_num = 5
         if self.trade_summary.accus:
@@ -105,6 +107,15 @@ class DownloadTradesDoneWithGainLoss:
         ws.print_area = f"A1:N{row_num}"
         wb.save(self.filename)
         wb.close()
+
+    def time_made(self):
+        # A fixed time in place of the template's =NOW(), which changes whenever the
+        # file is opened: the minute it is made on the trade date, the 4:00 PM close
+        # for a later one, as Alvin types them (2026-10-27). E2 keeps h:mm AM/PM.
+        now = ph_now()
+        if now.date().isoformat() == self.trade_date:
+            return time(now.hour, now.minute)
+        return time(16, 0)
 
     def write_term_sheet(self, ws, row_num, term_sheets, _type):
         # Header
@@ -341,6 +352,8 @@ class DownloadTradesDoneWithGainLoss:
 
                 # Details
                 bank_name_count = len(transactions[ccy][transaction_type])
+                line_count = sum(len(trades) for stocks in transactions[ccy][transaction_type].values()
+                                 for trades in stocks.values())
                 for i, bank_name in enumerate(transactions[ccy][transaction_type]):
                     account_start_row = row_num
                     for stock_name in transactions[ccy][transaction_type][bank_name]:
@@ -433,14 +446,16 @@ class DownloadTradesDoneWithGainLoss:
                             cell = ws[f"{col}{row_num}"]
                             cell.fill = PatternFill(patternType="solid", fill_type="solid", fgColor=DIVIDER_COLOR)
 
-                        # Cost totals
+                        # Cost totals -- none in a section of one trade line, where they
+                        # would only repeat it; the divider stays (Alvin, 2026-10-27)
                         if show_gain:
-                            cols = {
-                                "J": f'=SUM(H{account_start_row}:H{row_num - 1})',
-                                "L": f"=SUBTOTAL(9,L{account_start_row}:L{row_num - 1})",
-                                "M": f"=SUBTOTAL(9,M{account_start_row}:M{row_num - 1})",
-                                "N": f"=M{row_num}/L{row_num}",
-                            }
+                            cols = {"J": f'=SUM(H{account_start_row}:H{row_num - 1})'}
+                            if line_count > 1:
+                                cols.update({
+                                    "L": f"=SUBTOTAL(9,L{account_start_row}:L{row_num - 1})",
+                                    "M": f"=SUBTOTAL(9,M{account_start_row}:M{row_num - 1})",
+                                    "N": f"=M{row_num}/L{row_num}",
+                                })
 
                             for col, value in cols.items():
                                 if col == "J":
@@ -485,7 +500,9 @@ class DownloadTradesDoneWithGainLoss:
                         "H": f"=SUM(H{start_row}:H{end_row})"
                     }
 
-                    if show_gain:
+                    # With one bank the subtotal row just above already shows Cost / Gain / %,
+                    # so the footer only repeats them (Alvin clears them by hand, 2026-10-27).
+                    if show_gain and bank_name_count > 1:
                         # SUBTOTAL(9,...) ignores any nested SUBTOTAL cells inside its range,
                         # so this picks up the detail rows only and never double-counts the
                         # per-bank subtotal rows written above.
@@ -533,7 +550,8 @@ class DownloadTradesDoneWithGainLoss:
         cell = ws[f"A{row_num}"]
         cell.value = "Transfer of Stocks"
         cell.font = Font(size=14, bold=True)
-        cell.alignment = Alignment(horizontal="center")
+        # Left: column A is narrow, so a centred 14 pt heading spills both ways
+        cell.alignment = Alignment(horizontal="left")
 
         cell = ws[f"J{row_num}"]
         cell.value = "Average"
