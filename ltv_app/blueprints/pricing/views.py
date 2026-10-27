@@ -1,7 +1,8 @@
 import io
+import json
 import os
 
-from flask import Blueprint, render_template, request, current_app, redirect, url_for, flash, make_response, send_file
+from flask import Blueprint, render_template, request, current_app, redirect, url_for, flash, make_response, send_file, abort
 
 from .. auth import login_required
 from .. database import get_db
@@ -64,7 +65,7 @@ def home():
 
         elif cmd_button == "Yes":
             headers = [i.strip() for i in textarea_data.split("\n")[0].replace("\r", "").split("\t")]
-            return redirect(url_for('pricing.add_header') + f"?data={[bank_code, headers]}")
+            return redirect(url_for('pricing.add_header', data=json.dumps([bank_code, headers])))
 
         elif cmd_button == "No":
             return redirect(url_for("pricing.home"))
@@ -94,7 +95,15 @@ def add_header():
         return response
 
     else:
-        data = request.args.get("data")
+        # JSON, never eval(): ?data= arrives from the browser, so evaluating it ran
+        # whatever a crafted link put there. Anything but a [bank_code, headers]
+        # pair is a 400. scripts/verify_pricing_add_header.py.
+        try:
+            bank_code, headers = json.loads(request.args.get("data") or "")
+        except (ValueError, TypeError):
+            abort(400)
+        if not isinstance(bank_code, str) or not isinstance(headers, list):
+            abort(400)
         data_types = [
             ("product",   "AQ/DQ"),
             ("code",      "Stock Code"),
@@ -106,7 +115,6 @@ def add_header():
             ("frequency", "Frequency"),
         ]
 
-        bank_code, headers = eval(data)
         context = {
             "bank_code":   bank_code,
             "headers":     enumerate(headers, start=1),
