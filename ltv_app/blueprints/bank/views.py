@@ -240,6 +240,9 @@ def _compute_transactions(db, bank_ref, code_ref, date_from, date_to):
     balance = start_qty
     cost_to_date = start_cost
     result = []
+    transfer_refs = {r[0] for r in db.execute(
+        "SELECT ref_num FROM tbl_transaction WHERE bank_ref = ? AND code_ref = ? "
+        "AND transaction_type LIKE '%Transfer%'", (bank_ref, code_ref))}
 
     for data in db_data:
         qty = data['quantity']
@@ -247,8 +250,11 @@ def _compute_transactions(db, bank_ref, code_ref, date_from, date_to):
         charges = data['charges']
         amount = qty * price + charges
 
+        # A transfer moves cost between Alvin's own accounts and realises nothing (Alvin,
+        # 30 Oct 2026). Its cost still leaves at the running average, below.
+        is_transfer = data["ref_num"] in transfer_refs
         gain_loss = 0.0
-        if qty < 0 and balance > 0:
+        if qty < 0 and balance > 0 and not is_transfer:
             gain_loss = abs(qty) * price - charges - (cost_to_date / balance) * abs(qty)
 
         if qty > 0:
@@ -273,6 +279,7 @@ def _compute_transactions(db, bank_ref, code_ref, date_from, date_to):
 
         data['amount'] = amount
         data['gain_loss'] = gain_loss
+        data['is_transfer'] = is_transfer
         data['balance'] = balance
         data['average'] = average
         result.append(data)
@@ -539,7 +546,7 @@ def download_transactions(bank_id, code):
            '/INDIRECT("I"&ROW()),'
            'INDIRECT("J"&ROW()-1)))')
     #
-    # Gain/Loss: only when qty < 0 (sell or transfer out)
+    # Gain/Loss: only on a sale (qty < 0), never on a transfer
     #   gain = qty × (prev_avg − sell_price)   [qty is negative, so result is positive when sold above cost]
     GL  = ('=IF(INDIRECT("D"&ROW())<0,'
            'INDIRECT("D"&ROW())*(INDIRECT("J"&ROW()-1)-INDIRECT("E"&ROW())),'
@@ -564,8 +571,8 @@ def download_transactions(bank_id, code):
         c6.number_format = num_fmt_2dp; c6.font = data_font; c6.border = thin_border
         c7 = ws.cell(row=r, column=7, value=round(t['amount'], 2))
         c7.number_format = num_fmt_2dp; c7.font = data_font; c7.border = thin_border
-        # H — Gain/Loss formula
-        c8 = ws.cell(row=r, column=8, value=GL)
+        # H: Gain/Loss formula, none on a transfer
+        c8 = ws.cell(row=r, column=8, value="" if t["is_transfer"] else GL)
         c8.number_format = num_fmt_2dp; c8.border = thin_border
         # I — Balance formula
         c9 = ws.cell(row=r, column=9, value=BAL)
