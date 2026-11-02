@@ -9,8 +9,9 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Font, Alignment
 from openpyxl.styles.borders import Border, Side
 from openpyxl.worksheet.cell_range import CellRange
-from datetime import datetime
+from datetime import date, datetime
 
+from ltv_app.blueprints.ltv_stocks.legacy_port.working_day import WorkingDay
 from ltv_app.blueprints.transactions import TradesDoneAverage
 from ltv_app.blueprints.transactions.models import get_short_average
 from ltv_app.workbook_download import in_memory
@@ -344,9 +345,12 @@ class CreateNotebook:
         ws.row_dimensions[row_num].height = ROW_HEIGHT
         border_line(ws, row_num)
 
-        # Closing Rate
+        # Closing Rate: the knock-out day's close and date, as Alvin types them
+        ko_closing = None
         for transaction_type, _ in trades.items():
             if "KO" in transaction_type:
+                if ko_closing is None:
+                    ko_closing = self._ko_closing(code) or ()
                 cell = ws[f"O{row_num-3}"]
                 cell.value = "Closing"
                 cell.alignment = Alignment(horizontal="center")
@@ -354,12 +358,14 @@ class CreateNotebook:
                 ws.merge_cells(f"O{row_num-3}:Q{row_num-3}")
 
                 cell = ws[f"O{row_num-2}"]
+                cell.value = ko_closing[1] if ko_closing else None
                 cell.alignment = Alignment(horizontal="center")
                 cell.number_format = "#,##0.00"
                 cell.font = Font(size=9, color=RED_COLOR)
                 ws.merge_cells(f"O{row_num-2}:Q{row_num-2}")
 
                 cell = ws[f"O{row_num-1}"]
+                cell.value = ko_closing[0] if ko_closing else None
                 cell.alignment = Alignment(horizontal="center")
                 cell.number_format = "d-mmm-yyyy"
                 cell.font = Font(size=9, color=RED_COLOR)
@@ -446,6 +452,27 @@ class CreateNotebook:
             return int(row[0]) if row and row[0] is not None else 0
         except (TypeError, IndexError):
             return 0
+
+    def _ko_closing(self, code):
+        """(knock-out day, its close) for a stock's KO block, or None when no close is held.
+
+        The knock-out day is the stock's last trading day before the notebook's date, on its
+        own currency's calendar: KO rows carry no fixing_date. Alvin typed this close and
+        date by hand on every KO block (BUGS.md 2026-11-02)."""
+        row = self.db.execute(
+            "SELECT tbl_code.ref_num, tbl_currency.ccy_id FROM tbl_code "
+            "INNER JOIN tbl_currency ON tbl_currency.ref_num = tbl_code.ccy_ref "
+            "WHERE tbl_code.code = ?", (code,)).fetchone()
+        if row is None:
+            return None
+        ko_day = WorkingDay(self.db, row["ccy_id"]).previous_day(date.fromisoformat(self.trade_date))
+        price = self.db.execute(
+            "SELECT closing_price FROM tbl_stock_price "
+            "WHERE code_ref = ? AND substr(trade_date, 1, 10) = ?",
+            (row["ref_num"], ko_day.isoformat())).fetchone()
+        if price is None or price[0] is None:
+            return None
+        return ko_day, price[0]
 
     def write_short_balance(self, ws, row_num, trades, transaction_reference, running_short):
         # Under a stock's last Sell (Short) / Buy (Pay Short): a balance block on the
