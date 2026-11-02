@@ -123,6 +123,7 @@ def build_summary(ws, groups):
     put("conversion_total", conversion_total,
         {"B": "TOTAL", "E": f"=SUM(E{conversion_first}:E{conversion_total - 1})"})
     put("key", key, dict(zip(NET_COLS, KEY_CURRENCIES)))
+    ws.print_area = f"A1:F{conversion_total}"   # ends on the conversion TOTAL, as the template's did
 
     # The HKD-per-unit rates the H..L columns multiply by (row 7)
     ws["H7"] = f"=D{rate_row['AUD']}"

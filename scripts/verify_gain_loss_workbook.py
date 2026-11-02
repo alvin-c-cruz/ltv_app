@@ -10,7 +10,8 @@ the newest month and the year to date (all banks, all stocks). Formulas stay une
   G2 every active account has a SUMMARY row;
   G3 each SUB-Total sums exactly its group's account rows, and the Total sums every SUB-Total;
   G4 each account row reads its own N and the currency key row;
-  G7 no sheet links to a fixed SUMMARY account row (=SUMMARY!C31); they look up column N.
+  G7 no sheet links to a fixed SUMMARY account row (=SUMMARY!C31); they look up column N;
+  G8 the SUMMARY print area ends on the conversion TOTAL row.
 No figure is printed.
 
 Run: ..\\venv\\Scripts\\python.exe scripts\\verify_gain_loss_workbook.py
@@ -101,6 +102,11 @@ def _check(wb, active_ids, tag):
                 if m and int(m.group(2)) >= 9:
                     fixed += 1
     _case(f"G7 [{tag}] links to a fixed SUMMARY account row", fixed, 0)
+
+    conv_total = next(r for r in range(total + 1, ws.max_row + 1) if ws[f"B{r}"].value == "TOTAL")
+    area = str(ws.print_area or "")
+    last_row = int(area.rpartition("$")[2]) if area.rpartition("$")[2].isdigit() else None
+    _case(f"G8 [{tag}] SUMMARY prints through the conversion TOTAL", last_row, conv_total)
 
 
 with app.app_context():
