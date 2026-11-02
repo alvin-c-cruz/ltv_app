@@ -114,7 +114,8 @@ def _printed_openings(path):
     found = []
     for r in range(start + 1, ws.max_row + 1):
         title = ws[f"C{r}"].value
-        if isinstance(title, str) and title.startswith("Transfer "):
+        # The section heading repeats at the top of a page the section runs onto
+        if isinstance(title, str) and title.startswith("Transfer ") and title != "Transfer of Stocks":
             code = re.search(r"\(([^()]*)\)\s*$", title).group(1)
             found.append((code, ws[f"E{r + 5}"].value, ws[f"M{r + 5}"].value))
     return found
