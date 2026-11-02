@@ -250,7 +250,7 @@ def _compute_transactions(db, bank_ref, code_ref, date_from, date_to):
         charges = data['charges']
         amount = qty * price + charges
 
-        # A transfer moves cost between Alvin's own accounts and realises nothing (Alvin,
+        # A transfer moves cost between LTV's own accounts and realises nothing (Alvin,
         # 30 Oct 2026). Its cost still leaves at the running average, below.
         is_transfer = data["ref_num"] in transfer_refs
         gain_loss = 0.0

@@ -1,6 +1,6 @@
 """Regression harness: no gain or loss on a transfer, on /bank/<id>/<code> or in its download.
 
-A transfer moves shares and cost between Alvin's own accounts; it realises nothing. Alvin,
+A transfer moves shares and cost between LTV's own accounts; it realises nothing. Alvin,
 30 Oct 2026: "there shouldn't be any gain or loss in transfers" (BUGS.md 2026-11-02). The
 transaction list treated every qty < 0 row on a long balance as a sale. On a copy of the
 database, for every (account, stock, year) holding a transfer:

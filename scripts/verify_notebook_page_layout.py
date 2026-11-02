@@ -25,12 +25,14 @@ Both a repeated (continuation) heading and an account opening a page are require
 somewhere in the sample, so the rules cannot pass by never coming up. No figure
 is printed.
 
-Run: server/.venv/Scripts/python.exe scripts/verify_notebook_page_layout.py
+Run: ..\venv\Scripts\python.exe scripts\verify_notebook_page_layout.py
 """
 import io
 import math
 import os
+import shutil
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SERVER = os.path.dirname(HERE)
@@ -40,7 +42,9 @@ from openpyxl import load_workbook
 
 from ltv_app import create_app
 
-DB_PATH = os.path.join(SERVER, "instance", "LTV Stocks.db")
+# Boot on a temp copy: create_app() writes (ALTER TABLE / CREATE INDEX) as it boots.
+DB_PATH = os.path.join(tempfile.mkdtemp(), "copy.db")
+shutil.copy(os.path.join(SERVER, "instance", "LTV Stocks.db"), DB_PATH)
 FIRST_PAGE_END = 41
 PAGE_ROWS = 32
 FIRST_ACCOUNT_ROW = 24
