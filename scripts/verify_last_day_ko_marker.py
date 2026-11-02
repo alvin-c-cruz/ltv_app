@@ -11,11 +11,11 @@ gets, because the contract drops out of every later report once it is flagged
 
 The Z:AJ tracking grid *does* mark it: on the final column the formula reads the
 real breaching close and evaluates to "KO" for both an accumulator and a
-decumulator. It simply was not printed -- `print_area` stopped at column X.
-
-So the fix is to print it. Y (a dropped helper) and Z (the literal direction
-flag, always 2) are hidden so they stay off the page, the same way C and M
-already are, and AA:AJ are narrowed to suit their one-character contents.
+decumulator. It is not printed: printing stops at column X on Alvin's
+instruction (30 Oct 2026), fitted to one page wide. The AA:AJ grid is still
+built, but a knock-out on the report date therefore has no printed "KO" marker
+(open question D4); the row is red and the price bold. Y (a dropped helper) and
+Z (the literal direction flag, always 2) stay hidden, and AA:AJ stay narrow.
 
     .venv/Scripts/python.exe scripts/verify_last_day_ko_marker.py
 """
@@ -115,15 +115,16 @@ def live_print_area():
     sheets = [n for n in wb.sheetnames if wb[n].print_area]
     check("sheets with a print area", bool(sheets), True)
 
-    # The printed range must not depend on whether anything knocked out --
-    # every sheet ends at the same column, KO marker or no KO marker.
     last_cols = set()
     for name in sheets:
         ws = wb[name]
         area = ws.print_area[0] if isinstance(ws.print_area, list) else ws.print_area
         last_cols.add(area.split(':')[1].replace('$', '').rstrip('0123456789'))
-    check("every sheet prints to the same last column", sorted(last_cols),
-          [_STATUS_COLS[-1]])
+    check("every sheet prints to column X (Alvin, 30 Oct 2026)", sorted(last_cols), ['X'])
+    fits = [(wb[n].page_setup.fitToWidth, wb[n].page_setup.fitToHeight,
+             bool(wb[n].sheet_properties.pageSetUpPr and wb[n].sheet_properties.pageSetUpPr.fitToPage))
+            for n in sheets]
+    check("every sheet is one page wide, height automatic", sorted(set(fits)), [(1, 0, True)])
 
     ws = wb[sheets[0]]
     check("helper column Y hidden", bool(ws.column_dimensions['Y'].hidden), True)

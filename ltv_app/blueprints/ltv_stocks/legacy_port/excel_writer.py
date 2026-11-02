@@ -25,6 +25,7 @@ from openpyxl.styles import Alignment, Font
 from openpyxl.styles.borders import Border, Side
 from openpyxl.styles.fills import PatternFill
 from openpyxl.utils import column_index_from_string
+from openpyxl.worksheet.properties import PageSetupProperties
 
 from .term_sheet_calc import _FREQ_DIV, contract_records
 from .positions_calc import position_records, short_position_records, _average, _transactions_narrative
@@ -1037,6 +1038,11 @@ def build_workbook(db, report_date, bank_ids):
             openpyxl.worksheet.worksheet.Worksheet.set_printer_settings(
                 ws, paper_size=4, orientation='landscape'
             )
+            # A:X on one page width, on any paper (Alvin, 30 Oct 2026: "the pagebreak should be
+            # up to column x only"). Height runs to as many pages as the sheet needs.
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+            ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
             ws.page_margins.left = 0.1
             ws.page_margins.right = 0.1
             ws.page_margins.top = 0.15
@@ -1088,17 +1094,11 @@ def build_workbook(db, report_date, bank_ids):
             r = _write_short_positions(ws, shorts, report_date, r, wd, price_lookup,
                                        bank_id=bank_id, ccy=ccy, hkd_wd=hkd_wd)
 
-            # Through AJ, so the Z:AJ tracking grid prints. A knock-out on the
-            # last day of the window has no O:X cell after it to carry the "KO"
-            # marker, and that day -- the report date -- is both the likeliest
-            # day to find a fresh knock-out and the only chance the sheet gets,
-            # since the contract drops out of later reports once flagged
-            # status='KO'. The grid's final column already evaluates to "KO"
-            # from the real breaching close; it just wasn't on the page.
-            # Unconditional: the printed range never depends on whether
-            # anything knocked out. Y and Z are hidden (see _set_column_widths),
-            # so the range widens by the ten one-character status columns only.
-            ws.print_area = f'A1:{_STATUS_COLS[-1]}{r}'
+            # Through X only, on Alvin's instruction (30 Oct 2026). The Z:AJ tracking grid is
+            # still built, but it no longer prints, so a knock-out on the report date (column X)
+            # shows only as the reddened row and bold price, with no "KO" marker on the page.
+            # The 17 Sep 2026 widening to AJ was a review suggestion, not his. BUGS.md 2026-11-02.
+            ws.print_area = f'A1:X{r}'
 
             if ccy == 'HKD':
                 hkd_count.setdefault(bank_id, {})
