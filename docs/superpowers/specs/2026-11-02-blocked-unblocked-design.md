@@ -114,10 +114,14 @@ styling, and the notebook already does them from a template.
   - It sets every print setting in section 5 in code, so a re-saved template can't undo them (as the notebook does for
     its paper size).
   - The account pages are written from the `PAGE 3` prototype, one for each account that holds shares.
-- **Rows match the macro, the look matches the PDFs.** The 14:15 PDFs were printed before Alvin ran Filter Active
-  Stocks; his 14:18 save is after it. The `Blocked Unblocked` PDF therefore shows the 27 Oct filter state: a
-  zero-share block with `#DIV/0!` on each page and gaps in the column A numbering. So the app's rows follow the macro
-  (the 14:18 save), and its fonts, fills, borders, number formats and page breaks follow the PDFs.
+- **Visible blocks match the macro, the look matches the PDFs.** The 14:15 PDFs were printed before Alvin ran Filter
+  Active Stocks; his 14:18 save is after it. The `Blocked Unblocked` PDF therefore shows the 27 Oct filter state: a
+  zero-share block with `#DIV/0!` on each page and gaps in the column A numbering.
+  - The app's visible stock blocks and sections follow the macro's result in the 14:18 save.
+  - Its fonts, fills, borders, number formats and page breaks follow the PDFs.
+  - The save's other hidden rows don't follow one rule. Some were hidden by hand, and a macro defect leaves one
+    block half-hidden (section 4; F7 and F8 in section 6). The builder applies one rule, and the harness ties the
+    visible blocks, not the raw hidden-row set.
 
 ## 3. Inputs
 
@@ -142,7 +146,9 @@ day's fixings out, and gives different blocked figures on the pairs the work ord
 
 **Layout data the template held.** These items aren't inputs in section 1's sense, but the build needs them and today
 they live only in the workbook:
-- the account columns of `Blocked Unblocked`, with their order and header labels;
+- the account columns of `Blocked Unblocked`, with their order and header labels, and which of them are hidden.
+  CB1 and CBSG have no column at all. Section 5 says what the build does when an account without a visible column
+  holds shares;
 - which stocks are in the BANKS and NON-BANKS sections, and the row order;
 - the stock display names;
 - the `PAGE 3` groups (sections I to IV, Group A, Group B);
@@ -153,19 +159,47 @@ a home (open question 1).
 
 ## 4. Filter Active Stocks, in Python
 
-The macro (`FilterActiveStocks`, in the work order's `vba_source.bas`) runs on `Blocked Unblocked` in three steps. The
-builder does the same while it writes, so no macro and no button are needed:
+The macro (`FilterActiveStocks`, in the work order's `vba_source.bas`) runs on `Blocked Unblocked` in three steps.
+`lastRow` is the last row with column B filled.
+1. Unhide rows 5 to `lastRow`.
+2. For each row from 5 to `lastRow` with B filled, D = `"Shares"` and an E:S sum of 0, hide that row and the next
+   two. It hides only rows up to `lastRow`.
+3. Starting at row 5, find each section header (B empty, C = section label, D empty, E = first account name). If no
+   `Shares` row is visible between it and the next header (or `lastRow`), hide the header through the row before the
+   next header.
 
-1. **Start with every row visible.** The macro unhides rows 5 to the last. The builder writes all rows visible. The only
-   rows hidden by layout are each half's spacer row under the title (template row 3).
-2. **Hide each stock block with no position.** A block is three rows: the `Shares` row (B = code, D = `"Shares"`), the
-   `HKD` row, and a thin spacer. The macro hides all three when the `Shares` row's sum over E:S is 0. S is the total of
-   E:R, so this is the same as "the account cells sum to 0". The builder applies the same test to the figures it
-   computed.
-   - Keep the macro's sum test rather than "every cell is 0", so the harness matches the macro.
+**Replayed literally over the 14:18 save's cached values**, the macro hides the same rows as the save except rows 29–30,
+which the save has hidden and the macro leaves visible. The save's hidden rows therefore don't follow one rule:
+- **Step 3 never examines the first section** (F7). It starts at row 5, so it never sees the UNBLOCKED BANKS header on
+  row 4, and step 1 doesn't touch rows 1–4. In the save:
+  - row 4 and that section's footer rows 29–30 were hidden by hand;
+  - the blank row 31 under them was left visible;
+  - the macro itself hid the BLOCKED BANKS section through its blank row 198.
+- **The last block is only partly hidden** (F8). `lastRow` is the last block's `Shares` row (335). That block is zero,
+  so step 2 hides row 335 but not its `HKD` row and spacer (336–337). The save prints an orphan `HKD` row above the
+  NON-BANK BLOCK totals. Step 1 also never unhides rows below `lastRow`.
+- **The spacer row under each half's title is fixed layout, not filter.** It is hidden under UNBLOCKED (row 3) and
+  visible under BLOCKED (row 173).
+
+**The builder's rule.** It writes every row visible, then:
+1. **Hides each stock block with no position**: all three rows (`Shares`, `HKD`, spacer) when the `Shares` row's
+   account cells sum to 0. That is the macro's E:S test, because S is the total of E:R.
+   - Keep the sum test, not "every cell is 0", so the visible blocks match the macro.
    - The two differ only on a row mixing long and short positions that cancel (open question 5).
-3. **Hide each section left with no visible stock**, from its header row (B empty, C = section label, D empty,
-   E = first account name) through its footer rows, up to the next header.
+2. **Hides each section with no visible block, in every section including the first.** It hides from the header row
+   through the row before the next header of the same half. For a half's last section, it stops at its last footer
+   row. A footer row that also carries the half's `BANK + NON-BANK` total (row 339 in the save) stays visible.
+   - A section never runs into the other half.
+   - The macro's would run past the half's totals and the BLOCKED title if the UNBLOCKED NON-BANKS section were ever
+     empty. That didn't arise on 30 Oct.
+3. **Leaves the fixed rows as the style template has them.** The title spacers stay as in the save.
+
+**Pending Alvin (D7b): F7 and F8.** **Recommended:** don't reproduce the hand-hiding gap or the orphan row.
+
+Replayed over the 14:18 save, the builder's rule gives the same visible blocks, section headers and footer rows. It
+differs only in rows the harness allow-lists (section 8, case 4):
+- the blank separator row 31, which the builder hides with the first section;
+- the orphan `HKD` row and spacer, 336–337, which the builder hides with their block.
 
 The column A counter follows the template's formula, `INDIRECT("A"&ROW()-3)+IF(S<>0,1,0)`. Within each half it is the
 running count of blocks whose total is non-zero, so once the filter has run it numbers the visible blocks 1, 2, 3 and
@@ -191,6 +225,14 @@ The work order's section 2 table gives these settings, read through Excel COM fr
   - print area `A1:V<last row>`, zoom 75;
   - a **manual row break before the BLOCKED title row** (row 172 in the template);
   - hidden columns **B G H I J M**: the code column, and the account columns CB2, CB3, CBBH, CBBH2 and SC;
+  - **every account holding shares on D, long or short, has a visible column.** The column list and the hidden
+    columns are fixed layout, and CB1 and CBSG have no column at all. An account with shares in a hidden column, or
+    in no column, would drop off the printed page, and its shares would be missing from S and every total.
+    - **Recommended:** the build refuses and names the account, until the layout data (open question 1) gives it a
+      visible column.
+    - The alternative is to derive the hidden columns from the data. That would also hide the visible empty columns
+      the PDF shows (BOS, DBPL, MST2), and it changes the page width at zoom 75.
+    - On the 30 Oct ledger, every account holding shares has a visible column;
   - hidden rows from section 4.
 - **Page 1, UNBLOCKED:**
   - title row (height 23.25): `UNBLOCKED` in C, `*NOTE: HKD is based on Ave. Cost` in K, the edition date in Q;
@@ -278,16 +320,42 @@ on the printed pages.
   shows two different grand totals. *Pending Alvin (D7b).*
   - **Recommended:** make the bottom grand total I + II + III + IV, equal to the top one. Keep NON-BANK SUB-TOTAL as
     the groups listed beneath.
-- **F6. The `Equities` "Blocked" column shows the two short rows as negatives.** `I = IF(J>C, C, J)` with C < 0 and
-  J = 0 makes a short count as blocked. Its total therefore falls below Σ min(to block, holdings) over the long rows.
-  *Pending Alvin (D7b).*
-  - **Recommended:** the data sheet's Blocked figure is min(to block, holdings) on long rows only, and a short row
-    carries its shares in its own Short column.
-  - The printed BLOCKED page keeps the short block where the 30 Oct edition printed it, in red as a negative, so the
-    printed pages don't change.
+- **F6. Short rows count as blocked, and the printed BLOCKED totals carry it.** `Equities` I = `IF(J>C, C, J)` with
+  C < 0 and J = 0 makes a short count as blocked, so the "Blocked" column shows the two short rows as negatives.
+  - The printed BLOCKED page draws its short block (row 305 in the save) from that column, through the named range
+    `BLOCKED` = `Equities!I:I`.
+  - Its totals sum over that block: `S338`, the NON-BANK BLOCK SHARES TOTAL, is `SUMIF(T199:T337, …, S199:S337)`,
+    and the BLOCKED `BANK + NON-BANK` total `F339` and the HKD totals `S339` and `F340` follow from it.
+  - So the printed blocked totals fall below Σ min(to block, holdings) over the long rows by the short shares.
+  - The GRAND TOTAL (`F342` = `F339` + `F167`) is the net position, longs less shorts. It is not wrong.
 
-The work order speaks of five faults. The list above has six because it splits the four `PAGE 3` items. Alvin can rule
-on them one by one.
+  *Pending Alvin (D7b).* The data sheet carries Blocked = min(to block, holdings) on long rows only, and each short
+  position in its own Short column. The printed page then has two options:
+  - **Recommended: a separate SHORT line.** The BLOCKED page prints the short blocks as their own section after
+    NON-BANKS, with a `SHORT` header and its own `SHORT SHARES TOTAL:` and `HKD TOTAL:` rows, kept out of the BLOCK
+    totals.
+    - The printed BLOCK totals then equal Σ min(to block, holdings) over the long rows.
+    - The GRAND TOTAL becomes unblocked + blocked + short, the same net figure as now.
+    - Printed change: the short block moves out of NON-BANKS into the SHORT section, and the NON-BANK BLOCK and BLOCKED
+      totals rise by the short shares.
+  - **Alternative: keep the 30 Oct presentation.** The short block stays inside NON-BANKS on the BLOCKED page, drawn
+    from the Short column, and the printed BLOCK totals keep including it. The data sheet's Blocked column is right,
+    but the printed blocked totals keep the understatement.
+
+**Filter Active Stocks defects,** found by replaying the macro over the 14:18 save (section 4):
+
+- **F7. Step 3 never examines the first section.** It starts at row 5, so the UNBLOCKED BANKS header on row 4 is never
+  seen. In the save, that section was hidden by hand: rows 4 and 29–30 are hidden, and the blank row 31 is left
+  visible. *Pending Alvin (D7b).*
+  - **Recommended:** the builder examines every section, the first included, and hides an empty one from its header
+    to the row before the next header, as the macro does for the others.
+- **F8. The last block of the sheet is only partly hidden.** `lastRow` is the last row with B filled, which is that
+  block's `Shares` row. Step 2 hides only rows up to `lastRow`, so a zero last block leaves its `HKD` row and spacer
+  visible. The save prints that orphan `HKD` row (336) above the NON-BANK BLOCK totals. *Pending Alvin (D7b).*
+  - **Recommended:** don't reproduce it. The builder hides all three rows of every zero block.
+
+The work order speaks of five faults. F1–F6 are its section 4 items; there are six because the four `PAGE 3` items are
+split. F7 and F8 are the macro's. Alvin can rule on them one by one.
 
 The harness ties the built figures to the evidence except where a ruling changes them. A fixed fault is checked
 against the corrected rule, computed at runtime, not against the evidence cell.
@@ -302,8 +370,12 @@ already in place. It holds:
 - the printed sheets in workbook order: `Market vs Average`, `Market vs Average (2)`, `PAGE 3`, the account pages, and
   `Blocked Unblocked`;
 - one data sheet, `Equities` (not printed). It has a row per account and code with shares, average, cost, to block,
-  blocked, unblocked, short, close (with its date), market value and gain/loss. Everything printed derives from it, and
-  the harness ties it.
+  blocked (long rows only), unblocked, short, close (with its date), market value and gain/loss. The harness ties it.
+  Every printed share figure is drawn from one of its columns:
+  - the UNBLOCKED page from Unblocked;
+  - the BLOCKED page's long blocks from Blocked;
+  - the short blocks from Short, printed in the SHORT section or inside NON-BANKS, depending on F6;
+  - the market figures from close and market value.
 
 Why this default:
 - No macro is left to run, so `.xlsm` buys nothing, and an `.xlsx` can't carry code.
@@ -351,7 +423,15 @@ print `PASS`/`FAIL` per case.
    - The visible blocks, as (half, section, code), equal the reference's visible blocks: the 14:18 save, after the
      macro.
    - The account cells of each visible `Shares` row equal the reference's E:R.
-   - Section 4's three steps, run over the reference's own values, reproduce its hidden rows.
+   - The visible section headers and section footer rows equal the reference's.
+   - The raw hidden-row sets are not compared. Any other difference in hidden rows must be one of the allow-listed
+     kinds; any other difference fails, named by row number and kind. The allowed kinds:
+     - a blank separator row (row 31: F7, the save's hand-hiding);
+     - the `HKD` row or spacer of a block whose `Shares` row is hidden (336–337: F8, the orphan).
+
+     Each kind leaves the list if Alvin rules to reproduce the save's behaviour, because the builder then reproduces
+     it.
+   - Every account holding shares on D has a visible column (section 5).
 5. **Closes.**
    - Every printed code's close equals the reference `Closing` price for the same date (29 Oct on the 30 Oct build).
    - Figures that depend on closes are compared only where both sides used the same close date, as the work order
@@ -359,7 +439,9 @@ print `PASS`/`FAIL` per case.
 6. **Print layout** (Excel COM, read-only, hidden, `Quit()` in `finally`). For every printed sheet, compare against
    the section 5 table:
    - paper 5, landscape, zoom, print area, manual breaks;
-   - hidden columns, the visible-row count against the reference, and `PageSetup.Pages.Count`.
+   - hidden columns and `PageSetup.Pages.Count`;
+   - hidden rows, compared as in case 4 (visible blocks, headers and footers equal; other differences only of the
+     allow-listed kinds). A raw visible-row count is not compared.
    - Export both PDFs to temp and check 2 and 9 pages of 14 × 8.5 in.
 
 Page counts depend on the active printer's metrics. On this machine the Legal setting gave the same counts on the
@@ -374,10 +456,21 @@ ran with.
    - A stock list in this public repository would describe the client's portfolio.
    - **Proposed:** a small table, or a JSON file under `instance/` (untracked), seeded from the 30 Oct edition. It would
      be editable when a new stock or account appears.
-2. **Shares to block "as of D".** `remaining_days` counts the periods not yet marked `received` at build time. An
-   edition built after D (Friday's report run on Monday) would count fixings received after D as already delivered.
-   - **Proposed:** count a period as received only when its end date is ≤ D, as `calc.py`'s RECEIVED_THRU option does.
-   - Alvin to confirm.
+2. **Shares to block "as of D".** `remaining_days` counts the periods not flagged `received` at build time. Two kinds
+   of period disagree with D:
+   - **Periods ended by D but not yet flagged**, a fixing Alvin hasn't marked received.
+     - Holdings on the edition's rule already include the day's fixings, so still counting such a period as to block
+       may count the same shares twice.
+     - `calc.py`'s optional RECEIVED_THRU argument (its line 51) adds these: a period counts as received when it is
+       flagged or its end date is ≤ that date.
+     - On the 30 Oct ledger one period ends on D unflagged. The 30 Oct edition counted it as still to block.
+   - **Periods flagged but ending after D.** An edition built late (Friday's report run on Monday) would count
+     deliveries after D as already made. There are none on the 30 Oct ledger.
+   - **Proposed:** as of D, a period counts as received when its end date is ≤ D, flagged or not, and not received
+     when it ends after D, flagged or not.
+   - Alvin to rule on each direction. The first matters for his "including that day's fixings" rule. If he accepts it,
+     the 30 Oct harness's to-block figure changes on one pair. The harness then computes that pair from the rule
+     instead of comparing it with the evidence.
 3. **Market time and close date in the header** (`Market vs Average` L4/L5). `tbl_stock_price` has no time. The
    30 Oct edition printed the Yahoo time in L4 and the edition date in L5 (`=D4`), over 29 Oct closes.
    - **Proposed:** L5 shows the date of the close actually used, and L4 stays empty, rather than invent a time.
