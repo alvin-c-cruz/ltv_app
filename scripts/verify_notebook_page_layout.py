@@ -17,7 +17,8 @@ For each of the newest trade dates with a notebook, generated through the route:
   L4  within an account the items run 1, 2, 3 ... across repeated headings, and a
       new account starts again at 1;
   L5  no transfer (its nine lines, title to Average) crosses a page end -- on
-      20 Oct he moved the whole Transfer of Stocks section to a new page for it.
+      20 Oct he moved the whole Transfer of Stocks section to a new page for it;
+  L6  the sheet is set to paper 10000, the "Notebook" form (5.5 x 8.5 in) the page model assumes;
 Plus R1-R5, place_heading() on fixed sizes shaped like his October pages (the
 sampled dates may not happen to exercise every rule).
 Both a repeated (continuation) heading and an account opening a page are required
@@ -105,7 +106,7 @@ with app.app_context():
 TRANSFER_ROWS = 9
 
 seen = {"continuation heading": 0, "page-opening account": 0, "transfer": 0}
-wrong = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5": 0}
+wrong = {"L1": 0, "L2": 0, "L3": 0, "L4": 0, "L5": 0, "L6": 0}
 checked = 0
 for trade_date in dates:
     if checked >= DATES_TO_CHECK:
@@ -114,6 +115,8 @@ for trade_date in dates:
     if ws is None:
         continue
     checked += 1
+    if ws.page_setup.paperSize != 10000:
+        wrong["L6"] += 1
     headings, items, remaining, section_end = _layout(ws)
 
     page_start = FIRST_PAGE_END + 1
@@ -164,6 +167,7 @@ _case("L2 line items crossing a page end", wrong["L2"], 0)
 _case("L3 balance lines ending on a later page than their last trade", wrong["L3"], 0)
 _case("L4 items out of sequence within an account", wrong["L4"], 0)
 _case("L5 transfers crossing a page end", wrong["L5"], 0)
+_case("L6 notebooks not on the Notebook form (paper 10000)", wrong["L6"], 0)
 
 # place_heading(row it would take after two blank rows, last row written above, unit sizes)
 from ltv_app.blueprints.notebook.extensions.create_notebook import page_end, place_heading

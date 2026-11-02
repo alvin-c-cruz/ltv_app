@@ -26,6 +26,9 @@ ROW_NUM_START = 24
 # print area on 73, 105, 137 or 169 -- never on 41 (BUGS.md 2026-10-26).
 FIRST_PAGE_END = 41
 PAGE_ROWS = 32
+# The printer driver's "Notebook" form, 5.5 x 8.5 in, which Alvin prints on. FIRST_PAGE_END and
+# PAGE_ROWS hold only on it; the template ships 10001 ("Long", 8.5 x 13).
+NOTEBOOK_PAPER = 10000
 LINE_COLUMNS = "ABCDEFGHIJKLMNOPQ"
 STOCK_TRANSACTIONS = [
     "Buy (Accu)",
@@ -83,6 +86,8 @@ class CreateNotebook:
         self.write_transfers(ws, row_num, ink_end)
 
         ws.print_area = f"A1:Q{rule_to_page_end(ws)}"
+        # Set here, not only in the template, so an uploaded template cannot undo it.
+        ws.page_setup.paperSize = NOTEBOOK_PAPER
 
         if CLOSING_SHEET in wb.sheetnames:
             colour_closing_changes(wb[CLOSING_SHEET])
