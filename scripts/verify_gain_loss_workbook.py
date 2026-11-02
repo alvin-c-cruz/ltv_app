@@ -11,7 +11,9 @@ the newest month and the year to date (all banks, all stocks). Formulas stay une
   G3 each SUB-Total sums exactly its group's account rows, and the Total sums every SUB-Total;
   G4 each account row reads its own N and the currency key row;
   G7 no sheet links to a fixed SUMMARY account row (=SUMMARY!C31); they look up column N;
-  G8 the SUMMARY print area ends on the conversion TOTAL row.
+  G8 the SUMMARY print area ends on the conversion TOTAL row;
+  G5 every account sheet's opening-position USD value divides by that sheet's own rate (E6);
+  G6 hkd_per_sgd is defined, sgd_per_usd is derived from it, and SUMMARY converts SGD with it.
 No figure is printed.
 
 Run: ..\\venv\\Scripts\\python.exe scripts\\verify_gain_loss_workbook.py
@@ -30,6 +32,7 @@ sys.path.insert(0, SERVER)
 from openpyxl import load_workbook
 
 from ltv_app import create_app
+from ltv_app.blueprints.gain_loss.summary_sheet import HKD_PER_SGD
 
 CCYS = ("HKD", "JPY", "AUD", "USD", "SGD")
 KEY_CURRENCIES = ["AUD", "HKD", "JPY", "USD", "SGD"]
@@ -107,6 +110,29 @@ def _check(wb, active_ids, tag):
     area = str(ws.print_area or "")
     last_row = int(area.rpartition("$")[2]) if area.rpartition("$")[2].isdigit() else None
     _case(f"G8 [{tag}] SUMMARY prints through the conversion TOTAL", last_row, conv_total)
+
+    wrong_usd = 0
+    for name in wb.sheetnames:
+        bank, _, ccy = name.rpartition("-")
+        if ccy not in CCYS or not bank or wb[name].sheet_state != "visible":
+            continue
+        sheet = wb[name]
+        for r in range(1, sheet.max_row + 1):
+            h = sheet[f"H{r}"].value
+            if isinstance(h, str) and h.startswith(f"=G{r}/") and h != f"=G{r}/$E$6":
+                wrong_usd += 1
+    _case(f"G5 [{tag}] USD values not at the sheet's own rate (E6)", wrong_usd, 0)
+
+    sgd_row = next(r for r in range(total, ws.max_row + 1) if ws[f"B{r}"].value == "SGD")
+    names = wb.defined_names
+    rates = (
+        "hkd_per_sgd" in names and names["hkd_per_sgd"].attr_text == "Sheet1!$C$10",
+        wb["Sheet1"]["C10"].value == HKD_PER_SGD,
+        wb["Sheet1"]["C8"].value == "=C2/C10",
+        ws[f"D{sgd_row}"].value == "=hkd_per_sgd",
+        ws["L7"].value == f"=D{sgd_row}",
+    )
+    _case(f"G6 [{tag}] one SGD rate: hkd_per_sgd, sgd_per_usd from it, SUMMARY uses it", rates, (True,) * 5)
 
 
 with app.app_context():

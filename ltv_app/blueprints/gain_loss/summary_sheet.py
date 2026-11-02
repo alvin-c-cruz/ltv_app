@@ -9,6 +9,8 @@ active or has a sheet in this workbook, so a new account cannot drop out of the 
 import re
 from copy import copy
 
+from openpyxl.workbook.defined_name import DefinedName
+
 # Alvin's layout (his hand-finished 30 Oct 2026 file): a bank heading, then (bank_id, row label).
 SUMMARY_GROUPS = (
     ("Citibank", (("CBSG", "Singapore Account 1"),)),
@@ -34,7 +36,7 @@ CONVERSION = (
     ("JPY", "D", 0.07),
     ("AUD", "B", 5.5),
     ("USD", "E", 7.85),
-    ("SGD", "F", 0.18),
+    ("SGD", "F", "=hkd_per_sgd"),
 )
 FIXED_LINK = re.compile(r"^=SUMMARY!\$?([A-Z]{1,2})\$?(\d+)$")
 
@@ -150,3 +152,20 @@ def relink_summary_refs(wb, old_rows):
                     cell.value = f'=SUMIF(SUMMARY!$N:$N,"{bank_id}",SUMMARY!${col}:${col})'
                     rewritten += 1
     return rewritten
+
+
+# Alvin, 30 Oct 2026: "use 6.06 for sgd". Whether it stays fixed or later comes from a
+# dated rate source is his call (BUGS.md 2026-11-02, D6).
+HKD_PER_SGD = 6.06
+
+
+def apply_rates(wb):
+    """One SGD rate for the whole workbook: hkd_per_sgd on Sheet1, and sgd_per_usd derived
+    from it and hkd_per_usd, so the sheets' USD values and SUMMARY's conversion agree."""
+    ws = wb["Sheet1"]
+    ws["B10"] = "hkd_per_sgd"
+    ws["C10"] = HKD_PER_SGD
+    ws["B10"]._style = copy(ws["B8"]._style)
+    ws["C10"]._style = copy(ws["C8"]._style)
+    ws["C8"] = "=C2/C10"          # sgd_per_usd = hkd_per_usd / hkd_per_sgd
+    wb.defined_names["hkd_per_sgd"] = DefinedName("hkd_per_sgd", attr_text="Sheet1!$C$10")

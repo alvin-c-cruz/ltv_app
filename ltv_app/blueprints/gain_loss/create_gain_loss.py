@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from flask import current_app, g, url_for
 
 from .. database import get_db
-from .summary_sheet import account_rows, build_summary, relink_summary_refs, summary_groups
+from .summary_sheet import account_rows, apply_rates, build_summary, relink_summary_refs, summary_groups
 from .. transactions import get_balance, get_transactions, get_short_balance, get_short_transactions
 from .. transactions.models import (
     accumulate_position, accumulate_short_position,
@@ -225,7 +225,7 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                     write_box_normal(ws, f'E{row_num}', beginning_balance, "shares")
                     write_box_normal(ws, f'F{row_num}', average, "currency_4")
                     write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
-                    write_box_normal(ws, f'H{row_num}', f'=G{row_num}/hkd_per_usd', "currency_2")
+                    write_box_normal(ws, f'H{row_num}', f'=G{row_num}/$E$6', "currency_2")
                     ws.merge_cells(f'H{row_num}:I{row_num}')
                     write_box_normal(ws, f'K{row_num}', '')
                     write_box_normal(ws, f'L{row_num}', f'=B{row_num}')
@@ -244,7 +244,7 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                     write_box_normal(ws, f'E{row_num}', s_qty, "shares")
                     write_box_normal(ws, f'F{row_num}', s_avg, "currency_4")
                     write_box_normal(ws, f'G{row_num}', f'=E{row_num}*F{row_num}', "currency_2")
-                    write_box_normal(ws, f'H{row_num}', f'=G{row_num}/hkd_per_usd', "currency_2")
+                    write_box_normal(ws, f'H{row_num}', f'=G{row_num}/$E$6', "currency_2")
                     ws.merge_cells(f'H{row_num}:I{row_num}')
                     write_box_normal(ws, f'K{row_num}', 0, "currency_2")
                     write_box_normal(ws, f'L{row_num}', f'=B{row_num}')
@@ -473,6 +473,7 @@ def create_file(date_from, date_to, bank_ref, code_ref):
         "SELECT bank_id, bank_name, is_active FROM tbl_bank_account ORDER BY priority").fetchall()
     build_summary(summary, summary_groups(accounts, sheet_bank_ids))
     relink_summary_refs(wb, old_rows)
+    apply_rates(wb)
 
     output = io.BytesIO()
     wb.save(output)
