@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from flask import current_app, g, url_for
 
 from .. database import get_db
+from .summary_sheet import account_rows, build_summary, relink_summary_refs, summary_groups
 from .. transactions import get_balance, get_transactions, get_short_balance, get_short_transactions
 from .. transactions.models import (
     accumulate_position, accumulate_short_position,
@@ -461,6 +462,17 @@ def create_file(date_from, date_to, bank_ref, code_ref):
                     if short_head_row_num:
                         write_box_normal(ws, f'K{short_head_row_num}', f'=L{row_num}', "currency_2")
                     row_num += 2
+
+    # SUMMARY from the accounts, not the template's fixed list (BUGS.md 2026-11-02)
+    summary = wb['SUMMARY']
+    old_rows = account_rows(summary)
+    sheet_bank_ids = {name.rpartition('-')[0] for name in wb.sheetnames
+                      if name.rpartition('-')[2] in ('HKD', 'JPY', 'AUD', 'USD', 'SGD')
+                      and wb[name].sheet_state == 'visible'}
+    accounts = get_db().execute(
+        "SELECT bank_id, bank_name, is_active FROM tbl_bank_account ORDER BY priority").fetchall()
+    build_summary(summary, summary_groups(accounts, sheet_bank_ids))
+    relink_summary_refs(wb, old_rows)
 
     output = io.BytesIO()
     wb.save(output)
