@@ -5,35 +5,50 @@ from openpyxl.styles import Alignment, Border, Side
 
 from ...workbook_download import in_memory
 
+# Every row the three downloads read: the long book, plus the Short Book's own trades.
+# Return Shares / Borrow Shares are booked in both tables, so the Short Book's copy is left
+# out, as the notebook's SHORT_SQL does. tbl_transaction_short has no counter_bank_ref: a
+# short trade is never a transfer. BUGS.md 2026-11-02.
+_LEDGER = """
+    SELECT trade_date, value_date, bank_ref, code_ref, transaction_type, quantity, price,
+           brokerage, commission, foreign_charge, stamp_duty, misc, counter_bank_ref
+      FROM tbl_transaction
+    UNION ALL
+    SELECT trade_date, value_date, bank_ref, code_ref, transaction_type, quantity, price,
+           brokerage, commission, foreign_charge, stamp_duty, misc, NULL
+      FROM tbl_transaction_short
+     WHERE transaction_type IN ('Sell (Short)', 'Buy (Pay Short)')
+"""
+
 
 def _posting_transactions(db, start_date, end_date):
     """Port of DownloadPosting.transactions (methods.py)."""
-    sql = """
+    sql = f"""
       SELECT
         tbl_bank_account.bank_id,
         tbl_bank_account.bank_name,
         tbl_code.code,
         tbl_code.stock_name,
-        tbl_transaction.trade_date,
-        tbl_transaction.value_date,
-        tbl_transaction.transaction_type,
-        tbl_transaction.quantity,
-        tbl_transaction.price,
-        tbl_transaction.brokerage,
-        tbl_transaction.commission,
-        tbl_transaction.foreign_charge,
-        tbl_transaction.stamp_duty,
-        tbl_transaction.misc,
-        tbl_transaction.counter_bank_ref,
+        t.trade_date,
+        t.value_date,
+        t.transaction_type,
+        t.quantity,
+        t.price,
+        t.brokerage,
+        t.commission,
+        t.foreign_charge,
+        t.stamp_duty,
+        t.misc,
+        t.counter_bank_ref,
         tbl_currency.ccy_id
-      FROM tbl_transaction
-      INNER JOIN tbl_bank_account on tbl_bank_account.ref_num = tbl_transaction.bank_ref
-      INNER JOIN tbl_code on tbl_code.ref_num = tbl_transaction.code_ref
+      FROM ({_LEDGER}) AS t
+      INNER JOIN tbl_bank_account on tbl_bank_account.ref_num = t.bank_ref
+      INNER JOIN tbl_code on tbl_code.ref_num = t.code_ref
       INNER JOIN tbl_currency on tbl_currency.ref_num = tbl_code.ccy_ref
-      INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = tbl_transaction.transaction_type
-      WHERE tbl_transaction.trade_date >= ?
-        AND tbl_transaction.trade_date <= ?
-      ORDER BY tbl_bank_account.priority, tbl_currency.priority, tbl_transaction.trade_date, tbl_transaction_type.priority
+      INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = t.transaction_type
+      WHERE t.trade_date >= ?
+        AND t.trade_date <= ?
+      ORDER BY tbl_bank_account.priority, tbl_currency.priority, t.trade_date, tbl_transaction_type.priority
       ;
     """
 
@@ -239,24 +254,24 @@ def download_posting(db, posting_month, posting_year):
 def download_daily_transactions(db, trade_date):
     """Port of DownloadDailyTransactions — single date, single sheet,
     columns Trade Date/Account/Transaction/Stock/Quantity/Price/Amount(formula)."""
-    sql = """
+    sql = f"""
       SELECT
         tbl_bank_account.bank_id,
         tbl_bank_account.bank_name,
         tbl_code.code,
         tbl_code.stock_name,
-        tbl_transaction.trade_date,
-        tbl_transaction.transaction_type,
-        tbl_transaction.quantity,
-        tbl_transaction.price,
-        tbl_transaction.counter_bank_ref,
+        t.trade_date,
+        t.transaction_type,
+        t.quantity,
+        t.price,
+        t.counter_bank_ref,
         tbl_currency.ccy_id
-      FROM tbl_transaction
-      INNER JOIN tbl_bank_account on tbl_bank_account.ref_num = tbl_transaction.bank_ref
-      INNER JOIN tbl_code on tbl_code.ref_num = tbl_transaction.code_ref
+      FROM ({_LEDGER}) AS t
+      INNER JOIN tbl_bank_account on tbl_bank_account.ref_num = t.bank_ref
+      INNER JOIN tbl_code on tbl_code.ref_num = t.code_ref
       INNER JOIN tbl_currency on tbl_currency.ref_num = tbl_code.ccy_ref
-      INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = tbl_transaction.transaction_type
-      WHERE tbl_transaction.trade_date = ?
+      INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = t.transaction_type
+      WHERE t.trade_date = ?
       ORDER BY tbl_currency.priority, tbl_bank_account.priority, tbl_code.code, tbl_transaction_type.priority
       ;
     """
@@ -354,26 +369,26 @@ def download_transaction_range(db, start_date, end_date):
     """Port of DownloadTransactionRange — date range, single sheet, same
     columns as daily transactions plus explicit column widths + thin
     borders on every cell."""
-    sql = """
+    sql = f"""
       SELECT
         tbl_bank_account.bank_name,
         tbl_code.code,
-        tbl_transaction.trade_date,
-        tbl_transaction.transaction_type,
-        tbl_transaction.quantity,
-        tbl_transaction.price,
-        tbl_transaction.counter_bank_ref,
+        t.trade_date,
+        t.transaction_type,
+        t.quantity,
+        t.price,
+        t.counter_bank_ref,
         tbl_currency.ccy_id
-      FROM tbl_transaction
-      INNER JOIN tbl_bank_account on tbl_bank_account.ref_num = tbl_transaction.bank_ref
-      INNER JOIN tbl_code on tbl_code.ref_num = tbl_transaction.code_ref
+      FROM ({_LEDGER}) AS t
+      INNER JOIN tbl_bank_account on tbl_bank_account.ref_num = t.bank_ref
+      INNER JOIN tbl_code on tbl_code.ref_num = t.code_ref
       INNER JOIN tbl_currency on tbl_currency.ref_num = tbl_code.ccy_ref
-      INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = tbl_transaction.transaction_type
-      WHERE tbl_transaction.trade_date >= ? AND tbl_transaction.trade_date <= ?
+      INNER JOIN tbl_transaction_type on tbl_transaction_type.transaction_type = t.transaction_type
+      WHERE t.trade_date >= ? AND t.trade_date <= ?
       -- Grouped for reading: account, then stock, then chronological within
       -- the stock. Currency is not a sort term any more -- a stock belongs to
       -- exactly one currency, so ordering by code already groups it.
-      ORDER BY tbl_bank_account.priority, tbl_code.code, tbl_transaction.trade_date, tbl_transaction_type.priority
+      ORDER BY tbl_bank_account.priority, tbl_code.code, t.trade_date, tbl_transaction_type.priority
       ;
     """
     result = db.execute(sql, (start_date, end_date)).fetchall()
