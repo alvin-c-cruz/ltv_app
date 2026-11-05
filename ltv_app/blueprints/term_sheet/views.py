@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, g, abort
 from flask_login import current_user
+from datetime import datetime
 
 from .models import TermSheet, StockContract, FixingSchedule, CreateSchedules, next_day
 
@@ -8,6 +9,19 @@ from .. auth import login_required
 from ... tz import ph_today
 
 bp = Blueprint("term_sheet", __name__, template_folder="pages", url_prefix="/term-sheet")
+
+
+def _day(day, fmt="%d-%b-%Y"):
+    return datetime.strptime(str(day)[:10], "%Y-%m-%d").strftime(fmt)
+
+
+def _holiday_roll_flash(contract_ref, rolls):
+    """One warning naming each period whose end CreateSchedules moved off a weekday holiday."""
+    moved = "; ".join(f"period {n} ({_day(grid, '%a %d-%b-%Y')} → {_day(end, '%a %d-%b-%Y')})"
+                      for n, grid, end in rolls)
+    return (f"⚠ {contract_ref}: {len(rolls)} period end(s) fell on a holiday and moved to the next "
+            f"trading day: {moved}. Banks have also ended such periods on the trading day before; "
+            f"check these against the term sheet.")
 
 
 @bp.route("/<bank_id>", methods=["GET", "POST"])
@@ -139,7 +153,7 @@ def add():
 
         ts.save()
 
-        CreateSchedules(ts, db)
+        schedules = CreateSchedules(ts, db)
         ts.get_schedules()
         schedule_warnings = ts.validate_schedule()
 
@@ -170,6 +184,8 @@ def add():
         if schedule_warnings:
             flash(f"⚠ {ts.ref_num}: generated schedule has {len(schedule_warnings)} "
                   f"warning(s) — review its Period Schedule.")
+        if schedules.holiday_rolls:
+            flash(_holiday_roll_flash(ts.ref_num, schedules.holiday_rolls))
         return redirect(url_for('transactions.home', trade_date=trade_date))
     else:
         ts = {}

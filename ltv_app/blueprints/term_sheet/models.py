@@ -342,6 +342,11 @@ class TermSheet(Model):
 class CreateSchedules:
     def __init__(self, term_sheet, db):
         self.db = db
+        # (period number, grid end, saved end) for each bi-weekly/weekly period
+        # whose grid end was a weekday holiday and so moved forward. DB has ended
+        # such periods both ways, so Add and Refresh Periods name them for a check
+        # against the term sheet (work order 2026-11-04).
+        self.holiday_rolls = []
 
         contract_ref = term_sheet.ref_num
 
@@ -391,6 +396,8 @@ class CreateSchedules:
             for i in range(1, num_periods + 1):
                 grid_end = str((anchor + timedelta(days=step * i - 1)).date())
                 end_date = self.__roll_period_end(grid_end)
+                if end_date != grid_end and datetime.strptime(grid_end, "%Y-%m-%d").isoweekday() <= 5:
+                    self.holiday_rolls.append((i, grid_end, end_date))
                 days = Counter(self.db, start_date, end_date, self.code_ref).count
                 FixingSchedule(
                     db=self.db, contract_ref=contract_ref, start_date=start_date,
