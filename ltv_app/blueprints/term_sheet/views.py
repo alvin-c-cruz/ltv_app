@@ -2,7 +2,8 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import current_user
 from datetime import datetime
 
-from .models import TermSheet, StockContract, FixingSchedule, CreateSchedules, next_day
+from .models import (TermSheet, StockContract, FixingSchedule, CreateSchedules, next_day,
+                     refresh_schedule, _to_int)
 
 from .. database import get_db
 from .. auth import login_required
@@ -22,6 +23,23 @@ def _holiday_roll_flash(contract_ref, rolls):
     return (f"⚠ {contract_ref}: {len(rolls)} period end(s) fell on a holiday and moved to the next "
             f"trading day: {moved}. Banks have also ended such periods on the trading day before; "
             f"check these against the term sheet.")
+
+
+def _refresh_flashes(result, period_count):
+    """What Refresh Periods did with the received marks (see models.refresh_schedule)."""
+    messages = []
+    if result.kept:
+        messages.append(f"Kept the received marks on {len(result.kept)} period(s).")
+    if result.moved:
+        moved = "; ".join(f"period {n} ({_day(os_)} – {_day(oe)} → {_day(ns)} – {_day(ne)})"
+                          for n, os_, oe, ns, ne in result.moved)
+        messages.append(f"⚠ {len(result.moved)} received period(s) changed dates; check each one's "
+                        f"received shares: {moved}.")
+    if result.dropped:
+        dropped = "; ".join(f"period {n} (received {_to_int(v):,})" for n, v in result.dropped)
+        messages.append(f"⚠ The new schedule has {period_count} period(s), so {len(result.dropped)} "
+                        f"received mark(s) were dropped: {dropped}.")
+    return messages
 
 
 @bp.route("/<bank_id>", methods=["GET", "POST"])
@@ -275,17 +293,19 @@ def edit(contract_ref, view_only=False):
 
         ts.save()
 
-        # Refresh Periods: discard the existing schedule and regenerate it from
-        # the (just-saved) frequency / tenor / start date using the same engine
-        # the add flow uses. Lets users correct a wrong frequency in one click.
+        # Refresh Periods: regenerate the schedule from the (just-saved) frequency /
+        # tenor / start date with the engine the add flow uses, keeping the received
+        # marks by period number. Lets users correct a wrong schedule in one click.
         if form.get('refresh_periods') == '1':
-            db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?;", (contract_ref,))
-            db.commit()
-            CreateSchedules(ts, db)
+            result = refresh_schedule(ts, db)
             ts.get_schedules()
             schedule_warnings = ts.validate_schedule()
             freq_label = dict(frequencies).get(ts.frequency, ts.frequency)
             flash(f"Period schedule regenerated for {ts.transaction_type} {ts.reference} ({freq_label}).")
+            for message in _refresh_flashes(result, len(ts.schedules)):
+                flash(message)
+            if result.holiday_rolls:
+                flash(_holiday_roll_flash(contract_ref, result.holiday_rolls))
             if schedule_warnings:
                 flash(f"⚠ Regenerated schedule has {len(schedule_warnings)} warning(s) — see Period Schedule below.")
             return redirect(url_for('term_sheet.edit', contract_ref=contract_ref))

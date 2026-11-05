@@ -508,6 +508,51 @@ class CreateSchedules:
             return False
 
 
+@dataclass
+class RefreshResult:
+    holiday_rolls: list   # CreateSchedules.holiday_rolls of the new schedule
+    kept: list            # period numbers whose received mark was put back
+    moved: list           # (n, old start, old end, new start, new end) of kept marks whose dates changed
+    dropped: list         # (n, received) of marks on periods the new schedule no longer has
+
+
+def refresh_schedule(term_sheet, db):
+    """Refresh Periods: rebuild a contract's schedule, keeping each received mark on the
+    period of the same number (ref_num order, as validate_schedule reads them).
+
+    Until 5 Nov 2026 the marks were deleted with the periods, so a schedule that was wrong
+    after fixings had started could only be corrected by hand (work order 2026-11-04).
+    A mark is a fixing already recorded against the old period; the new period of the
+    same number takes it even when its dates changed, and `moved` names those for a check.
+    """
+    old = db.execute("SELECT start_date, end_date, received FROM tbl_stock_contract_period "
+                     "WHERE contract_ref=? ORDER BY ref_num", (term_sheet.ref_num,)).fetchall()
+    db.execute("DELETE FROM tbl_stock_contract_period WHERE contract_ref=?;", (term_sheet.ref_num,))
+    db.commit()
+    schedules = CreateSchedules(term_sheet, db)
+    new = db.execute("SELECT ref_num, start_date, end_date FROM tbl_stock_contract_period "
+                     "WHERE contract_ref=? ORDER BY ref_num", (term_sheet.ref_num,)).fetchall()
+
+    kept, moved, dropped = [], [], []
+    for n, period in enumerate(old, start=1):
+        if not period["received"]:
+            continue
+        if n > len(new):
+            dropped.append((n, period["received"]))
+            continue
+        target = new[n - 1]
+        db.execute("UPDATE tbl_stock_contract_period SET received=? WHERE ref_num=?;",
+                   (period["received"], target["ref_num"]))
+        kept.append(n)
+        was = (str(period["start_date"])[:10], str(period["end_date"])[:10])
+        now = (str(target["start_date"])[:10], str(target["end_date"])[:10])
+        if was != now:
+            moved.append((n, *was, *now))
+    db.commit()
+
+    return RefreshResult(holiday_rolls=schedules.holiday_rolls, kept=kept, moved=moved, dropped=dropped)
+
+
 class Counter:
     def __init__(self, db, start_date, end_date, code_ref):
         self.db = db
