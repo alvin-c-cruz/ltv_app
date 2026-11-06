@@ -351,6 +351,43 @@ def case_i5(source, as_of):
              ps.prices == {ticks[0]["ref_num"]: 10.5, ticks[1]["ref_num"]: 1234.5} and len(ps.skipped) == 3)
 
 
+def case_i6(source, as_of):
+    app = boot(copy_db(source))
+    client = app.test_client()
+    with app.app_context():
+        db = get_db()
+        before = price_fingerprint(db)
+        edition = build_edition(db, as_of)
+    page = client.get("/blocked-unblocked/")
+    response = client.post("/blocked-unblocked/", data={"report_date": as_of})
+    named = f"{as_of} Blocked Unblocked.xlsx" in response.headers.get("Content-Disposition", "")
+    sheet = {}
+    if response.status_code == 200 and named:
+        ws = load_workbook(io.BytesIO(response.data), data_only=True)["Equities"]
+        col = {cell.value: i for i, cell in enumerate(ws[5])}
+        for row in ws.iter_rows(min_row=6, values_only=True):
+            if row[col["Account"]] is not None:
+                sheet[(row[col["Account"]], row[col["Code"]], row[col["Side"]])] = row
+    carried = bool(sheet) and len(sheet) == len(edition.rows) and all(
+        (r.bank_id, r.code, r.side) in sheet
+        and sheet[(r.bank_id, r.code, r.side)][col["Shares"]] == r.shares
+        and abs(sheet[(r.bank_id, r.code, r.side)][col["Average"]] - r.average) < 1e-9
+        and sheet[(r.bank_id, r.code, r.side)][col["Blocked"]] == r.blocked
+        for r in edition.rows)
+    case("I6a the page shows the form", page.status_code == 200 and b"Blocked Unblocked" in page.data)
+    case("I6b the download is <D> Blocked Unblocked.xlsx and its Equities sheet carries every row", named and carried)
+
+    with client.session_transaction() as sess:
+        sess.pop("_flashes", None)
+    client.post("/blocked-unblocked/", data={"report_date": as_of, "price_text": "NOSUCH 2"})
+    with client.session_transaction() as sess:
+        flashes = [message for _, message in sess.pop("_flashes", [])]
+    with app.app_context():
+        unchanged = price_fingerprint(get_db()) == before
+    case("I6c a pasted price it can't read is reported, and no close is stored",
+         any("NOSUCH" in m for m in flashes) and unchanged)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
@@ -368,6 +405,7 @@ def main():
     case_i3(dev)
     case_i4(dev, as_of)
     case_i5(dev, as_of)
+    case_i6(dev, as_of)
     if args.reference and args.ledger:
         case_e1_e2(args.reference, args.ledger)
     else:

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Blocked Unblocked File</h1>
+    <p>The edition as of a date, built from the ledger. Holdings include that day's fixings. Prices are the date's
+       close, or the latest before it, unless you supply a price set; a supplied set is used for this file only and is
+       not saved as a close.</p>
+    <form action="{{ url_for('blocked_unblocked.home') }}" class="form" method="post" enctype="multipart/form-data">
+        {{ form.csrf_token }}
+        <p>{{ form.report_date.label }} {{ form.report_date }}</p>
+        <p>{{ form.price_file.label }} {{ form.price_file }}</p>
+        <p>{{ form.price_text.label }}<br>{{ form.price_text(rows=6, cols=40) }}</p>
+        {{ form.submit(class="btn btn-success") }}
+    </form>
+</div>
+{% endblock %}

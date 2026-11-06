@@ -1,1 +1,1 @@
-# The Blocked Unblocked edition; the blueprint is added in Task 3.
+from .views import bp
