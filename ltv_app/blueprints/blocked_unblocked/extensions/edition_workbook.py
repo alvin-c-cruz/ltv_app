@@ -3,6 +3,7 @@ figure the printed sheets draw on (spec section 7). The printed sheets are added
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
+from ....tz import ph_today
 from ....workbook_download import in_memory
 
 SHARES = "#,##0;[Red](#,##0)"
@@ -36,7 +37,7 @@ HEADER_ROW = 5
 
 
 class EditionWorkbook:
-    def __init__(self, edition):
+    def __init__(self, edition, notices=()):
         self.download_name = f"{edition.as_of} Blocked Unblocked.xlsx"
         wb = Workbook()
         ws = wb.active
@@ -44,7 +45,18 @@ class EditionWorkbook:
         ws["A1"] = "Blocked Unblocked: Equities"
         ws["A1"].font = Font(size=14, bold=True)
         ws["A2"] = f"As of {edition.as_of}; holdings include that day's fixings"
+        if edition.as_of < ph_today().strftime("%Y-%m-%d"):
+            ws["A2"] = (f"As of {edition.as_of}; holdings include that day's fixings. Contracts knocked out or made "
+                        f"inactive since {edition.as_of} are not counted in To block.")
         ws["A3"] = f"Prices: {edition.price_label}"
+        lines = list(notices)
+        if edition.unpriced:
+            lines.append("No price for: " + ", ".join(edition.unpriced))
+        if not edition.rows:
+            lines.append(f"No positions on {edition.as_of}")
+        if lines:
+            ws["A4"] = "  |  ".join(lines)
+            ws["A4"].font = Font(bold=True, color="C00000")
         for i, (header, _, _, width) in enumerate(COLUMNS, start=1):
             cell = ws.cell(HEADER_ROW, i, header)
             cell.font = Font(bold=True)

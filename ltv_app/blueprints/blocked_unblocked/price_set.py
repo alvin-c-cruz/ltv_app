@@ -5,6 +5,7 @@ build only and never written to tbl_stock_price, which the fixings and the noteb
 (spec section 9, question 3, ruled 6 Nov)."""
 import csv
 import io
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -22,7 +23,7 @@ def _number(text):
         value = float(str(text).replace(",", "").strip())
     except (TypeError, ValueError):
         return None
-    return value if value > 0 else None
+    return value if math.isfinite(value) and value > 0 else None
 
 
 def read_price_set(db, csv_bytes=None, text=None):
@@ -40,18 +41,22 @@ def read_price_set(db, csv_bytes=None, text=None):
 
     result = PriceSet()
     if csv_bytes:
-        reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig")))
-        if not reader.fieldnames or "Symbol" not in reader.fieldnames or "Current Price" not in reader.fieldnames:
-            result.skipped.append("the file is not a Yahoo portfolio CSV (no Symbol and Current Price columns)")
-        else:
-            for row in reader:
-                symbol = (row.get("Symbol") or "").strip()
-                ref = by_ticker.get(symbol.upper())
-                price = _number(row.get("Current Price"))
-                if ref is None or price is None:
-                    result.skipped.append(symbol or "a row with no symbol")
-                    continue
-                result.prices[ref] = price
+        try:
+            reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig")))
+            fields = reader.fieldnames
+            if not fields or "Symbol" not in fields or "Current Price" not in fields:
+                result.skipped.append("the file is not a Yahoo portfolio CSV (no Symbol and Current Price columns)")
+            else:
+                for row in reader:
+                    symbol = (row.get("Symbol") or "").strip()
+                    ref = by_ticker.get(symbol.upper())
+                    price = _number(row.get("Current Price"))
+                    if ref is None or price is None:
+                        result.skipped.append(symbol or "a row with no symbol")
+                        continue
+                    result.prices[ref] = price
+        except (UnicodeDecodeError, csv.Error):
+            result.skipped.append("the file could not be read as a CSV")
 
     for line in (text or "").splitlines():
         line = line.strip()

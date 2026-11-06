@@ -11,6 +11,11 @@
         <p>{{ form.report_date.label }} {{ form.report_date }}</p>
         <p>{{ form.price_file.label }} {{ form.price_file }}</p>
         <p>{{ form.price_text.label }}<br>{{ form.price_text(rows=6, cols=40) }}</p>
+        {% for field_name, messages in form.errors.items() %}
+            {% for message in messages %}
+        <p style="color:var(--danger)">{{ form[field_name].label.text if field_name in form else field_name }}: {{ message }}</p>
+            {% endfor %}
+        {% endfor %}
         {{ form.submit(class="btn btn-success") }}
     </form>
 </div>

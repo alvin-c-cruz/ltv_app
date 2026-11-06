@@ -32,7 +32,8 @@ def home():
         if edition.unpriced:
             flash("No price for " + ", ".join(edition.unpriced) + "; their market value is left blank.",
                   category="error")
-        workbook = EditionWorkbook(edition)
+        notices = ["Not read from the price set: " + "; ".join(price_set.skipped)] if price_set and price_set.skipped else []
+        workbook = EditionWorkbook(edition, notices)
         return send_workbook(workbook.output, workbook.download_name)
 
     return render_template("blocked_unblocked/home.html", form=form)

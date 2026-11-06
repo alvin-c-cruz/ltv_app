@@ -72,9 +72,11 @@ class EditionRow:
 
     @property
     def key(self):
-        """The workbook's own key for the position: '175:HK', or '(S) 175:HK' for a short."""
+        """The app's canonical key for the position: '<code without leading zeros>:<first two letters of the
+        currency>', prefixed '(S) ' for a short. Alvin's workbook writes shorts as "(S) " or "(s) " and some
+        suffixes in lower case, so plan B's layout data maps those variants onto this key."""
         code = (self.code.lstrip("0") or "0") if self.code.isdigit() else self.code
-        suffix = "HK" if self.ccy == "HKD" else self.ccy
+        suffix = self.ccy[:2]
         return f"{'(S) ' if self.side == SHORT else ''}{code}:{suffix}"
 
 
@@ -203,4 +205,4 @@ def build_edition(db, as_of, prices=None, price_label=""):
     rows.sort(key=lambda r: (banks[r.bank_ref]["priority"] or 0, r.code, r.side != LONG))
     return Edition(as_of=as_of, rows=rows,
                    price_label=(price_label or "supplied") if prices else f"closes on or before {as_of}",
-                   unpriced=sorted({r.code for r in rows if r.close is None}))
+                   unpriced=sorted({r.code for r in rows if r.shares != 0 and r.close is None}))

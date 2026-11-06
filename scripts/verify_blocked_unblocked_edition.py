@@ -249,13 +249,14 @@ def case_i4(source, as_of):
 
 
 def reference_rows(path):
-    """{(bank_id, code, side): [shares, shares x average, to block]} from the edition's Equities sheet."""
+    """{(bank_id, code, side): [shares, shares x average, to block, {key texts}]} from the edition's Equities
+    sheet; the key texts are column B as written."""
     tmp = os.path.join(tempfile.mkdtemp(), "reference.xlsm")
     shutil.copy(path, tmp)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ws = load_workbook(tmp, data_only=True, read_only=True)["Equities"]
-        out = defaultdict(lambda: [0, 0.0, 0])
+        out = defaultdict(lambda: [0, 0.0, 0, set()])
         for row in ws.iter_rows(min_row=4, values_only=True):
             key, qty, avg, to_block, account = row[1], row[2], row[3], row[9], row[10]
             if not (account and isinstance(key, str) and isinstance(qty, (int, float))):
@@ -265,6 +266,7 @@ def reference_rows(path):
             entry[0] += qty
             entry[1] += qty * (avg or 0)
             entry[2] = to_block if isinstance(to_block, (int, float)) else 0
+            entry[3].add(key)
     return out
 
 
@@ -280,6 +282,16 @@ def case_e1_e2(reference, ledger):
                       for k, v in ref_held.items() if k in held)
         case("E1 30 Oct: the positions, their shares and averages equal Alvin's edition",
              ref_held and set(held) == set(ref_held) and figures)
+
+        def canon(text):
+            return text.strip().upper()
+
+        mismatched = [(k[0], k[1], k[2]) for k, v in ref_held.items() if k in held
+                      and canon(held[k].key) not in {canon(t) for t in v[3]}]
+        if mismatched:
+            print(f"  E1 key mismatches (account, code, side): {mismatched}")
+        case("E1 30 Oct: every held row's key equals the edition's key text, upper-cased and (s) read as (S)",
+             ref_held and not mismatched)
         flag = second_to_block(db, EVIDENCE_DATE, "flag")
         date = second_to_block(db, EVIDENCE_DATE, "date")
         bank_of = {r["bank_id"]: r["ref_num"] for r in db.execute("SELECT ref_num, bank_id FROM tbl_bank_account")}
@@ -350,6 +362,9 @@ def case_i5(source, as_of):
         case("I5f a Yahoo CSV and pasted lines are read; what can't be read is listed",
              ps.prices == {ticks[0]["ref_num"]: 10.5, ticks[1]["ref_num"]: 1234.5} and len(ps.skipped) == 3)
 
+        bad = read_price_set(db, b"\xff\xfe\x00bad", None)
+        case("I5g an upload that is not UTF-8 is noted, not raised", bad.prices == {} and len(bad.skipped) == 1)
+
 
 def case_i6(source, as_of):
     app = boot(copy_db(source))
@@ -379,13 +394,42 @@ def case_i6(source, as_of):
 
     with client.session_transaction() as sess:
         sess.pop("_flashes", None)
-    client.post("/blocked-unblocked/", data={"report_date": as_of, "price_text": "NOSUCH 2"})
-    with client.session_transaction() as sess:
-        flashes = [message for _, message in sess.pop("_flashes", [])]
+    held = next((r for r in edition.rows if r.shares != 0), None)
+    test_price = 123.45
+    ws = None
+    if held:
+        response = client.post("/blocked-unblocked/", data={
+            "report_date": as_of, "price_text": f"{held.code} {test_price}\nNOSUCH 2"})
+        if response.status_code == 200:
+            ws = load_workbook(io.BytesIO(response.data), data_only=True)["Equities"]
     with app.app_context():
         unchanged = price_fingerprint(get_db()) == before
-    case("I6c a pasted price it can't read is reported, and no close is stored",
-         any("NOSUCH" in m for m in flashes) and unchanged)
+    mine = [row for row in ws.iter_rows(min_row=6, values_only=True) if row[2] == held.code] if ws else []
+    case("I6c a supplied price reaches the sheet, an unreadable one is noted in the sheet, and no close is stored",
+         ws and "NOSUCH" in str(ws["A4"].value) and mine
+         and all(isinstance(row[14], (int, float)) and abs(row[14] - test_price) < 1e-9
+                 and str(row[15]).startswith("prices supplied") for row in mine)
+         and str(ws["A3"].value).startswith("Prices: prices supplied") and unchanged)
+
+    bare_path = copy_db(source)
+    bare_app = boot(bare_path)
+    bare_client = bare_app.test_client()
+    with bare_app.app_context():
+        bare_db = get_db()
+        bare_db.execute("DELETE FROM tbl_stock_price WHERE code_ref=?", (held.code_ref,))
+        bare_db.commit()
+    response = bare_client.post("/blocked-unblocked/", data={"report_date": as_of})
+    note = ""
+    if response.status_code == 200:
+        note = str(load_workbook(io.BytesIO(response.data), data_only=True)["Equities"]["A4"].value)
+    case("I6d a code with no price is named on the sheet", "No price for:" in note and held.code in note)
+
+    old_day = str((datetime.strptime(as_of, "%Y-%m-%d") - timedelta(days=1)).date())
+    response = client.post("/blocked-unblocked/", data={"report_date": old_day})
+    note = ""
+    if response.status_code == 200:
+        note = str(load_workbook(io.BytesIO(response.data), data_only=True)["Equities"]["A2"].value)
+    case("I6e a back-dated edition says contracts closed since are not counted", "not counted in To block" in note)
 
 
 def main():
