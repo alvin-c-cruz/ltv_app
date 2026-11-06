@@ -21,8 +21,14 @@ DIVIDER_COLOR = "00000000"
 RATE_COLOR = "00FFFF99"
 
 # Short-book types that exist only in tbl_transaction_short. Borrow/Return Shares are
-# double-booked into the long book and already print from there.
+# double-booked into the long book and already print from there; a return's gain is
+# written there too, once.
 SHORT_BOOK_TYPES = ("Sell (Short)", "Buy (Pay Short)")
+
+# Gives borrowed shares back out of the long book and closes as many of the short, so it
+# is headed apart from the sells and shows its gain the way a cover does (Alvin, 2026-11-06).
+RETURN_SHARES = "Return Shares"
+BORROW_SHARES = "Borrow Shares"
 
 CODE_TO_SHRINK = ('0857', '0981', '0939', '1099', '1288', '2196', '3993')
 
@@ -251,7 +257,9 @@ class DownloadTradesDoneWithGainLoss:
     @staticmethod
     def has_gain(ccy, transactions, short_transactions):
         # The sections write_transactions gives Cost and Gain / Loss columns.
-        return "Sell (Spot)" in transactions.get(ccy, {}) or "Buy (Pay Short)" in short_transactions.get(ccy, {})
+        long_book = transactions.get(ccy, {})
+        return ("Sell (Spot)" in long_book or RETURN_SHARES in long_book
+                or "Buy (Pay Short)" in short_transactions.get(ccy, {}))
 
     @staticmethod
     def write_label(ws, coordinate, label):
@@ -299,24 +307,37 @@ class DownloadTradesDoneWithGainLoss:
     def write_transactions(self, ws, row_num, transactions, short_book=False):
         """Long-book blocks, or with short_book the short-book blocks: a short sale shows
         the new short average, as a buy shows its new long average, and a cover's gain is
-        the covered shares at the short average less what the cover cost."""
+        the covered shares at the short average less what the cover cost. A long-book
+        return is measured as a cover is: its shares at the short average less their
+        value at the return's price."""
         for ccy in transactions:
             for transaction_type in transactions[ccy]:
                 if "Transfer" in transaction_type:
                     continue
 
+                is_return = not short_book and transaction_type == RETURN_SHARES
                 if short_book:
                     show_average = transaction_type == "Sell (Short)"
                     show_gain = transaction_type == "Buy (Pay Short)"
                 else:
                     show_average = "Buy" in transaction_type
-                    show_gain = transaction_type == "Sell (Spot)"
+                    show_gain = transaction_type == "Sell (Spot)" or is_return
+                # Gain = short sale less cost (a cover, a return), else proceeds less cost
+                short_gain = short_book or is_return
 
                 start_row = row_num
                 trade_total = False
-                # Headers
+                # Headers. A return and a borrow are named, not headed with the
+                # buys and sells (Alvin, 2026-11-06).
+                named = transaction_type in (RETURN_SHARES, BORROW_SHARES)
+                if named:
+                    heading = transaction_type.upper()
+                elif "Buy" in transaction_type:
+                    heading = "BUY"
+                else:
+                    heading = "SELL"
                 cols = {
-                    "A": "BUY" if ("Buy" in transaction_type or transaction_type == "Borrow Shares") else "SELL",
+                    "A": heading,
                     "D": ccy,
                     "E": "Price",
                     "G": "Shares",
@@ -326,7 +347,7 @@ class DownloadTradesDoneWithGainLoss:
                 if show_average:
                     cols["J"] = "Average"
                 elif show_gain:
-                    cols["L"] = f"Short Sale {ccy}" if short_book else f"Cost {ccy}"
+                    cols["L"] = f"Short Sale {ccy}" if short_gain else f"Cost {ccy}"
                     cols["M"] = f"Lost {ccy}"
                     cols["N"] = "% Lost"
 
@@ -343,6 +364,9 @@ class DownloadTradesDoneWithGainLoss:
                         cell.border = thin_border
 
                 ws.merge_cells(f"J{row_num}:K{row_num}")
+                if named:
+                    # The longer heading, centred across A:C, as Alvin set it (2026-11-06)
+                    ws.merge_cells(f"A{row_num}:C{row_num}")
 
                 ws.row_dimensions[row_num].height = HEADER_HEIGHT
                 row_num += 1
@@ -386,9 +410,12 @@ class DownloadTradesDoneWithGainLoss:
 
                                 cols["J"] = average
                             elif show_gain:
-                                average = self.average(trade, short_book, cover=True)
+                                if is_return:
+                                    average = self.return_average(trade)
+                                else:
+                                    average = self.average(trade, short_book, cover=True)
                                 cols["L"] = f'=G{row_num}*O{row_num}'
-                                cols["M"] = f'=L{row_num}-H{row_num}' if short_book else f'=H{row_num}-L{row_num}'
+                                cols["M"] = f'=L{row_num}-H{row_num}' if short_gain else f'=H{row_num}-L{row_num}'
                                 cols["N"] = f'=M{row_num}/L{row_num}'
                                 cols["O"] = average
 
@@ -541,6 +568,22 @@ class DownloadTradesDoneWithGainLoss:
                                      before_ref=trade["ref_num"] if cover else None)
         return TradesDoneAverage(db=self.db, trade_date=self.trade_date,
                                  code=trade["code"], bank_id=trade["bank_id"]).average
+
+    def return_average(self, trade):
+        """The short average a long-book return is measured against: the one carried just
+        before its short-book half. borrow_return_shares books the two halves with nothing
+        linking them, so the k-th long half of the day, account, stock and size pairs with
+        the k-th short half. Without one, the day's closing short average."""
+        quantity = int(trade["quantity"].replace(",", ""))
+        key = (self.trade_date, trade["bank_ref"], trade["code_ref"], RETURN_SHARES)
+        sql = ("SELECT ref_num FROM {} WHERE trade_date=? AND bank_ref=? AND code_ref=? "
+               "AND transaction_type=? AND quantity=? ORDER BY ref_num")
+        longs = [r[0] for r in self.db.execute(sql.format("tbl_transaction"), key + (-quantity,))]
+        shorts = [r[0] for r in self.db.execute(sql.format("tbl_transaction_short"), key + (quantity,))]
+        k = longs.index(trade["ref_num"]) if trade["ref_num"] in longs else len(shorts)
+        before_ref = shorts[k] if k < len(shorts) else None
+        return get_short_average(self.db, trade["bank_ref"], trade["code_ref"], self.trade_date,
+                                 before_ref=before_ref)
 
     def write_transfers(self, ws, row_num, transfers):
         # Section header

@@ -31,7 +31,9 @@ class TransactionSummary:
             t.quantity,
             t.price,
             t.brokerage, t.commission, t.foreign_charge, t.stamp_duty, t.misc,
-            t.locked
+            t.locked,
+            t.bank_ref,
+            t.code_ref
           FROM tbl_transaction AS t
           INNER JOIN tbl_bank_account AS bank ON bank.ref_num = t.bank_ref
           INNER JOIN tbl_code AS stock ON stock.ref_num = t.code_ref
@@ -77,7 +79,9 @@ class TransactionSummary:
             self.transactions[ccy_id][transaction_type][bank_name][stock].append({
                 "ref_num":    ref_num,
                 "bank_id":    row["bank_id"],
+                "bank_ref":   row["bank_ref"],
                 "code":       row["code"],
+                "code_ref":   row["code_ref"],
                 "quantity":   quantity,
                 "price":      price,
                 "amount":     '{:,.2f}'.format(amt),
