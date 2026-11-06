@@ -14,7 +14,8 @@ backup it was built from. On temp copies only:
   I4 a pair sold out on D with a live contract keeps its row and reads 0 (rulings of 4 and 6 Nov);
   E1 (with --reference and --ledger) 30 Oct: the positions with shares, their shares and averages equal the
      edition's Equities sheet;
-  E2 (same) the second path with the old flag rule reproduces the edition's shares to block on every long row; the
+  E2 (same) the second path with the old flag rule reproduces the edition's shares to block on every long row
+     holding shares; zero-share rows whose sheet figure has no ledger source are counted, not compared; the
      number of pairs the date rule changes is printed, as a count.
 No figure is printed.
 
@@ -282,9 +283,13 @@ def case_e1_e2(reference, ledger):
         date = second_to_block(db, EVIDENCE_DATE, "date")
         bank_of = {r["bank_id"]: r["ref_num"] for r in db.execute("SELECT ref_num, bank_id FROM tbl_bank_account")}
         code_of = {norm(r["code"]): r["ref_num"] for r in db.execute("SELECT ref_num, code FROM tbl_code")}
-        longs = {k: v for k, v in ref.items() if k[2] == LONG}
+        longs = {k: v for k, v in ref.items() if k[2] == LONG and v[0] != 0}
         reproduces = all(flag.get((bank_of.get(k[0]), code_of.get(k[1])), 0) == v[2] for k, v in longs.items())
-        case("E2 30 Oct: the old flag rule reproduces the edition's shares to block", longs and reproduces)
+        case("E2 30 Oct: the old flag rule reproduces the edition's shares to block on every long row holding shares",
+             longs and reproduces)
+        stale = sum(1 for k, v in ref.items() if k[2] == LONG and v[0] == 0 and v[2] != 0
+                    and flag.get((bank_of.get(k[0]), code_of.get(k[1])), 0) == 0)
+        print(f"  zero-share rows whose sheet to-block has no ledger source (stale in the workbook): {stale}")
         changed = sum(1 for p in set(flag) | set(date) if flag.get(p, 0) != date.get(p, 0))
         print(f"  pairs whose shares to block the date rule changes on 30 Oct: {changed}")
 
