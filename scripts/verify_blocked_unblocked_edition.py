@@ -41,7 +41,8 @@ from openpyxl import load_workbook
 
 from ltv_app import create_app
 from ltv_app.blueprints.database.views import get_db
-from ltv_app.blueprints.blocked_unblocked.edition import LONG, SHORT, build_edition
+from ltv_app.blueprints.blocked_unblocked.edition import LONG, SHORT, build_edition, closes
+from ltv_app.blueprints.blocked_unblocked.price_set import read_price_set
 
 SHORT_TYPES = ("Sell (Short)", "Buy (Pay Short)")
 CHARGES = ("brokerage", "commission", "foreign_charge", "stamp_duty", "misc")
@@ -294,6 +295,62 @@ def case_e1_e2(reference, ledger):
         print(f"  pairs whose shares to block the date rule changes on 30 Oct: {changed}")
 
 
+def price_fingerprint(db):
+    return tuple(db.execute("SELECT count(*), total(closing_price), max(ref_num) FROM tbl_stock_price").fetchone())
+
+
+def case_i5(source, as_of):
+    app = boot(copy_db(source))
+    with app.app_context():
+        db = get_db()
+
+        def expected_close(code_ref, day):
+            row = db.execute("SELECT closing_price, trade_date FROM tbl_stock_price WHERE code_ref=? AND trade_date<=? "
+                             "AND closing_price IS NOT NULL ORDER BY trade_date DESC LIMIT 1", (code_ref, day)).fetchone()
+            return (row[0], row[1]) if row else (None, "")
+
+        edition = build_edition(db, as_of)
+        held = [r for r in edition.rows if r.shares and r.close is not None]
+        case("I5a each row is priced at the close on D, else the latest before D",
+             held and all((r.close, r.close_from) == expected_close(r.code_ref, as_of) for r in edition.rows))
+
+        target = held[0]
+        last_day = db.execute("SELECT max(trade_date) FROM tbl_stock_price WHERE code_ref=? "
+                              "AND closing_price IS NOT NULL", (target.code_ref,)).fetchone()[0]
+        later = str((datetime.strptime(last_day, "%Y-%m-%d") + timedelta(days=1)).date())
+        case("I5b a day with no close takes the latest before it",
+             closes(db, [target.code_ref], later).get(target.code_ref) == expected_close(target.code_ref, last_day))
+
+        before = price_fingerprint(db)
+        supplied = build_edition(db, as_of, prices={target.code_ref: 123.45}, price_label="prices supplied (test)")
+        mine = [r for r in supplied.rows if r.code_ref == target.code_ref]
+        others = [r for r in supplied.rows if r.code_ref != target.code_ref]
+        case("I5c a supplied price wins for its code only; the others keep their closes",
+             mine and all(r.close == 123.45 and r.close_from == "prices supplied (test)" for r in mine)
+             and all((r.close, r.close_from) == expected_close(r.code_ref, as_of) for r in others)
+             and supplied.price_label == "prices supplied (test)")
+        case("I5d a supplied price is never stored", price_fingerprint(db) == before)
+
+        db.execute("DELETE FROM tbl_stock_price WHERE code_ref=?", (target.code_ref,))
+        db.commit()
+        bare = build_edition(db, as_of)
+        mine = [r for r in bare.rows if r.code_ref == target.code_ref]
+        case("I5e a code with no price at all has no market value and is named as unpriced",
+             mine and all(r.close is None and r.market is None and r.gain is None for r in mine)
+             and target.code in bare.unpriced)
+
+        ticks = db.execute("SELECT ref_num, code, yahoo_ticker FROM tbl_code WHERE yahoo_ticker IS NOT NULL "
+                           "AND yahoo_ticker != '' ORDER BY ref_num LIMIT 2").fetchall()
+        header = ("Symbol,Current Price,Date,Time,Change,Open,High,Low,Volume,Trade Date,Purchase Price,"
+                  "Quantity,Commission,High Limit,Low Limit,Comment\n")
+        csv_bytes = (header + f"{ticks[0]['yahoo_ticker']},10.5,2026/11/06,4:08PM HKT,0,0,0,0,0,,,,,,,\n"
+                     + "NOSUCH.XX,1,2026/11/06,4:08PM HKT,0,0,0,0,0,,,,,,,\n").encode("utf-8")
+        text = f"{ticks[1]['code']} 1,234.50\nNOSUCH 2\nnot a price line\n"
+        ps = read_price_set(db, csv_bytes, text)
+        case("I5f a Yahoo CSV and pasted lines are read; what can't be read is listed",
+             ps.prices == {ticks[0]["ref_num"]: 10.5, ticks[1]["ref_num"]: 1234.5} and len(ps.skipped) == 3)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
@@ -310,6 +367,7 @@ def main():
         case_i2(db, as_of)
     case_i3(dev)
     case_i4(dev, as_of)
+    case_i5(dev, as_of)
     if args.reference and args.ledger:
         case_e1_e2(args.reference, args.ledger)
     else:
