@@ -1,9 +1,39 @@
 # Blocked Unblocked from the app — design
 
-Date: 2026-11-02
-Status: Draft. Pending Alvin on D7a (output), D7b (workbook faults) and D7c (Shares Blocked basis).
-Work order: `app-docs/bug-reports/2026-10-30-blocked-unblocked-from-the-app.md` (outside this repository). Its
-evidence folder holds the 27 Oct and 30 Oct editions, the two PDFs Alvin printed, and the root session's scripts.
+Date: 2026-11-02, revised 2026-11-06 with Alvin's rulings of 4–5 Nov
+Status: **Approved, 6 Nov 2026.** Alvin, 5 Nov: "I think we have a request to include this report in the app". On 6 Nov,
+asked the remaining 14 decisions: "as recomended". Every *Recommended* and *Proposed* in this spec is therefore ruled as
+written, each marked *Ruled 6 Nov* where it stands:
+
+| # | Decision | Ruling |
+|---|---|---|
+| 1 | D7a output | one `.xlsx` from a new page, built on demand (section 7) |
+| 2 | D7c Shares Blocked basis | holdings including the day's fixings (section 3) |
+| 3 | Which rows (open question 1) | the holdings decide the rows; the layout data places them |
+| 4 | Prices (open question 3) | D's close by default, or a price set supplied for one build, never stored |
+| 5 | When to run (open question 7) | any time; the header says which prices were used |
+| 6 | To block as of D (open question 2) | received when the period ends on or before D, flagged or not |
+| 7–9 | F1, F3, F4 | fixed |
+| 10 | F6 | a separate SHORT section on the BLOCKED page |
+| 11 | F7, F8 | not reproduced |
+| 12 | Short average (open question 4) | 4 dp |
+| 13 | Filter test (open question 5) | the macro's sum test |
+| 14 | Working sheets (open question 6) | left out |
+
+One recommendation was not among the 14 put to him: section 5's refusal when an account holding shares has no visible
+column on `Blocked Unblocked`. It stands as designed, a judgment he can overrule.
+Work orders (outside this repository): `app-docs/bug-reports/2026-10-30-blocked-unblocked-from-the-app.md`, whose
+evidence folder holds the 27 Oct and 30 Oct editions, the two PDFs Alvin printed and the root session's scripts; and
+`app-docs/bug-reports/2026-11-05-blocked-unblocked-rulings.md`, his rulings, with the 5 Nov 16:05 edition that carries
+them and the root session's tie-out scripts.
+
+**Ruled so far** (section 6 has the detail):
+- F2: fixed as recommended. Each row is priced by its own code.
+- F5: ruled otherwise. Section II counts inside NON-BANK SUB-TOTAL, once.
+- F9 (new): SHK Private is SHK + SHK2.
+- F10 (new): no edition note.
+- Zero rows: a row nobody holds reads 0.
+- Prices: Alvin's own closes win.
 
 This spec contains no client figures. Every share count, cost, price or total it refers to is in the work order or
 its evidence, and the harness in section 8 works them out at runtime.
@@ -131,15 +161,15 @@ Work order section 1 names five input areas. Each maps to existing code as follo
 |---|---|---|---|
 | Holdings: shares and cost per account and stock | `Online` D, K, E → `Equities` C, D | Weighted-average engine `transactions/models.py: accumulate_position`. Row selection like `portfolio/extensions/create_excel.py: GetData.get_transactions`, ordered like it (account's `transaction_basis`, then `tbl_transaction_type.priority`). Exclude `Sell (Short)` / `Buy (Pay Short)` as `stock_position/views.py: get_stock_positions` does. | Rows with **`trade_date` ≤ D** in every account, so the day's fixings count. Spike on the 30 Oct ledger: equal to the 30 Oct build's all-transactions read on every pair. Selecting on the account's own basis (`GetData(report_date=D)`, the settled view) leaves out the fixings that settle after D. Ordering by `trade_date` instead of the basis column changes the cost on some pairs, so keep the basis order. |
 | Shorts: shares (negative) and average | `Online (SHORT)` J, K and the matching `Online` rows | `tbl_transaction_short` through `transactions/models.py: accumulate_short_position` (balance and cost) and `get_short_average(db, bank_ref, code_ref, D)`. `bank/views.py: gather_short_position_bulk` lists the open shorts (it needs a date filter added). The page Alvin reads is `/bank/<id>/<code>/short` (`short_transaction_list`). | Rows with `trade_date` ≤ D, ordered `trade_date, ref_num`, as the Short Book is. The edition carries the average **rounded to 4 dp**, as that page shows it (open question 4). |
-| Shares to block | `Blocked Shares` H → `Equities` J, I | `stock_position/views.py: get_blocked_unblocked(db)`, keyed by `bank_id` and code. It uses the same formula as `block_unblock/views.py: home`: active DECU contracts, `daily_shares × remaining_days`, doubled when leveraged, with `remaining_days` from `term_sheet.StockContract.get_schedules`. Clamp with `split_blocked_unblocked(shares, to_block)`. | **Shares blocked = min(shares to block, holdings on the rule above)**. Pending Alvin (D7c), below. Shares to block itself is live state (the periods' `received` flags), not dated (open question 2). |
-| Closing prices | `Closing` D (price), L2 (market time), the `^HSI` row | `tbl_stock_price (code_ref, trade_date, closing_price)` through `ltv_stocks/legacy_port/stock_price.py: get_stock_price(db, code_ref, D)`. When D has no close, take the latest close before D, as `fixings/extensions/download_fixings.py: get_closing_price` does. Loaded today from Alvin's Yahoo CSV by `stock_price/views.py: upload_yahoo_csv`, keyed on `tbl_code.yahoo_ticker`. | The edition day's own close (work order §3). Spike: for every code printed on 30 Oct, and for `^HSI` (`Market vs Average` P1), the 29 Oct close in `tbl_stock_price` equals the edition's `Closing` sheet. `^HSCE` is on `Closing` only and no printed formula uses it, so it isn't needed. The market time (`Market vs Average` L4 ← `Closing` L2) isn't stored anywhere (open question 3). |
+| Shares to block | `Blocked Shares` H → `Equities` J, I | `stock_position/views.py: get_blocked_unblocked(db)`, keyed by `bank_id` and code. It uses the same formula as `block_unblock/views.py: home`: active DECU contracts, `daily_shares × remaining_days`, doubled when leveraged, with `remaining_days` from `term_sheet.StockContract.get_schedules`. Clamp with `split_blocked_unblocked(shares, to_block)`. | **Shares blocked = min(shares to block, holdings on the rule above)**. Ruled 6 Nov (D7c), below. Shares to block itself is live state (the periods' `received` flags), not dated (open question 2). |
+| Closing prices | `Closing` D (price), L2 (market time), the `^HSI` row | `tbl_stock_price (code_ref, trade_date, closing_price)` through `ltv_stocks/legacy_port/stock_price.py: get_stock_price(db, code_ref, D)`. When D has no close, take the latest close before D, as `fixings/extensions/download_fixings.py: get_closing_price` does. Loaded today from Alvin's Yahoo CSV by `stock_price/views.py: upload_yahoo_csv`, keyed on `tbl_code.yahoo_ticker`. | The edition day's own close (work order §3). Spike: for every code printed on 30 Oct, and for `^HSI` (`Market vs Average` P1), the 29 Oct close in `tbl_stock_price` equals the edition's `Closing` sheet. `^HSCE` is on `Closing` only and no printed formula uses it, so it isn't needed. The market time (`Market vs Average` L4 ← `Closing` L2) isn't stored anywhere (open question 3). **Alvin's own prices win** (4 Nov): when he pastes prices himself they are kept, and twice they were intraday quotes, not the 4 PM close. So he may want to choose the price set, not only its date (open question 3). |
 | Edition date | `Market vs Average` D4 → `Equities` A1, `Blocked Unblocked` Q2, the date cells of the other printed sheets | A form field, a `DateField` defaulting to `tz.ph_today` as `portfolio/forms.py: Form.report_date` does. | "A Friday report is up to Friday only" (26 Oct). Every input above is taken as of D. |
 
-**Pending Alvin (D7c): Shares Blocked basis.** The 30 Oct edition used holdings including that day's fixings, so
+**Ruled 6 Nov (D7c), as recommended: Shares Blocked basis.** The 30 Oct edition used holdings including that day's fixings, so
 blocked = min(to block, holdings on `trade_date` ≤ D). `/block-unblock/`'s own Excel uses the settled basis
 (`transactions/models.py: get_balance` at today's date, on the account's `transaction_basis`). That basis leaves the
 day's fixings out, and gives different blocked figures on the pairs the work order's section 3 lists.
-**Recommended default:** keep the edition's basis (fixings included).
+**Ruled:** keep the edition's basis (fixings included).
 - It is the basis Alvin set for holdings ("up to october 27 fixings").
 - Both halves of the page then rest on one holdings figure, so unblocked + blocked = holdings on every row.
 - It reproduces the 30 Oct edition he printed.
@@ -152,7 +182,7 @@ they live only in the workbook:
 - which stocks are in the BANKS and NON-BANKS sections, and the row order;
 - the stock display names;
 - the `PAGE 3` groups (sections I to IV, Group A, Group B);
-- the bank families in the `Market vs Average (2)` columns.
+- the bank families in the `Market vs Average (2)` columns. One is settled: **SHK Private is SHK + SHK2** (F9).
 
 Account names and ids come from `tbl_bank_account` (`bank_id`, `bank_name`, `report_label`, `priority`). The rest needs
 a home (open question 1).
@@ -194,7 +224,7 @@ which the save has hidden and the macro leaves visible. The save's hidden rows t
      empty. That didn't arise on 30 Oct.
 3. **Leaves the fixed rows as the style template has them.** The title spacers stay as in the save.
 
-**Pending Alvin (D7b): F7 and F8.** **Recommended:** don't reproduce the hand-hiding gap or the orphan row.
+**Ruled 6 Nov (D7b): F7 and F8, as recommended:** don't reproduce the hand-hiding gap or the orphan row.
 
 Replayed over the 14:18 save, the builder's rule gives the same visible blocks, section headers and footer rows. It
 differs only in rows the harness allow-lists (section 8, case 4):
@@ -206,8 +236,14 @@ running count of blocks whose total is non-zero, so once the filter has run it n
 so on. The builder writes these numbers as values.
 
 `Market vs Average` and `PAGE 3` have no macro. Their hidden rows are template rows Alvin hid by hand. The builder
-writes a row only for each code held, long or short, in any account on D. That is what the 30 Oct pages show, and the
+writes a row for each code held, long or short, in any account on D. That is what the 30 Oct pages show, and the
 harness checks it.
+
+**A row nobody holds reads 0, not 0/0** (Alvin, 4 Nov, "Keep rows, read 0"). The case was a long position sold the
+day it was delivered, with more deliveries due. In the workbook that row's average became `IFERROR(…, 0)`. Before
+that, `#DIV/0!` ran through to the `PAGE 3` and `Market vs Average` grand totals. The builder never divides by zero
+shares: average, % and gain/loss % print 0. Whether such a row is written at all, or only rows held on D, is open
+question 1.
 
 ## 5. The print layout to reproduce
 
@@ -272,8 +308,12 @@ Each sheet prints one page.
   - then the sub-total and the HKD GRAND-TOTAL.
   - D4 is the edition date. Above the Market column, L4 holds the market time (from `Closing` L2) and L5 is `=D4`.
     P1 holds `^HSI`.
+  - **No edition note** (F10, Alvin, 5 Nov: "remove this / including November 4 Fixings / and the off-page links to
+    it"). The typed note in E5:I5 is gone, with its link on `Blocked Unblocked` Q3:S3 and its copies in N2:R2 of the
+    account pages. The app writes none of them.
 - **`Market vs Average (2)`.** The gain or loss of the same rows broken down by bank family: Nomura Singapore, BOS,
-  Deutsche Bank, Morgan Stanley and SHK Private.
+  Deutsche Bank, Morgan Stanley and SHK Private. **SHK Private is SHK + SHK2** (F9): its Market and Cost columns add
+  both accounts. The bank breakdown's total equals the sheet's own gain/loss (row 49 in the 5 Nov layout: AW = N).
   - Its print area starts at R, and print titles repeat A:D.
   - The page title in A1 is therefore cut at column D in the PDF. That is the target look.
 - **`PAGE 3`, from top to bottom:**
@@ -301,25 +341,32 @@ The work order's section 4 lists these. None is copied into the app silently. Ea
 on the printed pages.
 
 - **F1. `Equities` F, "Market", reads column K of `Market vs Average`, which is empty.** The price is in L. So
-  F = 0 and G = −1 on every row, in both editions. *Pending Alvin (D7b).*
+  F = 0 and G = −1 on every row, in both editions. *Ruled 6 Nov: as recommended.*
   - **Recommended:** fix it. The data sheet carries the edition's close and (F − D) / D.
   - Nothing printed changes, because `Equities` isn't printed.
 - **F2. `PAGE 3` D50: a row carries another stock's code, so it is priced as that stock** (the account pages inherit
-  this). *Pending Alvin (D7b).*
-  - **Recommended:** fix it. Each row is priced by its own code from `tbl_code`.
+  this). **Ruled 5 Nov: fixed as recommended** (Alvin: "fix it"). In the workbook D50 now holds the row's own code as
+  the 4-character text key the `Closing` sheet uses, on `PAGE 3` and the account pages.
+  - Each row is priced by its own code from `tbl_code`.
   - That row's market value and gain/loss change on `PAGE 3` and the account pages that hold it.
 - **F3. `PAGE 3` E64, "Total Non Bank Shares", double-counts the E45/E61 subtotals** (the account pages inherit this).
-  *Pending Alvin (D7b).*
+  *Ruled 6 Nov: as recommended.*
   - **Recommended:** fix it. Count each stock row once.
   - The printed total changes.
-- **F4. `PAGE 3` O28 and O52:O55 hold pasted `#N/A`.** *Pending Alvin (D7b).*
+- **F4. `PAGE 3` O28 and O52:O55 hold pasted `#N/A`.** *Ruled 6 Nov: as recommended.*
   - **Recommended:** fix it. Compute these % cells like the rest of the column. `bank_pages.py` already does this on
     the account pages.
   - Printed `#N/A` cells become percentages.
 - **F5. The `PAGE 3` row 67 grand total leaves out section II.** The top HKD GRAND-TOTAL includes it, so the page
-  shows two different grand totals. *Pending Alvin (D7b).*
-  - **Recommended:** make the bottom grand total I + II + III + IV, equal to the top one. Keep NON-BANK SUB-TOTAL as
-    the groups listed beneath.
+  shows two different grand totals. **Ruled 5 Nov, not as the spec recommended.** Alvin: "PAGE 3 and other similar
+  sheets / line 67 formula should include line 18", then "line 65 should also include line 18". The final form, on
+  `PAGE 3` and every account page:
+  - row 65, NON-BANK SUB-TOTAL = `SUBTOTAL(9, x18, x25:x63)` (x64 on the account pages): section II is counted
+    **inside** the non-bank sub-total, once;
+  - row 67, HKD GRAND-TOTAL = `SUM(x65, x16)`, section I plus the non-bank sub-total;
+  - row 7, the top HKD GRAND-TOTAL = row 67 (it was row 67 + row 18).
+
+  The builder computes these in Python with the same membership, so the two grand totals are one figure.
 - **F6. Short rows count as blocked, and the printed BLOCKED totals carry it.** `Equities` I = `IF(J>C, C, J)` with
   C < 0 and J = 0 makes a short count as blocked, so the "Blocked" column shows the two short rows as negatives.
   - The printed BLOCKED page draws its short block (row 305 in the save) from that column, through the named range
@@ -329,7 +376,7 @@ on the printed pages.
   - So the printed blocked totals fall below Σ min(to block, holdings) over the long rows by the short shares.
   - The GRAND TOTAL (`F342` = `F339` + `F167`) is the net position, longs less shorts. It is not wrong.
 
-  *Pending Alvin (D7b).* The data sheet carries Blocked = min(to block, holdings) on long rows only, and each short
+  *Ruled 6 Nov: as recommended.* The data sheet carries Blocked = min(to block, holdings) on long rows only, and each short
   position in its own Short column. The printed page then has two options:
   - **Recommended: a separate SHORT line.** The BLOCKED page prints the short blocks as their own section after
     NON-BANKS, with a `SHORT` header and its own `SHORT SHARES TOTAL:` and `HKD TOTAL:` rows, kept out of the BLOCK
@@ -346,25 +393,33 @@ on the printed pages.
 
 - **F7. Step 3 never examines the first section.** It starts at row 5, so the UNBLOCKED BANKS header on row 4 is never
   seen. In the save, that section was hidden by hand: rows 4 and 29–30 are hidden, and the blank row 31 is left
-  visible. *Pending Alvin (D7b).*
+  visible. *Ruled 6 Nov: as recommended.*
   - **Recommended:** the builder examines every section, the first included, and hides an empty one from its header
     to the row before the next header, as the macro does for the others.
 - **F8. The last block of the sheet is only partly hidden.** `lastRow` is the last row with B filled, which is that
   block's `Shares` row. Step 2 hides only rows up to `lastRow`, so a zero last block leaves its `HKD` row and spacer
-  visible. The save prints that orphan `HKD` row (336) above the NON-BANK BLOCK totals. *Pending Alvin (D7b).*
+  visible. The save prints that orphan `HKD` row (336) above the NON-BANK BLOCK totals. *Ruled 6 Nov: as recommended.*
   - **Recommended:** don't reproduce it. The builder hides all three rows of every zero block.
 
-The work order speaks of five faults. F1–F6 are its section 4 items; there are six because the four `PAGE 3` items are
-split. F7 and F8 are the macro's. Alvin can rule on them one by one.
+**Found and fixed on 5 Nov** (work order 2026-11-05 §2), both ruled:
+
+- **F9. "SHK Private" on `Market vs Average (2)` took SHK Account No. 1 only.** Alvin: "It should be combined SHK
+  Account 1 and 2". The SHK Market and Cost columns now add an SHK2 term, on `Market vs Average (2)` (AS/AT) and on
+  `PAGE 3`'s bank breakdown (AO/AP). Before the fix the sheet's bank breakdown total missed its own gain/loss. The
+  builder treats the bank family as a set of accounts (section 3).
+- **F10. The edition note.** Removed with its links (section 5). The app writes none.
+
+The work order of 30 Oct speaks of five faults. F1–F6 are its section 4 items; there are six because the four
+`PAGE 3` items are split. F7 and F8 are the macro's. F9 and F10 came on 5 Nov. Alvin can rule on them one by one.
 
 The harness ties the built figures to the evidence except where a ruling changes them. A fixed fault is checked
 against the corrected rule, computed at runtime, not against the evidence cell.
 
 ## 7. Output
 
-**Pending Alvin (D7a):** the `.xlsm`, an `.xlsx`, the two PDFs, or all of them.
+**Ruled 6 Nov (D7a), as recommended:** one `.xlsx`. The options were the `.xlsm`, an `.xlsx`, the two PDFs, or all of them.
 
-**Recommended default:** **one `.xlsx`**, `<date> Blocked Unblocked.xlsx`, downloaded from a new page the way the
+**Ruled:** **one `.xlsx`**, `<date> Blocked Unblocked.xlsx`, downloaded from a new page the way the
 portfolio report is (`workbook_download.send_workbook`). Alvin prints the two PDFs from Excel with the print setup
 already in place. It holds:
 - the printed sheets in workbook order: `Market vs Average`, `Market vs Average (2)`, `PAGE 3`, the account pages, and
@@ -378,6 +433,9 @@ already in place. It holds:
   - the market figures from close and market value.
 
 Why this default:
+- **He builds it several times a day** (work order 2026-11-05 §5). On 5 Nov he built it at 11:53, rebuilt it at 13:30
+  with fixes, updated it at 16:05 with the afternoon trades, and it was then due its closes after 4:30 PM. A page that
+  rebuilds the edition from the ledger on demand replaces each of those passes.
 - No macro is left to run, so `.xlsm` buys nothing, and an `.xlsx` can't carry code.
 - Alvin said the PDFs are "just a sample of how the report should be", so they aren't a deliverable.
 - PDFs from the app would need Excel automation in the app (pywin32 isn't in its venv), or another renderer, and none
@@ -395,6 +453,13 @@ still uses `Loan` and `2333.hk` is open question 6.
 that has pywin32, Excel COM). Both follow the rules for committed harnesses: no figure in the source, expected values
 worked out at runtime, and no values printed on failure, only the sheet, cell address, account id and code. They
 print `PASS`/`FAIL` per case.
+
+**Reference edition.** The 30 Oct edition carries none of the 5 Nov rulings. The 5 Nov 16:05 edition carries them
+all, but no ledger backup matches it (it holds trades through the afternoon of 5 Nov; the newest backup is 2 Nov). So
+the harness keeps the 30 Oct pair for the inputs, `Blocked Unblocked` and the print layout (cases 1, 2, 4–6). The
+cells the rulings change are checked against the rulings' rules, computed at runtime (case 3), and the ties of case 7
+hold on any date. Once a ledger backup is taken together with an edition, that pair can replace the 30 Oct one: ask
+the root session to take the backup when Alvin next builds one.
 
 **Setup.**
 - Copy `clients/ltv/backups/LTV Stocks 2026-10-30-1355.db` to a temp file (sqlite backup API, source opened
@@ -444,18 +509,40 @@ print `PASS`/`FAIL` per case.
      allow-listed kinds). A raw visible-row count is not compared.
    - Export both PDFs to temp and check 2 and 9 pages of 14 × 8.5 in.
 
+7. **The ties Alvin asked for** (5 Nov: "if we combine the Gain/loss column of SHK 1 and SHK 2, does it tally with
+   page 3?", "relate all pages to Market vs Average / does it tally?"). On the built edition, any date:
+   - each `PAGE 3 - <account>` page's cost, market and gain/loss equal that account's columns on `Market vs Average
+     (2)`, with the SHK and SHK2 pages together equal to SHK Private;
+   - `Market vs Average (2)`'s bank breakdown total equals its own gain/loss;
+   - `PAGE 3`'s HKD GRAND-TOTAL equals `Market vs Average`'s grand total and `Market vs Average (2)`'s total, cost and
+     market;
+   - the top and bottom HKD GRAND-TOTAL of `PAGE 3` are equal (F5);
+   - `PAGE 3` equals the sum of the account pages (case 3);
+   - no printed cell holds an error value, and a code nobody holds shows 0, not `#DIV/0!`.
+
 Page counts depend on the active printer's metrics. On this machine the Legal setting gave the same counts on the
 current default printer as the work order recorded under `Microsoft Print to PDF`. The harness reports the printer it
 ran with.
 
 ## 9. Open questions
 
-1. **Where the layout data lives** (section 3, last paragraph): the section order, BANKS/NON-BANKS membership, display
-   names, the `PAGE 3` groups, and the bank families of `Market vs Average (2)`.
+1. **Where the layout data lives, and whether it decides which rows exist** (section 3, last paragraph): the section
+   order, BANKS/NON-BANKS membership, display names, the `PAGE 3` groups, and the bank families of `Market vs Average
+   (2)` (SHK Private settled by F9).
    - Today they live only in the workbook.
    - A stock list in this public repository would describe the client's portfolio.
-   - **Proposed:** a small table, or a JSON file under `instance/` (untracked), seeded from the 30 Oct edition. It would
-     be editable when a new stock or account appears.
+   - **It matters now.** On 5 Nov an account held a long position in a code that has a block on `Blocked Unblocked`
+     and a row on `Equities`, but no row on `Market vs Average` or `PAGE 3`. Those pages left it out, and the workbook
+     needs a hand-added row, which Alvin hasn't asked for (work order 2026-11-05 §6).
+   - **Ruled 6 Nov, as proposed:**
+     - The holdings decide the rows: every code held long or short in any account on D gets its row on every
+       page.
+     - The layout data only places each code: its section, group, order and display name. It lives in a small table,
+       or a JSON file under `instance/` (untracked), seeded from the 5 Nov edition.
+     - A held code the layout data doesn't place still prints, at the end of NON-BANKS and Group B, under its
+       `tbl_code` name, and the page names it so it can be placed.
+     - A code nobody holds on D but with deliveries still due from a live contract keeps its row and reads 0 (the
+       4 Nov ruling). Any other code nobody holds gets no row.
 2. **Shares to block "as of D".** `remaining_days` counts the periods not flagged `received` at build time. Two kinds
    of period disagree with D:
    - **Periods ended by D but not yet flagged**, a fixing Alvin hasn't marked received.
@@ -466,22 +553,32 @@ ran with.
      - On the 30 Oct ledger one period ends on D unflagged. The 30 Oct edition counted it as still to block.
    - **Periods flagged but ending after D.** An edition built late (Friday's report run on Monday) would count
      deliveries after D as already made. There are none on the 30 Oct ledger.
-   - **Proposed:** as of D, a period counts as received when its end date is ≤ D, flagged or not, and not received
+   - **Ruled 6 Nov, as proposed:** as of D, a period counts as received when its end date is ≤ D, flagged or not, and not received
      when it ends after D, flagged or not.
-   - Alvin to rule on each direction. The first matters for his "including that day's fixings" rule. If he accepts it,
+   - Ruled for both directions. The first matters for his "including that day's fixings" rule. Since it is accepted,
      the 30 Oct harness's to-block figure changes on one pair. The harness then computes that pair from the rule
      instead of comparing it with the evidence.
-3. **Market time and close date in the header** (`Market vs Average` L4/L5). `tbl_stock_price` has no time. The
-   30 Oct edition printed the Yahoo time in L4 and the edition date in L5 (`=D4`), over 29 Oct closes.
-   - **Proposed:** L5 shows the date of the close actually used, and L4 stays empty, rather than invent a time.
+3. **Which prices, and the header that names them** (`Market vs Average` L4/L5). `tbl_stock_price` has no time. The
+   30 Oct edition printed the Yahoo time in L4 and the edition date in L5 (`=D4`), over 29 Oct closes. On 4 Nov Alvin
+   ruled that his own pasted prices win. Twice they were intraday quotes: the 2 Nov edition carried 11:59 AM quotes,
+   and his 07:17 paste on 4 Nov differed from the Yahoo CSV in 23 prices.
+   - Intraday quotes can't go into `tbl_stock_price`. The fixings and notebook read it as the day's close.
+   - **Ruled 6 Nov, as proposed:**
+     - By default the edition prices at D's close from `tbl_stock_price`, or the latest before D.
+     - The page also takes a price set for that build only, uploaded in the Yahoo CSV format or pasted. It is never
+       stored as a close.
+     - L5 shows the date of the closes used, or "prices supplied <time>" for a supplied set. L4 stays empty rather
+       than invent a time.
 4. **Short average precision.**
    - The edition carries the Short Book's 4-dp average, so a short row's HKD differs slightly from full precision.
-   - **Proposed:** round to 4 dp, as the Short Book page shows, so the figures tie to the edition.
+   - **Ruled 6 Nov, as proposed:** round to 4 dp, as the Short Book page shows, so the figures tie to the edition.
 5. **Filter edge case.** The macro hides a block whose account cells sum to 0. A row holding cancelling positions would
    be hidden.
-   - **Proposed:** keep the macro's test, for parity.
-6. **The working sheets.** Does Alvin still use `Loan`, `2333.hk` or `Online`? If so, the app should carry them in the
-   output.
-7. **When to run.** The closes for D land in `tbl_stock_price` only after Alvin's 4:30 PM upload.
-   - **Proposed:** before the upload, the page builds the edition with the previous close and says so on the page.
-   - Alternatively it refuses until D's closes are in. Alvin to choose.
+   - **Ruled 6 Nov, as proposed:** keep the macro's test, for parity.
+6. **The working sheets.** Does Alvin still use `Loan`, `2333.hk` or `Online`? **Ruled 6 Nov:** left out of the
+   output, as section 7 has it. If he finds he needs one, it is added then.
+7. **When to run.** The closes for D land in `tbl_stock_price` only after Alvin's 4:30 PM upload, and he builds the
+   edition several times a day as trades land (section 7).
+   - **Ruled 6 Nov, as proposed:** the page builds at any time from the ledger as it stands. Before the upload it prices at the
+     previous close, or at a supplied price set (question 3), and the header says which.
+   - Not taken: refusing until D's closes are in, which would block the midday builds.
