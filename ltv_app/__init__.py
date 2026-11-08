@@ -148,11 +148,17 @@ def create_app(test_config=None):
         # must be at instance/config.py, NOT the server/ root.
         SECRET_KEY=secrets.token_hex(32),
         DATABASE=os.path.join(app.instance_path, "LTV Stocks.db"),
-        # No CSRFProtect is registered, so SameSite is the only thing stopping a
-        # cross-site state-changing POST. SESSION_COOKIE_SECURE is deliberately
-        # left False here and set to True in PythonAnywhere's instance/config.py
-        # -- setting it in code would break login over local plain HTTP.
+        # No CSRFProtect is registered. With auto-login (below) a request with no
+        # cookie is signed in too, so SameSite no longer guards anything on its
+        # own: ltv_app/local_only.py refuses cross-site requests instead.
+        # SESSION_COOKIE_SECURE stays False -- production is plain HTTP on
+        # 127.0.0.1, and setting it would drop the session cookie.
         SESSION_COOKIE_SAMESITE="Lax",
+        # The user signed in automatically when nobody is (Alvin, 8 Nov 2026:
+        # "auto login as admin ... since no body uses this app except this
+        # computer"). instance/config.py may set None to bring the login back;
+        # a name with no tbl_user row falls back to the login as well.
+        AUTO_LOGIN_USER="admin",
     )
 
     if test_config is None:
@@ -201,6 +207,20 @@ def create_app(test_config=None):
         'static',       # CSS/JS the login page needs before anyone is logged in
     }
 
+    # Registered first, so it runs ahead of everything, under LOGIN_DISABLED
+    # too: a request from another address, for another host, or sent by
+    # another site's page is refused before anyone is signed in or any DB work
+    # happens. It is what stands in for the login now that the login is
+    # automatic (ltv_app/local_only.py).
+    @app.before_request
+    def _answer_only_this_computer():
+        from .local_only import refusal
+        reason = refusal(request)
+        if reason is None:
+            return None
+        return (f"Refused: {reason}. The LTV app answers only to this computer; "
+                f"open it from its own address.", 403, {"Content-Type": "text/plain; charset=utf-8"})
+
     @app.before_request
     def _require_authentication_by_default():
         # Honour Flask-Login's own test switch, which the verify_*.py scripts use.
@@ -209,11 +229,24 @@ def create_app(test_config=None):
         endpoint = request.endpoint
         if endpoint is None:
             return None          # unmatched URL -- let Flask produce its 404
-        if endpoint in PUBLIC_ENDPOINTS or endpoint.endswith('.static'):
+        if endpoint == 'static' or endpoint.endswith('.static'):
+            return None
+        if not current_user.is_authenticated and app.config.get('AUTO_LOGIN_USER'):
+            _sign_in_automatically(app.config['AUTO_LOGIN_USER'])
+        if endpoint in PUBLIC_ENDPOINTS:
             return None
         if current_user.is_authenticated:
             return None
         return login_manager.unauthorized()
+
+    def _sign_in_automatically(username):
+        from flask_login import login_user
+        from .blueprints.database.views import get_db
+        from .blueprints.auth.dataclass import User
+        user = User(db=get_db())
+        user.get(username=username)
+        if user.id:
+            login_user(user)
 
     from . import blueprints
     for module_ in dir(blueprints):

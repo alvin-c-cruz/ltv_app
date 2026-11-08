@@ -6,6 +6,7 @@ legacy app shares. No debugger and no reloader here: those belong to flask_app.p
 development server on 5002.
 """
 import socket
+import sys
 import threading
 import webbrowser
 
@@ -29,7 +30,20 @@ def open_browser_later(url=URL, delay=1.5, opener=webbrowser.open):
     return timer
 
 
+def refuse_unless_loopback(host=HOST):
+    """Exit unless host is this computer's own address.
+
+    The app signs its user in by itself (AUTO_LOGIN_USER), so serving it on 0.0.0.0 or a LAN address
+    would hand the ledger to anyone on the network. The app also refuses other clients itself
+    (ltv_app/local_only.py); this stops a change to HOST from even getting that far.
+    """
+    from ltv_app.local_only import is_loopback_host
+    if not is_loopback_host(host):
+        sys.exit(f"Refusing to serve the LTV app on {host!r}: it must stay on this computer (127.0.0.1).")
+
+
 def main():
+    refuse_unless_loopback()
     if port_in_use():
         print(f"The LTV app is already running on {URL}; opening it.")
         webbrowser.open(URL)

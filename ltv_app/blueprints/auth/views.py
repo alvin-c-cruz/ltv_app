@@ -13,9 +13,15 @@ def home():
 
 @bp.route('/login', methods=['POST', 'GET'])
 def login():
+    from flask import current_app
     from ..database import get_db
     from .dataclass import User
     db = get_db()
+
+    # With auto-login on, the user is already signed in here (create_app's
+    # before_request); there is no login form to show.
+    if current_app.config.get('AUTO_LOGIN_USER') and current_user.is_authenticated:
+        return redirect(url_for('home_page.home'))
 
     if request.method == 'POST':
         username = request.form.get('username')
@@ -44,6 +50,9 @@ def login():
 @bp.route('/logout')
 def logout():
     logout_user()
+    from flask import current_app
+    if current_app.config.get('AUTO_LOGIN_USER'):
+        return redirect(url_for('home_page.home'))   # which signs the user in again
     return redirect(url_for('auth.login'))
 
 

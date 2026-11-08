@@ -24,8 +24,9 @@ sys.path.insert(0, SERVER)
 
 from ltv_app import create_app
 
-# No LOGIN_DISABLED: this client is genuinely anonymous.
-app = create_app()
+# No LOGIN_DISABLED and no auto-login: this client is genuinely anonymous. Since 8 Nov 2026 the app
+# signs its user in by itself (AUTO_LOGIN_USER); with it off, the login still guards /bank/.
+app = create_app({"AUTO_LOGIN_USER": None})
 app.config["DATABASE"] = os.path.join(SERVER, "instance", "LTV Stocks.db")
 client = app.test_client()
 

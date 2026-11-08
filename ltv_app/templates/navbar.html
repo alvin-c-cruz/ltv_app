@@ -76,7 +76,9 @@
             </li>
             {% endif %}
 
+            {% if not config.AUTO_LOGIN_USER %}
             <li><a href="{{ url_for('auth.logout') }}">Logout</a></li>
+            {% endif %}
         </ul>
     </div>
 </nav>

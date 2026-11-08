@@ -16,6 +16,10 @@ Three parts:
      and LOGIN_DISABLED still bypasses everything so the other verify_*.py
      scripts keep working
 
+Since 8 Nov 2026 the app signs its user in by itself (AUTO_LOGIN_USER) and answers only to this
+computer (verify_local_only.py). Default-deny is what it falls back to when AUTO_LOGIN_USER is None or
+names no user, so the app is booted here with AUTO_LOGIN_USER = None.
+
 Read-only: GETs only, nothing mutating is requested.
 
 Run: server/.venv/Scripts/python.exe scripts/verify_auth_default_deny.py
@@ -37,7 +41,7 @@ failures = []
 # A brand-new blueprint with no @login_required anywhere -- exactly the shape
 # the bank blueprint had. Registered before the first request so the app's
 # before_request hook governs it.
-app = create_app()
+app = create_app({"AUTO_LOGIN_USER": None})
 app.config["DATABASE"] = os.path.join(SERVER, "instance", "LTV Stocks.db")
 
 naive = Blueprint("naive_newcomer", __name__, url_prefix="/naive-newcomer")
@@ -68,7 +72,7 @@ SAMPLES = {"ref_num": 1, "contract_ref": 1, "period_ref": 1, "bank_id": "DBPe",
 MUTATING = ("delete", "unlock", "/lock", "mark", "no_charges", "set-active",
             "set-inactive", "toggle", "add-line", "save", "logout")
 
-app2 = create_app()
+app2 = create_app({"AUTO_LOGIN_USER": None})
 app2.config["DATABASE"] = os.path.join(SERVER, "instance", "LTV Stocks.db")
 client2 = app2.test_client()
 
